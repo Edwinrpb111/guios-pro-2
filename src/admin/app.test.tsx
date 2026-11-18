@@ -1,8 +1,17 @@
 import { screen } from '@testing-library/react';
 import { App } from '../App';
+import { repositorio } from '../datos';
 import { crearAuthConSesion, renderConAuth } from '../test/auth';
+import { restablecerRepositorioFalso } from '../test/datos';
+
+// Las pantallas del decisor (destino de la redirección) usan el repositorio de datos.
+vi.mock('../datos', async () => ({
+  repositorio: (await import('../test/datos')).crearRepositorioFalso(),
+}));
 
 describe('App: rutas de administración de la IS (issue #11)', () => {
+  beforeEach(() => restablecerRepositorioFalso(repositorio));
+
   it('un administrador llega a P-09 (/admin/sugerida/nuevo)', () => {
     renderConAuth(<App />, {
       auth: crearAuthConSesion('administrador'),
