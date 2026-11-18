@@ -46,12 +46,8 @@ describe('AdminSugeridaPage (P-08)', () => {
     expect(screen.getByRole('region', { name: 'Cálculos registrados' })).toHaveTextContent('2');
   });
 
-  it('ofrece la ayuda del método desde la cabecera de administración', async () => {
-    montar();
-    await screen.findByRole('table', { name: 'Historial de cálculos' });
-    await userEvent.click(screen.getByRole('button', { name: 'Ayuda del método' }));
-    expect(screen.getByRole('dialog', { name: 'Ayuda del método GUIOS' })).toBeInTheDocument();
-  });
+  // La ayuda del método (P-11) ya no va en esta pantalla sino en la cabecera del marco común:
+  // la prueba está en src/admin/app.test.tsx (issue #31).
 
   it('un publicado que ya no es vigente figura como histórico', async () => {
     const api = crearApiFalsa({
