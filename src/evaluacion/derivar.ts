@@ -6,6 +6,7 @@
 import type {
   CalculoImportancia,
   Catalogo,
+  EvaluacionDetalle,
   FactorCatalogo,
   FilaValoracionFactor,
   RecomendacionGuardada,
@@ -254,4 +255,16 @@ export function detalleSubfactores(
     total: subfactores.length,
     pmParcial: ponderacionMedia(valorados),
   };
+}
+
+/** Lo guardado al finalizar manda sobre lo que se derivaría hoy (fotografía, BRIEF §5.9). */
+export function recomendacionAMostrar(
+  evaluacion: Pick<EvaluacionDetalle, 'estado' | 'recomendacion'>,
+  derivada: RecomendacionVista | null,
+): RecomendacionVista | null {
+  const { recomendacion } = evaluacion;
+  if (evaluacion.estado === 'finalizada' && recomendacion) {
+    return vistaDeRecomendacion(recomendacion.codigo, recomendacion.causas, recomendacion.texto);
+  }
+  return derivada;
 }

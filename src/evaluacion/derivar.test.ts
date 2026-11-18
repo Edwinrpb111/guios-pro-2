@@ -10,6 +10,7 @@ import {
   derivarFactores,
   derivarResultados,
   detalleSubfactores,
+  recomendacionAMostrar,
   type FilaFactor,
   filaParaGuardar,
   filasParaFinalizar,
@@ -357,5 +358,41 @@ describe('detalleSubfactores', () => {
     expect(detalleSubfactores(compatibilidad, {}, undefined).subfactores[0]?.enunciado).toBe(
       'Subfactor 100',
     );
+  });
+});
+
+describe('recomendacionAMostrar', () => {
+  const derivada = derivarResultados([
+    derivarFactor(
+      soporte,
+      calculo,
+      valoracion({ idFactor: 20, id: 4, cumplimientos: { 200: 4, 201: 4 } }),
+    ),
+  ]).recomendacion;
+  const guardada = {
+    codigo: 'C' as const,
+    texto: 'Texto guardado',
+    causas: [{ nombre: 'Soporte', foda: 'Debilidad' as const, ir: 3 as const }],
+  };
+  const detalle = (estado: 'en_curso' | 'finalizada', recomendacion: typeof guardada | null) => ({
+    estado,
+    recomendacion,
+  });
+
+  it('en curso se muestra la recomendación derivada con guios-core', () => {
+    expect(recomendacionAMostrar(detalle('en_curso', null), derivada)?.codigo).toBe('A');
+  });
+
+  it('finalizada manda la fotografía guardada, con su texto y sus causas', () => {
+    expect(recomendacionAMostrar(detalle('finalizada', guardada), derivada)).toEqual({
+      codigo: 'C',
+      titulo: TEXTOS_RECOMENDACION.C.titulo,
+      texto: 'Texto guardado',
+      causas: guardada.causas,
+    });
+  });
+
+  it('una finalizada sin recomendación guardada cae en la derivada', () => {
+    expect(recomendacionAMostrar(detalle('finalizada', null), derivada)?.codigo).toBe('A');
   });
 });

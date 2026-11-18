@@ -8,6 +8,7 @@ import { FactoresPage } from './pages/FactoresPage';
 import { InicioPage } from './pages/InicioPage';
 import { LoginPage } from './pages/LoginPage';
 import { NoEncontradaPage } from './pages/NoEncontradaPage';
+import { ResultadosPage } from './pages/ResultadosPage';
 import { SubfactoresPage } from './pages/SubfactoresPage';
 
 /**
@@ -24,6 +25,7 @@ export function App() {
         <Route path="/evaluaciones/:id/contexto" element={<ContextoPage />} />
         <Route path="/evaluaciones/:id/factores" element={<FactoresPage />} />
         <Route path="/evaluaciones/:id/subfactores" element={<SubfactoresPage />} />
+        <Route path="/evaluaciones/:id/resultados" element={<ResultadosPage />} />
         <Route path="/admin" element={<RutaAdmin />}>
           <Route path="sugerida" element={<AdminSugeridaPage />} />
           <Route path="sugerida/*" element={<RutasSugerida />} />

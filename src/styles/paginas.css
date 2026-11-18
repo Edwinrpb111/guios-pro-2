@@ -426,3 +426,89 @@
     min-width: 150px;
   }
 }
+
+/* P-06: resultados */
+.recomendacion {
+  margin-bottom: 16px;
+}
+.recomendacion h2,
+.recomendacion h3 {
+  margin: 0 0 6px;
+}
+.recomendacion h3 {
+  font-size: 14px;
+  margin-top: 14px;
+}
+.recomendacion p {
+  margin: 0;
+}
+.recomendacion__cabecera {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.recomendacion__letra {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radio);
+  font-size: 28px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--muted);
+}
+.recomendacion__letra[data-codigo='A'] {
+  background: var(--F);
+}
+.recomendacion__letra[data-codigo='B'] {
+  background: var(--recB);
+}
+.recomendacion__letra[data-codigo='C'] {
+  background: var(--A);
+}
+.recomendacion__causas {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.recomendacion__causas li,
+.resultados__pendientes li {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.resultados__pendientes ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.resultados__pendientes h2 {
+  margin: 0 0 4px;
+}
+.tarjeta--relleno + .tarjeta--relleno,
+.tarjeta--relleno + p.ayuda-texto {
+  margin-top: 16px;
+}
+.alerta--confirmar {
+  flex-direction: column;
+  align-items: flex-start;
+  background: var(--orange2);
+  color: #7a4300;
+}
+.alerta--confirmar p {
+  margin: 0;
+}
+.alerta__acciones {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}

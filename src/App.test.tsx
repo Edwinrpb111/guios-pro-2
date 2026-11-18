@@ -45,4 +45,12 @@ describe('App', () => {
     });
     expect(await screen.findByText(/Ningún factor es relevante/)).toBeInTheDocument();
   });
+
+  it('con sesión abre los resultados de una evaluación en /evaluaciones/:id/resultados', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/resultados',
+    });
+    expect(await screen.findByRole('heading', { name: 'Sin recomendación' })).toBeInTheDocument();
+  });
 });
