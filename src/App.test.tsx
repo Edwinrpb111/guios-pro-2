@@ -53,4 +53,14 @@ describe('App', () => {
     });
     expect(await screen.findByRole('heading', { name: 'Sin recomendación' })).toBeInTheDocument();
   });
+
+  it('con sesión abre el informe imprimible en /evaluaciones/:id/informe', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/informe',
+    });
+    expect(
+      await screen.findByRole('article', { name: 'Informe de evaluación' }),
+    ).toBeInTheDocument();
+  });
 });
