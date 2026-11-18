@@ -20,9 +20,10 @@ export interface OpcionesServidor {
   origenes: string[];
   /**
    * Crea las dependencias; puede lanzar un `ErrorApi` `configuracion_*` si falta configuración.
-   * Se invoca solo cuando la petición trae token, y ese error no se muestra al cliente.
+   * Se invoca solo cuando la petición trae token, y ese error no se muestra al cliente. Puede ser
+   * asíncrona: lee la configuración guardada en la base (issue #33).
    */
-  crear: () => Dependencias;
+  crear: () => Dependencias | Promise<Dependencias>;
 }
 
 const CABECERAS_PERMITIDAS = 'authorization, x-client-info, apikey, content-type';
@@ -98,7 +99,7 @@ export async function atender(
     // que nunca ve detalles de ella. Validar el JWT y el rol requiere las dependencias (cliente de
     // Supabase), por eso `crear` va después de comprobar que hay token.
     exigirJwt(peticion);
-    const dependencias = opciones.crear();
+    const dependencias = await opciones.crear();
     const admin = await exigirAdmin(peticion, dependencias.verificador);
     const cuerpo = await leerCuerpo(peticion);
     const resultado = await accion(cuerpo, admin, dependencias);

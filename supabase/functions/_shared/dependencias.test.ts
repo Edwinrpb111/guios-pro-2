@@ -1,7 +1,13 @@
-import { assert, assertEquals, assertInstanceOf, assertStringIncludes } from 'jsr:@std/assert@1';
+import {
+  assert,
+  assertEquals,
+  assertInstanceOf,
+  assertRejects,
+  assertStringIncludes,
+} from 'jsr:@std/assert@1';
 import { GeminiClasificador } from './clasificador.ts';
 import { CrossrefProveedor } from './crossref.ts';
-import { crearDependencias } from './dependencias.ts';
+import { crearDependencias, crearDependenciasConBase } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
 import { ClasificadorFalso, ProveedorFalso } from './falsos.ts';
 import { OpenAlexProveedor } from './openalex.ts';
@@ -73,4 +79,35 @@ Deno.test('con LLM_PROVIDER=fake no se piden claves aunque se usen OpenAlex y Ge
   const deps = crear({ LLM_PROVIDER: 'fake' });
   deps.proveedores(['openalex']);
   deps.clasificador('gemini-3.1-flash-lite');
+});
+
+Deno.test('con la base: la configuración guardada se lee en cada petición y manda', async () => {
+  let lecturas = 0;
+  const guardadas = [
+    { proveedor_llm: 'gemini', gemini_api_key: 'k-base', umbral: 0.9 },
+    { proveedor_llm: 'fake' },
+  ];
+  const infraestructura = {
+    ...INFRA,
+    configuracionGuardada: () => Promise.resolve(guardadas[lecturas++] ?? null),
+  };
+  const leer = (nombre: string) => ({ LLM_PROVIDER: 'fake', LLM_UMBRAL: '0.5' })[nombre];
+
+  const primera = await crearDependenciasConBase(leer, infraestructura);
+  assertEquals(primera.configuracion.proveedorLlm, 'gemini');
+  assertEquals(primera.configuracion.umbral, 0.9);
+  assertInstanceOf(primera.clasificador('m'), GeminiClasificador);
+
+  const segunda = await crearDependenciasConBase(leer, infraestructura);
+  assertEquals(segunda.configuracion.proveedorLlm, 'fake');
+  assertEquals(segunda.configuracion.umbral, 0.5);
+  assertEquals(lecturas, 2);
+});
+
+Deno.test('con la base: si no se puede leer la configuración, la petición falla', async () => {
+  const infraestructura = {
+    ...INFRA,
+    configuracionGuardada: () => Promise.reject(new Error('base caída')),
+  };
+  await assertRejects(() => crearDependenciasConBase(() => undefined, infraestructura), Error);
 });

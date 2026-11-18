@@ -77,7 +77,7 @@ export async function paso(
     throw new ErrorApi(
       409,
       'proveedor_cambiado',
-      'El proveedor de IA (LLM_PROVIDER) cambió desde que se inició este cálculo. Inicia uno nuevo.',
+      'El proveedor de IA cambió (en «Configuración del recálculo» o en LLM_PROVIDER) desde que se inició este cálculo. Vuelve a ponerlo o inicia uno nuevo.',
     );
   }
 

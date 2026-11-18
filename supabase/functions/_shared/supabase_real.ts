@@ -2,6 +2,8 @@
 // `service_role` existe únicamente aquí, dentro de las Edge Functions (BRIEF §14).
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import type { UsuarioVerificado, VerificadorAdmin } from './auth.ts';
+import type { ConfiguracionGuardada } from './configuracion.ts';
+import type { InfraestructuraConBase } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
 import type {
   Calculo,
@@ -160,11 +162,24 @@ export class VerificadorSupabase implements VerificadorAdmin {
   }
 }
 
+/**
+ * Configuración guardada por el administrador (issue #33), con las claves descifradas de Vault.
+ * La función SQL solo la puede ejecutar `service_role`; el valor de las claves nunca sale de aquí.
+ */
+export async function leerConfiguracionGuardada(
+  cliente: SupabaseClient,
+): Promise<ConfiguracionGuardada | null> {
+  const filas = exigir(
+    await cliente.rpc('configuracion_recalculo_servicio'),
+    'No se pudo leer la configuración del recálculo',
+  ) as ConfiguracionGuardada[] | null;
+  return filas?.[0] ?? null;
+}
+
 /** `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` los inyecta la plataforma en las Edge Functions. */
-export function crearInfraestructuraSupabase(leer: (nombre: string) => string | undefined): {
-  repositorio: Repositorio;
-  verificador: VerificadorAdmin;
-} {
+export function crearInfraestructuraSupabase(
+  leer: (nombre: string) => string | undefined,
+): InfraestructuraConBase {
   const url = leer('SUPABASE_URL');
   const clave = leer('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !clave) {
@@ -180,5 +195,6 @@ export function crearInfraestructuraSupabase(leer: (nombre: string) => string | 
   return {
     repositorio: new RepositorioSupabase(cliente),
     verificador: new VerificadorSupabase(cliente),
+    configuracionGuardada: () => leerConfiguracionGuardada(cliente),
   };
 }

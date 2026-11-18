@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
-import { leerConfiguracion, leerOrigenes } from './configuracion.ts';
+import { combinarConEntorno, leerConfiguracion, leerOrigenes } from './configuracion.ts';
 import { ErrorApi } from './errores.ts';
 
 function entorno(valores: Record<string, string>) {
@@ -64,3 +64,58 @@ Deno.test(
     );
   },
 );
+
+Deno.test('configuración guardada: lo de la base manda; lo que falta sale del entorno', () => {
+  const leer = combinarConEntorno(
+    {
+      proveedor_llm: 'gemini',
+      modelo: null,
+      umbral: 0.8,
+      max_candidatos: 15,
+      crossref_mailto: '',
+      gemini_api_key: 'k-base',
+      openalex_api_key: null,
+    },
+    entorno({
+      LLM_PROVIDER: 'fake',
+      LLM_MODEL: 'modelo-entorno',
+      LLM_UMBRAL: '0.5',
+      CROSSREF_MAILTO: 'entorno@ejemplo.org',
+      OPENALEX_API_KEY: 'k-entorno',
+      GEMINI_API_KEY: 'k-gemini-entorno',
+    }),
+  );
+  const config = leerConfiguracion(leer);
+  assertEquals(config.proveedorLlm, 'gemini');
+  assertEquals(config.modelo, 'modelo-entorno');
+  assertEquals(config.umbral, 0.8);
+  assertEquals(config.maxCandidatos, 15);
+  assertEquals(config.crossrefMailto, 'entorno@ejemplo.org');
+  assertEquals(config.geminiApiKey, 'k-base');
+  assertEquals(config.openalexApiKey, 'k-entorno');
+});
+
+Deno.test('configuración guardada: sin fila en la base se usa solo el entorno', () => {
+  const config = leerConfiguracion(combinarConEntorno(null, entorno({ LLM_PROVIDER: 'fake' })));
+  assertEquals(config.proveedorLlm, 'fake');
+  assertEquals(config.umbral, 0.7);
+});
+
+Deno.test('configuración guardada: ORIGENES_PERMITIDOS nunca sale de la base', () => {
+  const leer = combinarConEntorno(
+    { ORIGENES_PERMITIDOS: 'https://malicioso.example' } as never,
+    entorno({}),
+  );
+  assertEquals(leer('ORIGENES_PERMITIDOS'), undefined);
+  assertEquals(leerOrigenes(leer), ['http://localhost:5173', 'http://127.0.0.1:5173']);
+});
+
+Deno.test('configuración guardada: un valor inválido de la base también da 500', () => {
+  for (const guardada of [{ umbral: 1.5 }, { max_candidatos: 0 }, { proveedor_llm: 'openai' }]) {
+    const error = assertThrows(
+      () => leerConfiguracion(combinarConEntorno(guardada, entorno({}))),
+      ErrorApi,
+    );
+    assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
+  }
+});

@@ -242,3 +242,28 @@ Deno.test(
     assertEquals(ejecutada(), false);
   },
 );
+
+Deno.test('crear puede ser asíncrono (lee la configuración de la base)', async () => {
+  const dependencias = crearDependenciasPrueba();
+  const respuesta = await atender(
+    solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
+    { origenes: ORIGENES, crear: () => Promise.resolve(dependencias) },
+    () => Promise.resolve({ estado: 200, cuerpo: { ok: true } }),
+  );
+  assertEquals(respuesta.status, 200);
+});
+
+Deno.test(
+  'si leer la configuración de la base falla, el cliente recibe error_interno',
+  async () => {
+    const respuesta = await atender(
+      solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
+      { origenes: ORIGENES, crear: () => Promise.reject(new Error('clave-secreta en el detalle')) },
+      () => Promise.resolve({ estado: 200, cuerpo: {} }),
+    );
+    assertEquals(respuesta.status, 500);
+    const texto = JSON.stringify(await respuesta.json());
+    assertEquals((JSON.parse(texto) as { codigo: string }).codigo, 'error_interno');
+    assert(!texto.includes('clave-secreta'));
+  },
+);
