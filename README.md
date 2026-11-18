@@ -72,6 +72,7 @@ src/
 └─ styles/       # Tokens y estilos del CP1
 supabase/        # Migraciones, semilla y Edge Functions
 docs/
+├─ componentes.md # Componentes base del CP1 (props, eventos, accesibilidad)
 ├─ fuentes/      # Datos y prototipo de referencia (catálogo CSV, prototipo HTML del CP1, PNG)
 └─ decisiones/   # ADR
 ```
