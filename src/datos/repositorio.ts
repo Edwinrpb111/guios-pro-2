@@ -1,6 +1,6 @@
 /**
- * Acceso a datos de las pantallas P-02..P-04 (BRIEF §11.1): catálogo con la IS vigente,
- * historial, contexto y valoración de factores. Es la única capa que habla con Supabase;
+ * Acceso a datos de las pantallas P-02..P-06 (BRIEF §11.1): catálogo con la IS vigente,
+ * historial, contexto, valoración de factores y subfactores, y finalizar. Es la única capa que habla con Supabase;
  * las pantallas y los componentes reciben el modelo de `tipos.ts`. Toda operación queda
  * limitada por RLS (BRIEF §10.3).
  *
@@ -9,7 +9,9 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '../lib/database.types';
+import type { Cumplimiento } from '../guios-core';
 import {
+  causasParaGuardar,
   mapearCalculo,
   mapearCatalogo,
   mapearEvaluacion,
@@ -26,6 +28,7 @@ import type {
   Contexto,
   EvaluacionDetalle,
   FilaValoracionFactor,
+  Finalizacion,
   ResumenEvaluacion,
 } from './tipos';
 
@@ -37,6 +40,21 @@ const CAMPOS_CALCULO =
 function fallar(mensaje: string, causa: unknown): never {
   throw new Error(mensaje, { cause: causa });
 }
+
+/** Fila de `valoracion_factor`: entrada del decisor y derivados (BRIEF §11.1). */
+const filaFactorBd = (idEvaluacion: number, fila: FilaValoracionFactor) => ({
+  id_evaluacion: idEvaluacion,
+  id_factor: fila.idFactor,
+  importancia_decisor: fila.id,
+  alcance_aplicado: fila.alcance,
+  importancia_relativa: fila.ir,
+  es_relevante: fila.relevante,
+  // numeric(3,2): se redondea aquí; el FODA ya viene calculado con la PM exacta (BRIEF §5.7).
+  ponderacion_global: fila.pm === null ? null : Math.round(fila.pm * 100) / 100,
+  clasificacion_foda: fila.foda,
+});
+
+const EN_CONFLICTO_FACTOR = { onConflict: 'id_evaluacion,id_factor' } as const;
 
 /** Texto vacío → `null` (las columnas opcionales no guardan cadenas vacías). */
 const textoONulo = (texto: string): string | null => {
@@ -61,7 +79,7 @@ export function crearRepositorio(cliente: ClienteGuios) {
       const { data, error } = await cliente
         .from('dimension')
         .select(
-          'id_dimension, nombre, factor(id_factor, nombre, alcance, orden, subfactor(id_subfactor, orden))',
+          'id_dimension, nombre, factor(id_factor, nombre, alcance, orden, subfactor(id_subfactor, orden, enunciado))',
         )
         .order('id_dimension');
       if (error) fallar('No se pudo leer el catálogo de factores.', error);
@@ -121,7 +139,8 @@ export function crearRepositorio(cliente: ClienteGuios) {
       const { data, error } = await cliente
         .from('evaluacion')
         .select(
-          'id_evaluacion, titulo, estado, id_calculo, ' +
+          'id_evaluacion, titulo, estado, id_calculo, fecha_actualizacion, ' +
+            'codigo_recomendacion, texto_recomendacion, causas, ' +
             'software_evaluado(id_software, nombre, version, tipo_licencia, ' +
             'organizacion(id_organizacion, nombre, sector, pais)), ' +
             'valoracion_factor(id_factor, importancia_decisor, alcance_aplicado, ' +
@@ -210,26 +229,72 @@ export function crearRepositorio(cliente: ClienteGuios) {
 
     /** *Upsert* de la valoración de un factor: entrada del decisor y derivados (BRIEF §11.1). */
     async guardarValoracionFactor(idEvaluacion: number, fila: FilaValoracionFactor): Promise<void> {
-      const { error } = await cliente.from('valoracion_factor').upsert(
-        {
-          id_evaluacion: idEvaluacion,
-          id_factor: fila.idFactor,
-          importancia_decisor: fila.id,
-          alcance_aplicado: fila.alcance,
-          importancia_relativa: fila.ir,
-          es_relevante: fila.relevante,
-          // numeric(3,2): se redondea aquí; el FODA ya viene calculado con la PM exacta (BRIEF §5.7).
-          ponderacion_global: fila.pm === null ? null : Math.round(fila.pm * 100) / 100,
-          clasificacion_foda: fila.foda,
-        },
-        { onConflict: 'id_evaluacion,id_factor' },
-      );
+      const { error } = await cliente
+        .from('valoracion_factor')
+        .upsert(filaFactorBd(idEvaluacion, fila), EN_CONFLICTO_FACTOR);
       if (error) {
         fallar(
           'No se pudo guardar la valoración del factor: la evaluación no existe o ya está finalizada.',
           error,
         );
       }
+    },
+
+    /**
+     * Valorar un subfactor (BRIEF §11.1): *upsert* del factor con su PM y FODA recalculados
+     * (así se obtiene su fila) y *upsert* del PS del subfactor.
+     */
+    async guardarValoracionSubfactor(
+      idEvaluacion: number,
+      factor: FilaValoracionFactor,
+      idSubfactor: number,
+      ps: Cumplimiento,
+    ): Promise<void> {
+      const mensaje =
+        'No se pudo guardar el subfactor: la evaluación no existe o ya está finalizada.';
+      const valoracion = await cliente
+        .from('valoracion_factor')
+        .upsert(filaFactorBd(idEvaluacion, factor), EN_CONFLICTO_FACTOR)
+        .select('id_val_factor')
+        .single();
+      if (valoracion.error) fallar(mensaje, valoracion.error);
+      const { error } = await cliente.from('valoracion_subfactor').upsert(
+        {
+          id_val_factor: valoracion.data.id_val_factor,
+          id_subfactor: idSubfactor,
+          nivel_cumplimiento: ps,
+        },
+        { onConflict: 'id_val_factor,id_subfactor' },
+      );
+      if (error) fallar(mensaje, error);
+    },
+
+    /**
+     * Finalizar (BRIEF §11.1): vuelve a guardar la fotografía de los factores y congela la
+     * evaluación con la recomendación, su texto y sus causas. Después, RLS impide editarla.
+     */
+    async finalizarEvaluacion(idEvaluacion: number, finalizacion: Finalizacion): Promise<void> {
+      const mensaje = 'No se pudo finalizar: la evaluación no existe o ya está finalizada.';
+      if (finalizacion.factores.length > 0) {
+        const { error } = await cliente.from('valoracion_factor').upsert(
+          finalizacion.factores.map((fila) => filaFactorBd(idEvaluacion, fila)),
+          EN_CONFLICTO_FACTOR,
+        );
+        if (error) fallar(mensaje, error);
+      }
+      const { recomendacion } = finalizacion;
+      const { data, error } = await cliente
+        .from('evaluacion')
+        .update({
+          estado: 'finalizada',
+          codigo_recomendacion: recomendacion.codigo,
+          texto_recomendacion: recomendacion.texto,
+          causas: causasParaGuardar(recomendacion.causas),
+        })
+        .eq('id_evaluacion', idEvaluacion)
+        .eq('estado', 'en_curso')
+        .select('id_evaluacion');
+      if (error || data.length !== 1) fallar(mensaje, error);
     },
   };
 }

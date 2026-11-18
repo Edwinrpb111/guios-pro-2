@@ -24,7 +24,7 @@ describe('nombreDeUsuario', () => {
   it('sin nombre y con el correo vacío o sin parte local devuelve «Usuario»', () => {
     expect(nombreDeUsuario({ email: '', user_metadata: {} })).toBe('Usuario');
     expect(nombreDeUsuario({ email: '@example.com', user_metadata: {} })).toBe('Usuario');
-    expect(nombreDeUsuario({ email: undefined, user_metadata: {} })).toBe('Usuario');
+    expect(nombreDeUsuario({ user_metadata: {} })).toBe('Usuario');
   });
 });
 

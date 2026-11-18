@@ -35,6 +35,7 @@ const soporte: FactorCatalogo = {
 };
 
 const catalogo: Catalogo = {
+  subfactores: {},
   dimensiones: [
     { id: 1, nombre: 'Tecnológica', factores: [compatibilidad, usabilidad] },
     { id: 2, nombre: 'Organizacional', factores: [soporte] },

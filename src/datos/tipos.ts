@@ -3,7 +3,14 @@
  * Es independiente de las filas de Supabase: los alcances y las escalas ya vienen
  * validados y tipados con los tipos de `guios-core`.
  */
-import type { Alcance, AlcanceCatalogo, Cumplimiento, Foda, Importancia } from '../guios-core';
+import type {
+  Alcance,
+  AlcanceCatalogo,
+  CausaRecomendacion,
+  Cumplimiento,
+  Foda,
+  Importancia,
+} from '../guios-core';
 
 export interface FactorCatalogo {
   id: number;
@@ -23,6 +30,8 @@ export interface DimensionCatalogo {
 
 export interface Catalogo {
   dimensiones: readonly DimensionCatalogo[];
+  /** Enunciado de cada subfactor, por id (P-05 y el informe). */
+  subfactores: Readonly<Record<number, string>>;
 }
 
 /** IE, IL e IS de un factor en un cálculo de importancia sugerida. */
@@ -84,9 +93,20 @@ export interface ValoracionFactor {
   cumplimientos: Readonly<Record<number, Cumplimiento>>;
 }
 
+/** Recomendación guardada al finalizar (fotografía, BRIEF §5.9). */
+export interface RecomendacionGuardada {
+  codigo: CodigoRecomendacion;
+  texto: string;
+  causas: readonly CausaRecomendacion[];
+}
+
 export interface EvaluacionDetalle {
   id: number;
   estado: EstadoEvaluacion;
+  /** Última modificación (ISO 8601); en una finalizada, la fecha en que se finalizó. */
+  fecha: string;
+  /** Lo guardado al finalizar; `null` mientras está en curso. */
+  recomendacion: RecomendacionGuardada | null;
   /** Cálculo de importancia sugerida con el que se creó la evaluación. */
   idCalculo: number;
   contexto: Contexto;
@@ -102,4 +122,11 @@ export interface FilaValoracionFactor {
   relevante: boolean;
   pm: number | null;
   foda: Foda | null;
+}
+
+/** Lo que se guarda al finalizar: la fotografía de los factores y la recomendación (BRIEF §11.1). */
+export interface Finalizacion {
+  /** Derivados de todos los factores valorados, recalculados al finalizar. */
+  factores: readonly FilaValoracionFactor[];
+  recomendacion: RecomendacionGuardada;
 }

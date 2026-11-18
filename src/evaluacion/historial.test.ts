@@ -8,6 +8,7 @@ import {
 } from './historial';
 
 const catalogo: Catalogo = {
+  subfactores: {},
   dimensiones: [
     {
       id: 1,
