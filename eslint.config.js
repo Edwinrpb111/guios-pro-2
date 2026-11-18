@@ -6,7 +6,17 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules', 'supabase/functions', 'docs'] },
+  {
+    ignores: [
+      'dist',
+      'coverage',
+      'node_modules',
+      'supabase/functions',
+      'docs',
+      'playwright-report',
+      'test-results',
+    ],
+  },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.strict],
@@ -35,6 +45,11 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  {
+    // Las pruebas E2E corren en Node (Playwright), no en el navegador.
+    files: ['e2e/**/*.ts', 'playwright.config.ts'],
+    languageOptions: { globals: globals.node },
   },
   prettier,
 );

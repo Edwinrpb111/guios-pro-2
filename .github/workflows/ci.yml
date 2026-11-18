@@ -40,3 +40,48 @@ jobs:
         run: npm run typecheck:functions
       - name: Pruebas de las Edge Functions
         run: npm run test:functions
+
+  # E2E del caso piloto LibreOffice–UNEMI (issue #9). Trabajo aparte: no altera el check
+  # requerido «Lint, tipos, pruebas y build».
+  e2e:
+    name: E2E del caso piloto (Playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 3.2.0
+      - name: Levantar Supabase local (migraciones y semilla)
+        # Solo lo que usa el E2E: base de datos, API y autenticación.
+        run: supabase start -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+      - name: Exportar la URL y las claves locales al entorno de las pruebas
+        run: |
+          valor() { supabase status -o env | sed -n "s/^$1=\"\(.*\)\"\$/\1/p"; }
+          anon="$(valor ANON_KEY)"
+          servicio="$(valor SERVICE_ROLE_KEY)"
+          echo "::add-mask::$anon"
+          echo "::add-mask::$servicio"
+          {
+            echo "SUPABASE_URL_PRUEBAS=$(valor API_URL)"
+            echo "SUPABASE_ANON_KEY_PRUEBAS=$anon"
+            echo "SUPABASE_SERVICE_ROLE_KEY_PRUEBAS=$servicio"
+          } >> "$GITHUB_ENV"
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+      - name: E2E (compila la app, la sirve y corre Playwright)
+        run: npm run e2e
+      - name: Informe de Playwright
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-playwright
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
