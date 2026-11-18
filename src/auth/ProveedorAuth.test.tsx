@@ -1,6 +1,9 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { ProveedorAuth } from './ProveedorAuth';
+import { RutaAdmin } from './RutaAdmin';
+import { RutaProtegida } from './RutaProtegida';
 import { useAuth } from './useAuth';
 
 type Escucha = (evento: string, sesion: unknown) => void;
@@ -199,6 +202,78 @@ describe('ProveedorAuth', () => {
     montar();
     await userEvent.click(screen.getByRole('button', { name: 'salir' }));
     expect(mocks.signOut).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ProveedorAuth: estado del rol entre sesiones', () => {
+  it('si la lectura de perfil se rechaza termina de cargar con rol ninguno', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: sesionAna } });
+    mocks.maybeSingle.mockRejectedValue(new Error('red caída'));
+    montar();
+    await esperarCarga();
+    expect(screen.getByText('rol: ninguno')).toBeInTheDocument();
+  });
+
+  it('al volver a entrar no usa el rol de la sesión anterior mientras lo vuelve a leer', async () => {
+    mocks.maybeSingle.mockResolvedValueOnce({ data: { rol: 'administrador' }, error: null });
+    montar();
+    await esperarCarga();
+    act(() => escucha('SIGNED_IN', sesionAna));
+    await waitFor(() => expect(screen.getByText('rol: administrador')).toBeInTheDocument());
+    act(() => escucha('SIGNED_OUT', null));
+    await waitFor(() => expect(screen.getByText('rol: ninguno')).toBeInTheDocument());
+
+    let resolver: (v: unknown) => void = () => undefined;
+    mocks.maybeSingle.mockReturnValueOnce(new Promise((r) => (resolver = r)));
+    act(() => escucha('SIGNED_IN', sesionAna));
+    expect(screen.getByText('cargando: true')).toBeInTheDocument();
+    expect(screen.getByText('rol: ninguno')).toBeInTheDocument();
+    await act(async () => resolver({ data: { rol: 'decisor' }, error: null }));
+    await esperarCarga();
+    expect(screen.getByText('rol: decisor')).toBeInTheDocument();
+  });
+});
+
+describe('ProveedorAuth junto con las guardas', () => {
+  function RutasReales() {
+    return (
+      <MemoryRouter initialEntries={['/admin/sugerida']}>
+        <Routes>
+          <Route path="/login" element={<p>Pantalla de ingreso</p>} />
+          <Route element={<RutaProtegida />}>
+            <Route path="/" element={<p>Contenido protegido</p>} />
+            <Route element={<RutaAdmin />}>
+              <Route path="/admin/sugerida" element={<p>Contenido de administración</p>} />
+            </Route>
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    );
+  }
+
+  it('un administrador ve admin y al cerrar sesión va a /login', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: sesionAna } });
+    mocks.maybeSingle.mockResolvedValue({ data: { rol: 'administrador' }, error: null });
+    render(
+      <ProveedorAuth>
+        <RutasReales />
+      </ProveedorAuth>,
+    );
+    expect(await screen.findByText('Contenido de administración')).toBeInTheDocument();
+    act(() => escucha('SIGNED_OUT', null));
+    expect(await screen.findByText('Pantalla de ingreso')).toBeInTheDocument();
+    expect(screen.queryByText('Contenido de administración')).not.toBeInTheDocument();
+  });
+
+  it('un decisor que entra a /admin/sugerida termina en /', async () => {
+    mocks.getSession.mockResolvedValue({ data: { session: sesionAna } });
+    render(
+      <ProveedorAuth>
+        <RutasReales />
+      </ProveedorAuth>,
+    );
+    expect(await screen.findByText('Contenido protegido')).toBeInTheDocument();
+    expect(screen.queryByText('Contenido de administración')).not.toBeInTheDocument();
   });
 });
 

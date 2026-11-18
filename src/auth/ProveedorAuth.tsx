@@ -25,6 +25,8 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     });
     const { data } = supabase.auth.onAuthStateChange((_evento, nuevaSesion) => {
       setSesion(nuevaSesion);
+      // Sin sesión se olvida el rol: al volver a entrar se lee de nuevo y no se reutiliza el anterior.
+      if (!nuevaSesion) setRolDe(null);
       setInicializada(true);
     });
     return () => {
@@ -39,16 +41,21 @@ export function ProveedorAuth({ children }: { children: ReactNode }) {
     if (!idUsuario) return;
     let activo = true;
     // Fuera del callback de onAuthStateChange para no bloquear el cliente de Auth.
-    void supabase
+    const resolver = (rol: Rol | null) => {
+      if (activo) setRolDe({ id: idUsuario, rol });
+    };
+    supabase
       .from('perfil')
       .select('rol')
       .eq('id', idUsuario)
       .maybeSingle()
-      .then(({ data, error }) => {
-        if (!activo) return;
-        const rol = !error && data && ROLES.includes(data.rol) ? (data.rol as Rol) : null;
-        setRolDe({ id: idUsuario, rol });
-      });
+      .then(
+        ({ data, error }) => {
+          resolver(!error && data && ROLES.includes(data.rol) ? (data.rol as Rol) : null);
+        },
+        // Un rechazo (p. ej. sin red) falla cerrado: sin rol, pero sin quedar cargando para siempre.
+        () => resolver(null),
+      );
     return () => {
       activo = false;
     };
