@@ -1,0 +1,10 @@
+{
+  "lock": false,
+  "compilerOptions": {
+    "strict": true
+  },
+  "tasks": {
+    "test": "deno test",
+    "tipos": "deno check ."
+  }
+}
