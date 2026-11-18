@@ -29,7 +29,7 @@ function clienteSimulado(
       return Promise.resolve(typeof r === 'function' ? r(llamada) : r);
     };
     const cadena: Record<string, unknown> = {};
-    for (const metodo of ['select', 'eq', 'order', 'range']) {
+    for (const metodo of ['select', 'eq', 'order', 'range', 'update', 'limit']) {
       cadena[metodo] = (...argumentos: unknown[]) => {
         llamada.pasos.push([metodo, argumentos]);
         return cadena;
@@ -314,5 +314,159 @@ describe('crearApiAdmin (Supabase)', () => {
     await expect(crearApiAdmin(cliente).descartar(1)).rejects.toThrow(
       'No se puede descartar un cálculo publicado.',
     );
+  });
+
+  describe('configuración del recálculo (issue #33)', () => {
+    const FILA = {
+      proveedor_llm: 'gemini',
+      modelo: 'gemini-3.1-flash-lite',
+      umbral: 0.7,
+      max_candidatos: null,
+      crossref_mailto: 'equipo@unemi.edu.ec',
+      actualizado_en: '2026-11-18T10:00:00Z',
+    };
+    const ESTADO = [
+      { nombre: 'GEMINI_API_KEY', configurada: true, actualizada_en: '2026-11-18T10:00:00Z' },
+      { nombre: 'OPENALEX_API_KEY', configurada: false, actualizada_en: null },
+    ];
+    const CAMBIOS = [
+      {
+        id_cambio: 3,
+        cambio: 'clave GEMINI_API_KEY guardada',
+        realizado_por_nombre: 'Ada Admin',
+        realizado_en: '2026-11-18T10:00:00Z',
+      },
+    ];
+
+    it('lee los parámetros, solo el estado de las claves y los cambios recientes', async () => {
+      const { cliente, llamadas, rpcs } = clienteSimulado({
+        tablas: {
+          configuracion_recalculo: { data: FILA, error: null },
+          configuracion_recalculo_cambio: { data: CAMBIOS, error: null },
+        },
+        rpc: { estado_claves_recalculo: { data: ESTADO, error: null } },
+      });
+      expect(await crearApiAdmin(cliente).obtenerConfiguracion()).toEqual({
+        parametros: {
+          proveedorLlm: 'gemini',
+          modelo: 'gemini-3.1-flash-lite',
+          umbral: 0.7,
+          maxCandidatos: null,
+          crossrefMailto: 'equipo@unemi.edu.ec',
+        },
+        actualizadoEn: '2026-11-18T10:00:00Z',
+        claves: [
+          { nombre: 'GEMINI_API_KEY', configurada: true, actualizadaEn: '2026-11-18T10:00:00Z' },
+          { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
+        ],
+        cambios: [
+          {
+            id: 3,
+            cambio: 'clave GEMINI_API_KEY guardada',
+            realizadoPor: 'Ada Admin',
+            realizadoEn: '2026-11-18T10:00:00Z',
+          },
+        ],
+      });
+      expect(rpcs).toEqual([['estado_claves_recalculo', undefined]]);
+      const pasos = llamadas.find((l) => l.tabla === 'configuracion_recalculo')?.pasos ?? [];
+      // Nunca se piden columnas de claves: solo existen en Vault.
+      expect(JSON.stringify(pasos)).not.toMatch(/api_key/);
+      expect(
+        llamadas.find((l) => l.tabla === 'configuracion_recalculo_cambio')?.pasos,
+      ).toContainEqual(['limit', [10]]);
+    });
+
+    it('sin fila visible (no es administrador) lo explica', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: { configuracion_recalculo: { data: null, error: null } },
+        rpc: { estado_claves_recalculo: { data: ESTADO, error: null } },
+      });
+      await expect(crearApiAdmin(cliente).obtenerConfiguracion()).rejects.toThrow(
+        /Solo un administrador/,
+      );
+    });
+
+    it('rechaza un estado de clave desconocido', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: { configuracion_recalculo: { data: FILA, error: null } },
+        rpc: {
+          estado_claves_recalculo: {
+            data: [{ nombre: 'OTRA', configurada: true, actualizada_en: null }],
+            error: null,
+          },
+        },
+      });
+      await expect(crearApiAdmin(cliente).obtenerConfiguracion()).rejects.toThrow(ErrorAdmin);
+    });
+
+    it('guarda los parámetros con update de la única fila y comprueba que se aplicó', async () => {
+      const { cliente, llamadas } = clienteSimulado({
+        tablas: { configuracion_recalculo: { data: [{ id: true }], error: null } },
+      });
+      await crearApiAdmin(cliente).guardarParametros({
+        proveedorLlm: 'fake',
+        modelo: null,
+        umbral: 0.8,
+        maxCandidatos: 15,
+        crossrefMailto: null,
+      });
+      expect(llamadas[0]?.pasos).toEqual([
+        [
+          'update',
+          [
+            {
+              proveedor_llm: 'fake',
+              modelo: null,
+              umbral: 0.8,
+              max_candidatos: 15,
+              crossref_mailto: null,
+            },
+          ],
+        ],
+        ['eq', ['id', true]],
+        ['select', ['id']],
+      ]);
+    });
+
+    it('si el update no tocó ninguna fila (RLS), avisa', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: { configuracion_recalculo: { data: [], error: null } },
+      });
+      await expect(
+        crearApiAdmin(cliente).guardarParametros({
+          proveedorLlm: null,
+          modelo: null,
+          umbral: null,
+          maxCandidatos: null,
+          crossrefMailto: null,
+        }),
+      ).rejects.toThrow(/Solo un administrador/);
+    });
+
+    it('guarda y borra claves con sus funciones SQL de solo escritura', async () => {
+      const { cliente, rpcs } = clienteSimulado();
+      const api = crearApiAdmin(cliente);
+      await api.guardarClave('GEMINI_API_KEY', 'k-1');
+      await api.borrarClave('OPENALEX_API_KEY');
+      expect(rpcs).toEqual([
+        ['guardar_clave_recalculo', { p_nombre: 'GEMINI_API_KEY', p_valor: 'k-1' }],
+        ['borrar_clave_recalculo', { p_nombre: 'OPENALEX_API_KEY' }],
+      ]);
+    });
+
+    it('el error de la base al guardar una clave no repite la clave', async () => {
+      const { cliente } = clienteSimulado({
+        rpc: {
+          guardar_clave_recalculo: {
+            data: null,
+            error: { message: 'Solo un administrador puede realizar esta operación.' },
+          },
+        },
+      });
+      const promesa = crearApiAdmin(cliente).guardarClave('GEMINI_API_KEY', 'k-secreta');
+      await expect(promesa).rejects.toThrow('Solo un administrador');
+      await expect(promesa).rejects.not.toThrow(/k-secreta/);
+    });
   });
 });

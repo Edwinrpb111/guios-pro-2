@@ -5,7 +5,13 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import tesis from '../guios-core/fixtures/is_tesis.json';
 import type { Importancia } from '../guios-core';
 import { ContextoApiAdmin } from './contexto';
-import type { ApiAdmin, CalculoResumen, FactorCatalogo, FilaSugerida } from './tipos';
+import type {
+  ApiAdmin,
+  CalculoResumen,
+  ConfiguracionRecalculo,
+  FactorCatalogo,
+  FilaSugerida,
+} from './tipos';
 
 export const CALCULO_TESIS: CalculoResumen = {
   id: 1,
@@ -75,6 +81,31 @@ export const CONTEO_TESIS = FILAS_TESIS.map(({ idFactor, subfactores, citas }) =
   citas,
 }));
 
+/** Configuración del recálculo de prueba: Gemini con su clave guardada (issue #33). */
+export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
+  parametros: {
+    proveedorLlm: 'gemini',
+    modelo: 'gemini-3.1-flash-lite',
+    umbral: 0.7,
+    maxCandidatos: null,
+    crossrefMailto: 'equipo@unemi.edu.ec',
+  },
+  actualizadoEn: '2026-11-18T15:00:00Z',
+  claves: [
+    { nombre: 'GEMINI_API_KEY', configurada: true, actualizadaEn: '2026-11-18T15:00:00Z' },
+    { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
+  ],
+  cambios: [
+    {
+      id: 2,
+      cambio: 'clave GEMINI_API_KEY guardada',
+      realizadoPor: 'Ada Admin',
+      realizadoEn: '2026-11-18T15:00:00Z',
+    },
+    { id: 1, cambio: 'parametros', realizadoPor: null, realizadoEn: '2026-11-18T14:00:00Z' },
+  ],
+};
+
 /** Valor que la prueba sabe que existe (evita aserciones no nulas). */
 export function definido<T>(valor: T | undefined): T {
   if (valor === undefined) throw new Error('Se esperaba un valor definido en la prueba');
@@ -97,6 +128,10 @@ export function crearApiFalsa(parcial: Partial<ApiAdmin> = {}): ApiFalsa {
     guardarResultado: vi.fn().mockResolvedValue(undefined),
     publicar: vi.fn().mockResolvedValue(undefined),
     descartar: vi.fn().mockResolvedValue(undefined),
+    obtenerConfiguracion: vi.fn().mockResolvedValue(CONFIGURACION_PRUEBA),
+    guardarParametros: vi.fn().mockResolvedValue(undefined),
+    guardarClave: vi.fn().mockResolvedValue(undefined),
+    borrarClave: vi.fn().mockResolvedValue(undefined),
     ...parcial,
   };
   return api as ApiFalsa;
