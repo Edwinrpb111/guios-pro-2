@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { AyudaMetodo } from '../pages/AyudaMetodo';
 import '../styles/admin.css';
 
 export interface MarcoAdminProps {
@@ -24,7 +25,10 @@ export function MarcoAdmin({ titulo, descripcion, acciones, children }: MarcoAdm
           <h1>{titulo}</h1>
           {descripcion && <p className="admin__descripcion">{descripcion}</p>}
         </div>
-        {acciones && <div className="admin__acciones">{acciones}</div>}
+        <div className="admin__acciones">
+          {acciones}
+          <AyudaMetodo />
+        </div>
       </header>
       {children}
     </main>
