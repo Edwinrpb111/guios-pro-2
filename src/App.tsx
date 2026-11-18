@@ -3,6 +3,7 @@ import { RutaAdmin } from './auth/RutaAdmin';
 import { RutaProtegida } from './auth/RutaProtegida';
 import { AdminSugeridaPage } from './pages/AdminSugeridaPage';
 import { ContextoPage } from './pages/ContextoPage';
+import { FactoresPage } from './pages/FactoresPage';
 import { InicioPage } from './pages/InicioPage';
 import { LoginPage } from './pages/LoginPage';
 import { NoEncontradaPage } from './pages/NoEncontradaPage';
@@ -19,6 +20,7 @@ export function App() {
       <Route element={<RutaProtegida />}>
         <Route path="/" element={<InicioPage />} />
         <Route path="/evaluaciones/:id/contexto" element={<ContextoPage />} />
+        <Route path="/evaluaciones/:id/factores" element={<FactoresPage />} />
         <Route path="/admin" element={<RutaAdmin />}>
           <Route path="sugerida" element={<AdminSugeridaPage />} />
         </Route>

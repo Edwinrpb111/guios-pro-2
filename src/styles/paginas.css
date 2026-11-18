@@ -247,3 +247,80 @@
   font-size: var(--texto-pequeno);
   color: var(--muted);
 }
+
+/* P-04: resumen de la valoración y grupos de factores */
+.resumen {
+  margin-bottom: 16px;
+}
+.resumen__fila {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.resumen__cifra {
+  font-size: 20px;
+}
+.resumen__relevantes {
+  color: var(--F);
+}
+.resumen__barra {
+  flex: 1;
+  min-width: 160px;
+}
+.avance {
+  height: 8px;
+  background: var(--bg);
+  border-radius: var(--radio-pildora);
+  overflow: hidden;
+}
+.avance__relleno {
+  height: 100%;
+  background: var(--orange);
+  transition: width 0.2s;
+}
+.leyenda {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: var(--texto-pequeno);
+  color: var(--muted);
+}
+.leyenda i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+.leyenda i[data-nivel='1'] {
+  background: var(--l1);
+}
+.leyenda i[data-nivel='2'] {
+  background: var(--l2);
+}
+.leyenda i[data-nivel='3'] {
+  background: var(--l3);
+}
+.leyenda i[data-nivel='4'] {
+  background: var(--l4);
+}
+.resumen__ayuda {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.resumen__ayuda summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.resumen__ayuda p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.grupo-factores {
+  margin-bottom: 16px;
+}
