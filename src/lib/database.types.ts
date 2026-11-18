@@ -559,6 +559,16 @@ export type Database = {
           total_citas: number;
         }[];
       };
+      crear_calculo_con_pasos: {
+        Args: {
+          p_anio_fin: number;
+          p_anio_inicio: number;
+          p_bases_datos: string;
+          p_creado_por: string;
+          p_parametros: Json;
+        };
+        Returns: number;
+      };
       descartar_calculo: { Args: { p_id_calculo: number }; Returns: undefined };
       es_admin: { Args: Record<PropertyKey, never>; Returns: boolean };
       es_evaluacion_propia: {
@@ -574,6 +584,7 @@ export type Database = {
         Args: { p_filas: Json; p_id_calculo: number };
         Returns: undefined;
       };
+      pausar_calculo: { Args: { p_id_calculo: number }; Returns: undefined };
       publicar_calculo: { Args: { p_id_calculo: number }; Returns: undefined };
     };
     Enums: {
