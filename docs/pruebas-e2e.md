@@ -53,4 +53,4 @@ El trabajo **E2E del caso piloto (Playwright)** de `.github/workflows/ci.yml` es
 
 - Los selectores usan roles y etiquetas accesibles (`radiogroup` «Importancia del factor …», `region` «Recomendación», etc.), no clases CSS: un cambio de texto en la interfaz es el que rompe la prueba.
 - `vitest` no corre estos archivos (`e2e/**` está excluido en `vite.config.ts`) y `npm run typecheck` los revisa con `e2e/tsconfig.json`.
-- **Recarga en P-05.** Entre P-04 y P-05 la prueba recarga la página. Al navegar sin recargar, P-05 parte de la evaluación en caché (sin las valoraciones recién guardadas) y no se actualiza al llegar la lectura nueva: muestra «Ningún factor es relevante». Es un defecto de `src/` que la E2E dejó al descubierto; cuando se corrija, hay que quitar el `reload()` de `valorarSubfactores`.
+- **De P-04 a P-05 sin recargar.** La E2E dejó al descubierto que P-05 partía de la evaluación en caché de P-04 y mostraba «Ningún factor es relevante» (issue #26). Se corrigió en `useEvaluacionCargada` (cada pantalla espera su propia lectura) y la prueba navega sin recargar, así que lo cubre de punta a punta.
