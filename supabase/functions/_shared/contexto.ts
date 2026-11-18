@@ -1,6 +1,7 @@
 // Contexto semántico de los 61 subfactores (BRIEF §13.2, paso 1): `contexto_subfactores.json`,
 // versionado y revisado por el equipo.
 import type { SubfactorCatalogo } from './repositorio.ts';
+import contenido from './contexto_subfactores.json' with { type: 'json' };
 
 export interface ContextoFactor {
   nombre: string;
@@ -36,4 +37,9 @@ export function contextoDe(
     terminosSubfactor: delSubfactor?.terminos ?? [sub.enunciado],
     descripcion: delSubfactor?.contexto ?? sub.enunciado,
   };
+}
+
+/** El contexto versionado que se despliega con las funciones. */
+export function contextoSubfactores(): ContextoSubfactores {
+  return contenido;
 }

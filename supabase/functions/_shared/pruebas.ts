@@ -103,13 +103,16 @@ export function candidato(i: number, cambios: Partial<Candidato> = {}): Candidat
 export function proveedorFijo(
   nombre: 'openalex' | 'crossref',
   candidatos: Candidato[],
-): ProveedorBusqueda & { consultas: string[] } {
+): ProveedorBusqueda & { consultas: string[]; llamadas: unknown[][] } {
   const consultas: string[] = [];
+  const llamadas: unknown[][] = [];
   return {
     nombre,
     consultas,
-    buscar(consulta) {
+    llamadas,
+    buscar(consulta, anioInicio, anioFin, limite) {
       consultas.push(consulta);
+      llamadas.push([consulta, anioInicio, anioFin, limite]);
       return Promise.resolve(candidatos.map((c) => ({ ...c, base: nombre })));
     },
   };
