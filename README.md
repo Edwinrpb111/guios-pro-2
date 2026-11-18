@@ -4,6 +4,8 @@ Sistema web para evaluar si un software libre (FLOSS) es adecuado para una organ
 
 UNEMI · Ingeniería de Software · Procesos y Calidad de Software · 2026.
 
+**En línea:** <https://guios-pro-2-kappa.vercel.app>
+
 > La especificación completa está en [`BRIEF.md`](BRIEF.md). El reparto del trabajo y el proceso, en [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Stack
@@ -168,16 +170,16 @@ docs/
 
 ## Despliegue
 
-La publicación (issue #13) es el último paso del proyecto. A grandes rasgos:
+Producción (issue #13): frontend en Vercel (<https://guios-pro-2-kappa.vercel.app>, rama `main`) y proyecto de Supabase `gnqkijgzeswsyzwjsifu` (us-east-1). Pasos para repetirlo en otro proyecto:
 
 1. **Supabase (proyecto hospedado):**
    - Crear el proyecto y enlazarlo: `npx supabase link --project-ref <ref>`.
-   - Aplicar las migraciones: `npx supabase db push`. La semilla (`supabase/seed.sql`) se carga una sola vez en la base nueva, por ejemplo pegándola en el editor SQL; `db push` no la ejecuta.
+   - Aplicar las migraciones y, solo en una base nueva, la semilla: `npx supabase db push --remote --include-seed` (probar antes con `--dry-run`). En las siguientes publicaciones, `npx supabase db push --remote` sin `--include-seed`.
    - Definir los secretos de las Edge Functions (`npx supabase secrets set NOMBRE=valor`; la lista está en [`docs/variables-entorno.md`](docs/variables-entorno.md)), con `LLM_PROVIDER=gemini` y `ORIGENES_PERMITIDOS` igual a la URL de Vercel, y publicar las funciones: `npx supabase functions deploy`.
    - Revisar en Authentication la política de contraseñas y la confirmación de correo, y añadir la URL de Vercel a las URL permitidas.
    - Promover al primer administrador ([Administrador inicial](#administrador-inicial)).
 2. **Vercel (frontend):**
    - Importar el repositorio como proyecto Vite (build `npm run build`, salida `dist`; `vercel.json` ya redirige todas las rutas a `index.html`).
    - Definir `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` con los valores del proyecto hospedado. Nunca van claves secretas en Vercel.
-   - Cada push a `main` despliega.
+   - Con el repositorio conectado, cada push a `main` despliega. Sin conectar: `npx vercel deploy --prod`.
 3. **Comprobar:** registrarse, crear una evaluación y, como administrador, abrir `/admin/sugerida`.
