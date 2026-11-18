@@ -1,0 +1,85 @@
+{
+  "descripcion": "BRIEF §6.1: filas = primer argumento (ID o IE), columnas = segundo (IS o IL).",
+  "casos": [
+    {
+      "a": 4,
+      "b": 1,
+      "esperado": 2
+    },
+    {
+      "a": 4,
+      "b": 2,
+      "esperado": 3
+    },
+    {
+      "a": 4,
+      "b": 3,
+      "esperado": 3
+    },
+    {
+      "a": 4,
+      "b": 4,
+      "esperado": 4
+    },
+    {
+      "a": 3,
+      "b": 1,
+      "esperado": 2
+    },
+    {
+      "a": 3,
+      "b": 2,
+      "esperado": 2
+    },
+    {
+      "a": 3,
+      "b": 3,
+      "esperado": 3
+    },
+    {
+      "a": 3,
+      "b": 4,
+      "esperado": 3
+    },
+    {
+      "a": 2,
+      "b": 1,
+      "esperado": 1
+    },
+    {
+      "a": 2,
+      "b": 2,
+      "esperado": 2
+    },
+    {
+      "a": 2,
+      "b": 3,
+      "esperado": 2
+    },
+    {
+      "a": 2,
+      "b": 4,
+      "esperado": 3
+    },
+    {
+      "a": 1,
+      "b": 1,
+      "esperado": 1
+    },
+    {
+      "a": 1,
+      "b": 2,
+      "esperado": 1
+    },
+    {
+      "a": 1,
+      "b": 3,
+      "esperado": 2
+    },
+    {
+      "a": 1,
+      "b": 4,
+      "esperado": 2
+    }
+  ]
+}

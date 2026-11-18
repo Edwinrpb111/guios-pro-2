@@ -1,0 +1,146 @@
+{
+  "descripcion": "BRIEF §6.4: casos borde de la recomendación (RN-08).",
+  "casos": [
+    {
+      "situacion": "Ningún factor evaluado",
+      "factores": [
+        {
+          "nombre": "Formación",
+          "alcance": "Interno",
+          "is": 3,
+          "id": 3,
+          "ps": [4, null, 3, 4]
+        },
+        {
+          "nombre": "Reusabilidad",
+          "alcance": "Externo",
+          "is": 2,
+          "id": 1,
+          "ps": [1, 1]
+        }
+      ],
+      "esperado": null
+    },
+    {
+      "situacion": "Todos los evaluados son F u O",
+      "factores": [
+        {
+          "nombre": "Formación",
+          "alcance": "Interno",
+          "is": 3,
+          "id": 4,
+          "ps": [4, 4, 3, 4]
+        },
+        {
+          "nombre": "Compatibilidad",
+          "alcance": "Externo",
+          "is": 3,
+          "id": 3,
+          "ps": [3, 3, 3, 3, 3, 3, 3, 3]
+        }
+      ],
+      "esperado": {
+        "codigo": "A",
+        "causas": []
+      }
+    },
+    {
+      "situacion": "Una única Debilidad con IR = 2 y el resto F u O",
+      "factores": [
+        {
+          "nombre": "Tiempo de adopción",
+          "alcance": "Interno",
+          "is": 2,
+          "id": 2,
+          "ps": [2, 3]
+        },
+        {
+          "nombre": "Prueba",
+          "alcance": "Externo",
+          "is": 3,
+          "id": 3,
+          "ps": [4]
+        }
+      ],
+      "esperado": {
+        "codigo": "B",
+        "causas": [
+          {
+            "nombre": "Tiempo de adopción",
+            "foda": "Debilidad",
+            "ir": 2
+          }
+        ]
+      }
+    },
+    {
+      "situacion": "Una Amenaza con IR = 2 y una Debilidad con IR = 4",
+      "factores": [
+        {
+          "nombre": "Portabilidad",
+          "alcance": "Externo",
+          "is": 2,
+          "id": 2,
+          "ps": [1, 2]
+        },
+        {
+          "nombre": "Apoyo de la alta dirección",
+          "alcance": "Interno",
+          "is": 4,
+          "id": 4,
+          "ps": [2]
+        }
+      ],
+      "esperado": {
+        "codigo": "C",
+        "causas": [
+          {
+            "nombre": "Apoyo de la alta dirección",
+            "foda": "Debilidad",
+            "ir": 4
+          }
+        ]
+      }
+    },
+    {
+      "situacion": "Factor relevante con un subfactor sin valorar",
+      "factores": [
+        {
+          "nombre": "Personalización",
+          "alcance": "Externo",
+          "is": 3,
+          "id": 4,
+          "ps": [1, 1, 1, null, 1, 1]
+        },
+        {
+          "nombre": "Prueba",
+          "alcance": "Externo",
+          "is": 3,
+          "id": 3,
+          "ps": [4]
+        }
+      ],
+      "esperado": {
+        "codigo": "A",
+        "causas": []
+      }
+    },
+    {
+      "situacion": "PM = 3,00 exacto en factor externo",
+      "factores": [
+        {
+          "nombre": "Fiabilidad",
+          "alcance": "Externo",
+          "is": 3,
+          "id": 3,
+          "ps": [3, 3, 3, 3, 3]
+        }
+      ],
+      "fodaEsperado": "Oportunidad",
+      "esperado": {
+        "codigo": "A",
+        "causas": []
+      }
+    }
+  ]
+}
