@@ -75,6 +75,12 @@ export const CONTEO_TESIS = FILAS_TESIS.map(({ idFactor, subfactores, citas }) =
   citas,
 }));
 
+/** Valor que la prueba sabe que existe (evita aserciones no nulas). */
+export function definido<T>(valor: T | undefined): T {
+  if (valor === undefined) throw new Error('Se esperaba un valor definido en la prueba');
+  return valor;
+}
+
 export type ApiFalsa = { [K in keyof ApiAdmin]: ReturnType<typeof vi.fn> & ApiAdmin[K] };
 
 export function crearApiFalsa(parcial: Partial<ApiAdmin> = {}): ApiFalsa {

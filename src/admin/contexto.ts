@@ -25,6 +25,8 @@ export function apiDiferida(cargar: () => Promise<ApiAdmin>): ApiAdmin {
   };
 }
 
+// El import dinámico no busca separar el bundle (Vite avisa que `lib/supabase` ya está en el
+// principal): evita que montar estas pantallas en pruebas exija las variables VITE_SUPABASE_*.
 const apiSupabase = apiDiferida(async () => {
   const [{ supabase }, { crearApiAdmin }] = await Promise.all([
     import('../lib/supabase'),
