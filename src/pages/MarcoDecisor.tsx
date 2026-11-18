@@ -17,10 +17,25 @@ interface EnlaceAdministracion {
   textoMovil: string;
 }
 
+/** Engranaje de «Configuración del recálculo»; decorativo, como los de `iconos.tsx`. */
+const IconoAjustes = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    aria-hidden
+    focusable={false}
+  >
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
+  </svg>
+);
+
 /**
  * Pantallas de administración del menú. `NavLink` sin `end`: el ítem queda activo también en
- * sus subrutas (P-09 en `/admin/sugerida/nuevo` y `/admin/sugerida/:id`). Aquí se sumará
- * «Configuración del recálculo» (issue #33).
+ * sus subrutas (P-09 en `/admin/sugerida/nuevo` y `/admin/sugerida/:id`). «Configuración del
+ * recálculo» es solo para administradores (issue #33).
  */
 const ENLACES_ADMINISTRACION: readonly EnlaceAdministracion[] = [
   {
@@ -28,6 +43,12 @@ const ENLACES_ADMINISTRACION: readonly EnlaceAdministracion[] = [
     icono: <IconoIA />,
     texto: 'Importancia sugerida',
     textoMovil: 'IA',
+  },
+  {
+    ruta: '/admin/configuracion',
+    icono: <IconoAjustes />,
+    texto: 'Configuración del recálculo',
+    textoMovil: 'Ajustes',
   },
 ];
 

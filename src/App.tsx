@@ -2,6 +2,7 @@ import { Route, Routes } from 'react-router';
 import { RutasSugerida } from './admin/rutas';
 import { RutaAdmin } from './auth/RutaAdmin';
 import { RutaProtegida } from './auth/RutaProtegida';
+import { AdminConfiguracionPage } from './pages/AdminConfiguracionPage';
 import { AdminSugeridaPage } from './pages/AdminSugeridaPage';
 import { ContextoPage } from './pages/ContextoPage';
 import { FactoresPage } from './pages/FactoresPage';
@@ -34,6 +35,7 @@ export function App() {
           <Route element={<MarcoDeRuta />}>
             <Route path="sugerida" element={<AdminSugeridaPage />} />
             <Route path="sugerida/*" element={<RutasSugerida />} />
+            <Route path="configuracion" element={<AdminConfiguracionPage />} />
           </Route>
         </Route>
         <Route path="*" element={<NoEncontradaPage />} />

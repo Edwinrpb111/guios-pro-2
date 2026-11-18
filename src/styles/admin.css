@@ -337,6 +337,82 @@ a.boton {
   display: block;
 }
 
+/* ---------- configuración del recálculo (issue #33) ---------- */
+.admin-configuracion {
+  max-width: 760px;
+}
+.admin-configuracion__bloque {
+  margin-bottom: var(--espacio-4);
+  max-width: none;
+}
+.admin-configuracion__bloque h2,
+.admin-clasificador__titulo {
+  font-size: var(--texto-base);
+  color: var(--navy);
+  margin: 0 0 var(--espacio-2);
+}
+.admin-campo {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--espacio-1);
+}
+.admin-campo input,
+.admin-campo select {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 4px;
+  border: 1px solid var(--line2);
+  border-radius: var(--radio-medio);
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 400;
+  background: #fff;
+}
+.admin-campo__ayuda {
+  display: block;
+  margin-bottom: var(--espacio-3);
+}
+.admin-formulario label.admin-campo {
+  margin-bottom: var(--espacio-1);
+}
+.admin-formulario__anios .admin-campo {
+  margin-bottom: var(--espacio-3);
+}
+.admin-clave fieldset {
+  border-top: 1px solid var(--line);
+  padding: var(--espacio-3) 0 0;
+  margin: var(--espacio-3) 0 0;
+}
+.admin-clave legend {
+  font-weight: 600;
+}
+.admin-clave__estado {
+  display: flex;
+  gap: var(--espacio-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin: var(--espacio-2) 0;
+}
+.chip[data-configurada='true'] {
+  background: var(--Fbg);
+  color: var(--F);
+  border-color: transparent;
+}
+.admin-cambios {
+  margin: 0;
+  padding-left: var(--espacio-4);
+}
+.admin-cambios li {
+  margin-bottom: 4px;
+}
+.admin-clasificador p {
+  margin: 0 0 6px;
+}
+.admin-clasificador p:last-child {
+  margin-bottom: 0;
+}
+
 /* ---------- móvil: tablas en tarjetas ---------- */
 @media (max-width: 760px) {
   .admin-indicadores {

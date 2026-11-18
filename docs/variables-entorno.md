@@ -27,23 +27,26 @@ Si faltan, `src/lib/auth.integracion.test.ts` se omite. Se pasan en la línea de
 
 ## Edge Functions (secretos de Supabase, `supabase secrets set`)
 
-| Variable                    | Tipo / valor                                                                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SUPABASE_SERVICE_ROLE_KEY` | Secreta (la inyecta la plataforma)                                                                                                                     |
-| `OPENALEX_API_KEY`          | Secreta                                                                                                                                                |
-| `CROSSREF_MAILTO`           | Correo del equipo                                                                                                                                      |
-| `LLM_PROVIDER`              | `gemini` \| `fake`                                                                                                                                     |
-| `GEMINI_API_KEY`            | Secreta                                                                                                                                                |
-| `LLM_MODEL`                 | `gemini-3.1-flash-lite`                                                                                                                                |
-| `LLM_UMBRAL`                | `0.7`                                                                                                                                                  |
-| `RECALCULO_MAX_CANDIDATOS`  | `50` (`15` para la demo)                                                                                                                               |
-| `ORIGENES_PERMITIDOS`       | Orígenes del frontend que acepta CORS, separados por comas. Por defecto `http://localhost:5173,http://127.0.0.1:5173`; en producción, la URL de Vercel |
-| `ADMIN_EMAIL`               | Solo README / paso manual: correo del administrador inicial                                                                                            |
+Desde el issue #33, un administrador puede definir `LLM_PROVIDER`, `LLM_MODEL`, `LLM_UMBRAL`, `RECALCULO_MAX_CANDIDATOS`, `CROSSREF_MAILTO`, `GEMINI_API_KEY` y `OPENALEX_API_KEY` desde la app, en **Configuración del recálculo** (`/admin/configuracion`). **Lo guardado en la app manda; lo que no está definido ahí sale de estos secretos** y, si tampoco están, del valor por defecto. Las claves se guardan cifradas en Supabase Vault y nunca vuelven al navegador ([ADR-010](decisiones/ADR-010-configuracion-del-recalculo-y-vault.md)). `ORIGENES_PERMITIDOS`, `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` solo se configuran como secretos.
+
+| Variable                    | Tipo / valor                                                                                                                                                                                    |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secreta (la inyecta la plataforma)                                                                                                                                                              |
+| `OPENALEX_API_KEY`          | Secreta                                                                                                                                                                                         |
+| `CROSSREF_MAILTO`           | Correo del equipo                                                                                                                                                                               |
+| `LLM_PROVIDER`              | `gemini` \| `fake`                                                                                                                                                                              |
+| `GEMINI_API_KEY`            | Secreta                                                                                                                                                                                         |
+| `LLM_MODEL`                 | `gemini-3.1-flash-lite`                                                                                                                                                                         |
+| `LLM_UMBRAL`                | `0.7`                                                                                                                                                                                           |
+| `RECALCULO_MAX_CANDIDATOS`  | `50` (`15` para la demo)                                                                                                                                                                        |
+| `ORIGENES_PERMITIDOS`       | Orígenes del frontend que acepta CORS, separados por comas. Por defecto `http://localhost:5173,http://127.0.0.1:5173`; en producción, la URL de Vercel. Solo secreto: no se cambia desde la app |
+| `ADMIN_EMAIL`               | Solo README / paso manual: correo del administrador inicial                                                                                                                                     |
 
 Notas:
 
 - `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` los inyecta la plataforma en las Edge Functions; no se definen a mano.
 - `ORIGENES_PERMITIDOS` no figura en BRIEF §13.7: se añade para cumplir §14 («solo aceptan el origen del frontend»).
 - Con `LLM_PROVIDER=fake` no hacen falta `OPENALEX_API_KEY` ni `GEMINI_API_KEY` ni red; `supabase/config.toml` lo fija para el entorno local. Con `gemini` hace falta `GEMINI_API_KEY` y, si se usa OpenAlex, `OPENALEX_API_KEY`; Crossref funciona sin clave (el correo `CROSSREF_MAILTO` es opcional, pero recomendable).
-- `LLM_UMBRAL` debe estar entre 0 y 1; `RECALCULO_MAX_CANDIDATOS` es un entero entre 1 y 200. Un valor inválido hace que la función responda 500 `configuracion_invalida` con el nombre de la variable.
+- `LLM_UMBRAL` debe estar entre 0 y 1; `RECALCULO_MAX_CANDIDATOS` es un entero entre 1 y 200. Un valor inválido hace que la función responda 500 `configuracion_invalida` con el nombre de la variable. La base aplica los mismos límites a lo que se guarda desde la app.
+- La configuración guardada en la app se lee en **cada petición**: un cambio se aplica al siguiente recálculo sin redesplegar. Un recálculo ya iniciado sigue con los parámetros guardados en el cálculo.
 - Secretos de producción: `npx supabase secrets set NOMBRE=valor`, nunca en archivos versionados. Más detalle en [`edge-functions.md`](edge-functions.md).
