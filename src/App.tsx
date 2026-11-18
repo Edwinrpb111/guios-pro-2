@@ -8,6 +8,7 @@ import { FactoresPage } from './pages/FactoresPage';
 import { InicioPage } from './pages/InicioPage';
 import { LoginPage } from './pages/LoginPage';
 import { NoEncontradaPage } from './pages/NoEncontradaPage';
+import { SubfactoresPage } from './pages/SubfactoresPage';
 
 /**
  * Rutas de la aplicación (BRIEF §12.1). Se irán agregando P-02..P-11
@@ -22,6 +23,7 @@ export function App() {
         <Route path="/" element={<InicioPage />} />
         <Route path="/evaluaciones/:id/contexto" element={<ContextoPage />} />
         <Route path="/evaluaciones/:id/factores" element={<FactoresPage />} />
+        <Route path="/evaluaciones/:id/subfactores" element={<SubfactoresPage />} />
         <Route path="/admin" element={<RutaAdmin />}>
           <Route path="sugerida" element={<AdminSugeridaPage />} />
           <Route path="sugerida/*" element={<RutasSugerida />} />

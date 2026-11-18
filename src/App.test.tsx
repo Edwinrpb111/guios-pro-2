@@ -37,4 +37,12 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Página no encontrada' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver al inicio' })).toHaveAttribute('href', '/');
   });
+
+  it('con sesión abre los subfactores de una evaluación en /evaluaciones/:id/subfactores', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/subfactores',
+    });
+    expect(await screen.findByText(/Ningún factor es relevante/)).toBeInTheDocument();
+  });
 });
