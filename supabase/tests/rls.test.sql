@@ -5,8 +5,11 @@ create extension if not exists pgtap with schema extensions;
 select plan(50);
 
 -- ---------------------------------------------------------------------------
--- Datos de prueba (como postgres, sin RLS)
+-- Datos de prueba (como postgres, sin RLS). Parte de una base sin semilla;
+-- el rollback final la restaura.
 -- ---------------------------------------------------------------------------
+truncate public.sugerida_factor, public.calculo_sugerida, public.subfactor, public.factor,
+  public.dimension cascade;
 insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000a', 'ana@prueba.ec', '{"nombre_completo":"Ana Decisora"}'),
   ('00000000-0000-0000-0000-00000000000b', 'beto@prueba.ec', '{}'),

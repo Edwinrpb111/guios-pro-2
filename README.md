@@ -26,20 +26,30 @@ Las variables de entorno están descritas en [`docs/variables-entorno.md`](docs/
 
 ## Comandos
 
-| Comando                           | Qué hace                                                   |
-| --------------------------------- | ---------------------------------------------------------- |
-| `npm run dev`                     | Servidor de desarrollo                                     |
-| `npm test`                        | Pruebas unitarias y de componentes                         |
-| `npm run test:coverage`           | Pruebas con cobertura (exige ≥ 95 % en `src/guios-core/`)  |
-| `npm run lint`                    | ESLint                                                     |
-| `npm run format` / `format:check` | Prettier                                                   |
-| `npm run typecheck`               | Verificación de tipos                                      |
-| `npm run build`                   | Build de producción                                        |
-| `npm run check`                   | Todo lo anterior, igual que la CI                          |
-| `npx supabase start`              | Levanta Supabase local (necesita Docker Desktop)           |
-| `npm run db:reset`                | Recrea la base local aplicando las migraciones             |
-| `npm run test:db`                 | Pruebas de RLS y funciones SQL (pgTAP) sobre la base local |
-| `npm run gen:types`               | Regenera `src/lib/database.types.ts` desde la base local   |
+| Comando                           | Qué hace                                                    |
+| --------------------------------- | ----------------------------------------------------------- |
+| `npm run dev`                     | Servidor de desarrollo                                      |
+| `npm test`                        | Pruebas unitarias y de componentes                          |
+| `npm run test:coverage`           | Pruebas con cobertura (exige ≥ 95 % en `src/guios-core/`)   |
+| `npm run lint`                    | ESLint                                                      |
+| `npm run format` / `format:check` | Prettier                                                    |
+| `npm run typecheck`               | Verificación de tipos                                       |
+| `npm run build`                   | Build de producción                                         |
+| `npm run check`                   | Todo lo anterior, igual que la CI                           |
+| `npx supabase start`              | Levanta Supabase local (necesita Docker Desktop)            |
+| `npm run db:reset`                | Recrea la base local aplicando las migraciones y la semilla |
+| `npm run db:semilla`              | Regenera `supabase/seed.sql` desde el CSV y la Tabla 5.3    |
+| `npm run test:db`                 | Pruebas de RLS y funciones SQL (pgTAP) sobre la base local  |
+| `npm run gen:types`               | Regenera `src/lib/database.types.ts` desde la base local    |
+
+## Administrador inicial
+
+La semilla no crea usuarios. El administrador se registra en la app como cualquier usuario (queda como `decisor`) y después se le sube el rol desde el editor SQL de Supabase, con el correo de `ADMIN_EMAIL`:
+
+```sql
+update public.perfil set rol = 'administrador'
+where id = (select id from auth.users where email = '<ADMIN_EMAIL>');
+```
 
 ## Estructura
 
