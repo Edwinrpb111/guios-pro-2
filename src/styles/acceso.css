@@ -1,0 +1,240 @@
+/*
+ * P-01: inicio de sesión y registro (issue #29). Trasladado de la pantalla de login del
+ * prototipo del CP1 (docs/fuentes/GUIOS_PRO_2.0_prototipo.html, img_cp1/mk_01_login.png):
+ * panel de marca en azul marino a la izquierda y tarjeta del formulario a la derecha.
+ * Reutiliza .campo, .boton, .alerta, .ayuda-texto y .layout__logo. En móvil (760 px)
+ * pasa a una sola columna con la marca compacta arriba.
+ */
+
+.acceso {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  background: var(--bg);
+}
+
+/* ---------- panel de presentación ---------- */
+.acceso__presentacion {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--espacio-6);
+  padding: 56px;
+  background: var(--navy);
+  color: #fff;
+}
+/* Formas decorativas suaves con los colores de la marca */
+.acceso__presentacion::before,
+.acceso__presentacion::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.acceso__presentacion::before {
+  width: 520px;
+  height: 520px;
+  right: -220px;
+  top: -200px;
+  background: radial-gradient(circle, rgba(242, 140, 27, 0.14), transparent 70%);
+}
+.acceso__presentacion::after {
+  width: 640px;
+  height: 640px;
+  left: -260px;
+  bottom: -320px;
+  background: radial-gradient(circle, rgba(47, 111, 179, 0.35), transparent 70%);
+}
+
+.acceso__marca {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.acceso__nombre {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.acceso__mensaje {
+  max-width: 500px;
+}
+.acceso__lema {
+  margin: 0 0 14px;
+  font-size: clamp(26px, 2.6vw, 36px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+}
+.acceso__descripcion {
+  margin: 0;
+  max-width: 460px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 15px;
+}
+.acceso__pasos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.acceso__pasos li {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radio);
+  background: rgba(255, 255, 255, 0.08);
+  font-size: var(--texto-pequeno);
+}
+.acceso__pasos b {
+  display: block;
+  margin-bottom: 3px;
+  /* Naranja aclarado para llegar a 4,5:1 sobre la tarjeta translúcida (texto de 12 px). */
+  color: color-mix(in srgb, var(--orange) 70%, #fff);
+}
+.acceso__pie {
+  margin: 0;
+  font-size: var(--texto-pequeno);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* ---------- formulario ---------- */
+.acceso__lado-formulario {
+  display: grid;
+  place-items: center;
+  padding: var(--espacio-6);
+}
+.acceso__tarjeta {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--espacio-6);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--sombra);
+}
+
+.acceso__pestanas {
+  display: flex;
+  margin-bottom: var(--espacio-5);
+  border-bottom: 1px solid var(--line);
+}
+.acceso__pestana {
+  flex: 1;
+  margin-bottom: -1px;
+  padding: 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+.acceso__pestana:hover {
+  color: var(--text);
+}
+.acceso__pestana[aria-selected='true'] {
+  color: var(--navy);
+  border-bottom-color: var(--orange);
+}
+.acceso__pestana:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radio-chico) var(--radio-chico) 0 0;
+}
+
+.acceso__titulo {
+  margin: 0 0 4px;
+  font-size: 20px;
+  letter-spacing: -0.2px;
+}
+.acceso__subtitulo {
+  margin: 0 0 var(--espacio-5);
+  color: var(--muted);
+}
+
+.acceso .campo input {
+  height: 44px;
+  font: inherit;
+}
+.acceso .campo input:focus-visible {
+  outline: var(--foco);
+  outline-offset: 1px;
+  border-color: var(--O);
+}
+.acceso .campo input[aria-invalid='true'] {
+  border-color: var(--A);
+}
+.acceso__ayuda {
+  margin: 0;
+}
+.acceso__formulario .alerta {
+  margin: 0 0 14px;
+}
+
+.acceso__enviar {
+  width: 100%;
+  height: 44px;
+  justify-content: center;
+  margin-top: 6px;
+}
+/* Mientras envía, el texto sigue siendo legible (la regla general deja el botón al 45 %). */
+.acceso__enviar:disabled {
+  opacity: 0.75;
+  cursor: progress;
+}
+.acceso__giro {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: acceso-giro 0.8s linear infinite;
+}
+@keyframes acceso-giro {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .acceso__giro {
+    animation: none;
+  }
+}
+
+.acceso__nota {
+  margin: 14px 0 0;
+  text-align: center;
+}
+
+/* ---------- móvil ---------- */
+@media (max-width: 760px) {
+  .acceso {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .acceso__presentacion {
+    gap: var(--espacio-4);
+    padding: 24px 20px 28px;
+  }
+  .acceso__lema {
+    margin: 0;
+    font-size: 22px;
+  }
+  .acceso__descripcion,
+  .acceso__pasos {
+    display: none;
+  }
+  .acceso__lado-formulario {
+    place-items: start center;
+    padding: 20px 16px 32px;
+  }
+  .acceso__tarjeta {
+    padding: 24px 20px;
+  }
+}
