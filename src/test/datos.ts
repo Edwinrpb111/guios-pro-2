@@ -98,6 +98,7 @@ export function crearRepositorioFalso(): Repositorio {
     guardarValoracionFactor: vi.fn(),
     guardarValoracionSubfactor: vi.fn(),
     finalizarEvaluacion: vi.fn(),
+    eliminarEvaluacion: vi.fn(),
   };
 }
 
@@ -114,4 +115,5 @@ export function restablecerRepositorioFalso(repo: Repositorio): void {
   vi.mocked(repo.guardarValoracionFactor).mockResolvedValue(undefined);
   vi.mocked(repo.guardarValoracionSubfactor).mockResolvedValue(undefined);
   vi.mocked(repo.finalizarEvaluacion).mockResolvedValue(undefined);
+  vi.mocked(repo.eliminarEvaluacion).mockResolvedValue(undefined);
 }
