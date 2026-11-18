@@ -1,14 +1,32 @@
-/* Estilos globales mínimos. Los tokens del CP1 llegan en el issue #6 (tokens.css). */
+/* Estilos globales. Los tokens y los componentes base del CP1 se importan aquí (issue #6). */
+/* Inter, igual que el prototipo del CP1; si no carga, se usan las fuentes del sistema (--fuente). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import './tokens.css';
+@import './componentes.css';
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
-  line-height: 1.5;
+  height: 100%;
+}
+
+body {
+  font-family: var(--fuente);
+  font-size: var(--texto-base);
+  line-height: var(--interlineado);
+  background: var(--bg);
+  color: var(--text);
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
 }
 
 .pagina {
