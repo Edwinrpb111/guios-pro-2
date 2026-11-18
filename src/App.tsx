@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router';
+import { RutasSugerida } from './admin/rutas';
 import { RutaAdmin } from './auth/RutaAdmin';
 import { RutaProtegida } from './auth/RutaProtegida';
 import { AdminSugeridaPage } from './pages/AdminSugeridaPage';
@@ -19,6 +20,7 @@ export function App() {
         <Route path="/" element={<InicioPage />} />
         <Route path="/admin" element={<RutaAdmin />}>
           <Route path="sugerida" element={<AdminSugeridaPage />} />
+          <Route path="sugerida/*" element={<RutasSugerida />} />
         </Route>
         <Route path="*" element={<NoEncontradaPage />} />
       </Route>
