@@ -17,3 +17,4 @@ La lógica del método debe vivir en un solo lugar (RNF-07) y no conocer la base
 
 - Un usuario malintencionado solo podría alterar sus propias evaluaciones.
 - La interfaz usa el mismo módulo para vistas previas y para la fotografía final.
+- El recálculo por pasos con Edge Functions está en [ADR-004](ADR-004-recalculo-por-pasos.md); lo que la base garantiza sobre el cálculo, en [ADR-005](ADR-005-ciclo-de-vida-del-calculo.md); el guardado de las evaluaciones, en [ADR-008](ADR-008-evaluacion-autoguardado-y-fotografia.md).

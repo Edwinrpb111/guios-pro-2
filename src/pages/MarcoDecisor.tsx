@@ -4,6 +4,7 @@ import { useAuth } from '../auth/useAuth';
 import { Layout } from '../components/Layout';
 import { useNuevaEvaluacion } from '../evaluacion/consultas';
 import { iniciales, nombreDeUsuario } from '../evaluacion/usuario';
+import { AyudaMetodo } from './AyudaMetodo';
 import { IconoIA, IconoInicio, IconoNueva, IconoSalir } from './iconos';
 import { ContextoMarco } from './marco';
 
@@ -71,6 +72,7 @@ export function MarcoDecisor({ barraInferior, children }: MarcoDecisorProps) {
           )}
         </>
       }
+      accionesCabecera={<AyudaMetodo />}
       barraInferior={barraInferior}
     >
       <ContextoMarco.Provider value={{ crearEvaluacion: crear, creandoEvaluacion: creando }}>
