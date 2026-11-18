@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, type InitialEntry } from 'react-router';
@@ -22,22 +23,34 @@ export function crearAuthConSesion(
   rol: 'decisor' | 'administrador',
   parcial: Partial<ValorAuth> = {},
 ): ValorAuth {
-  const usuario = { id: 'u-1', email: 'ana@example.com' } as ValorAuth['usuario'];
+  const usuario = {
+    id: 'u-1',
+    email: 'ana@example.com',
+    user_metadata: { nombre_completo: 'Ana Pérez' },
+  } as unknown as ValorAuth['usuario'];
   return crearAuth({ sesion: { user: usuario } as ValorAuth['sesion'], usuario, rol, ...parcial });
 }
 
-/** Renderiza `ui` dentro de un router en memoria y con el contexto de auth simulado. */
+/**
+ * Renderiza `ui` dentro de un router en memoria, con el contexto de auth simulado y un
+ * cliente de consultas nuevo (sin reintentos, para que los errores se vean al instante).
+ */
 export function renderConAuth(
   ui: ReactElement,
   opciones: { auth?: ValorAuth; ruta?: InitialEntry } = {},
 ) {
   const auth = opciones.auth ?? crearAuth();
+  const consultas = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  });
   return {
     auth,
     ...render(
-      <ContextoAuth.Provider value={auth}>
-        <MemoryRouter initialEntries={[opciones.ruta ?? '/']}>{ui}</MemoryRouter>
-      </ContextoAuth.Provider>,
+      <QueryClientProvider client={consultas}>
+        <ContextoAuth.Provider value={auth}>
+          <MemoryRouter initialEntries={[opciones.ruta ?? '/']}>{ui}</MemoryRouter>
+        </ContextoAuth.Provider>
+      </QueryClientProvider>,
     ),
   };
 }

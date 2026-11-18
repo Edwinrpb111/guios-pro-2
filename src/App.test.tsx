@@ -1,21 +1,29 @@
 import { screen } from '@testing-library/react';
 import { App } from './App';
+import { repositorio } from './datos';
 import { crearAuth, crearAuthConSesion, renderConAuth } from './test/auth';
+import { restablecerRepositorioFalso } from './test/datos';
+
+vi.mock('./datos', async () => ({
+  repositorio: (await import('./test/datos')).crearRepositorioFalso(),
+}));
 
 describe('App', () => {
+  beforeEach(() => restablecerRepositorioFalso(repositorio));
+
   it('sin sesión, / redirige a la pantalla de ingreso', () => {
     renderConAuth(<App />, { auth: crearAuth(), ruta: '/' });
     expect(screen.getByRole('tab', { name: 'Iniciar sesión' })).toBeInTheDocument();
   });
 
-  it('con sesión muestra la pantalla de inicio en /', () => {
+  it('con sesión muestra la pantalla de inicio en /', async () => {
     renderConAuth(<App />, { auth: crearAuthConSesion('decisor'), ruta: '/' });
-    expect(screen.getByRole('heading', { name: 'GUIOS PRO 2.0' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hola, Ana' })).toBeInTheDocument();
   });
 
-  it('un decisor que entra a /admin/sugerida es redirigido al inicio', () => {
+  it('un decisor que entra a /admin/sugerida es redirigido al inicio', async () => {
     renderConAuth(<App />, { auth: crearAuthConSesion('decisor'), ruta: '/admin/sugerida' });
-    expect(screen.getByRole('heading', { name: 'GUIOS PRO 2.0' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Hola, Ana' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Importancia sugerida' })).not.toBeInTheDocument();
   });
 
