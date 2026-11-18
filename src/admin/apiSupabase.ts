@@ -1,0 +1,267 @@
+/**
+ * `ApiAdmin` con Supabase (BRIEF §11): lecturas con RLS de administrador, funciones SQL de
+ * §11.2 y Edge Functions de §11.3. Valida los dominios cerrados al leer (BRIEF §14).
+ */
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { esImportancia, type Importancia } from '../guios-core';
+import type { Database, Json } from '../lib/database.types';
+import {
+  ErrorAdmin,
+  type ApiAdmin,
+  type CalculoResumen,
+  type EstadoCalculo,
+  type FilaSugerida,
+  type ParametrosCalculo,
+} from './tipos';
+
+export type ClienteAdmin = SupabaseClient<Database>;
+
+const COLUMNAS_CALCULO =
+  'id_calculo, origen, anio_inicio, anio_fin, etiqueta_rango, bases_datos, fecha_calculo, ' +
+  'vigente, estado, progreso, mensaje_error, parametros';
+
+const ESTADOS: readonly EstadoCalculo[] = [
+  'en_proceso',
+  'pausado',
+  'completado',
+  'publicado',
+  'descartado',
+  'fallido',
+];
+
+/** PostgREST devuelve como máximo 1000 filas por consulta (`max_rows`). */
+const TAMANO_PAGINA = 1000;
+
+const SIN_CONEXION =
+  'No se pudo contactar con el servicio de recálculo. Revisa tu conexión e intenta de nuevo.';
+
+interface FilaCalculo {
+  id_calculo: number;
+  origen: string;
+  anio_inicio: number | null;
+  anio_fin: number | null;
+  etiqueta_rango: string | null;
+  bases_datos: string | null;
+  fecha_calculo: string;
+  vigente: boolean;
+  estado: string;
+  progreso: number;
+  mensaje_error: string | null;
+  parametros: Json | null;
+}
+
+function exigir<T>(resultado: { data: T; error: { message: string } | null }): T {
+  if (resultado.error !== null) throw new ErrorAdmin(resultado.error.message);
+  return resultado.data;
+}
+
+function importancia(valor: number, campo: string): Importancia {
+  if (!esImportancia(valor)) throw new ErrorAdmin(`Importancia inválida en ${campo}: ${valor}`);
+  return valor;
+}
+
+function mapearCalculo(fila: FilaCalculo): CalculoResumen {
+  if (!ESTADOS.includes(fila.estado as EstadoCalculo)) {
+    throw new ErrorAdmin(`El cálculo ${fila.id_calculo} tiene un estado desconocido.`);
+  }
+  if (fila.origen !== 'tesis' && fila.origen !== 'ia') {
+    throw new ErrorAdmin(`El cálculo ${fila.id_calculo} tiene un origen desconocido.`);
+  }
+  const parametros =
+    fila.parametros !== null &&
+    typeof fila.parametros === 'object' &&
+    !Array.isArray(fila.parametros)
+      ? (fila.parametros as ParametrosCalculo)
+      : null;
+  return {
+    id: fila.id_calculo,
+    origen: fila.origen,
+    anioInicio: fila.anio_inicio,
+    anioFin: fila.anio_fin,
+    etiquetaRango: fila.etiqueta_rango,
+    basesDatos: fila.bases_datos,
+    fecha: fila.fecha_calculo,
+    vigente: fila.vigente,
+    estado: fila.estado as EstadoCalculo,
+    progreso: fila.progreso,
+    mensajeError: fila.mensaje_error,
+    parametros,
+  };
+}
+
+/** Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español. */
+async function errorDeFuncion(error: unknown): Promise<ErrorAdmin> {
+  const contexto = (error as { context?: unknown } | null)?.context;
+  if (contexto instanceof Response) {
+    try {
+      const cuerpo = (await contexto.json()) as {
+        error?: unknown;
+        codigo?: unknown;
+        estado?: unknown;
+      };
+      if (typeof cuerpo.error === 'string') {
+        return new ErrorAdmin(
+          cuerpo.error,
+          typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
+          typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
+        );
+      }
+    } catch {
+      // Cuerpo no JSON: se usa el mensaje genérico.
+    }
+  }
+  return new ErrorAdmin(SIN_CONEXION);
+}
+
+async function invocar<T>(cliente: ClienteAdmin, funcion: string, cuerpo: object): Promise<T> {
+  const { data, error } = await cliente.functions.invoke(funcion, { body: cuerpo });
+  if (error) throw await errorDeFuncion(error);
+  return data as T;
+}
+
+async function rpcSinResultado(
+  cliente: ClienteAdmin,
+  funcion: 'publicar_calculo' | 'descartar_calculo' | 'pausar_calculo',
+  id: number,
+): Promise<void> {
+  exigir(await cliente.rpc(funcion, { p_id_calculo: id }));
+}
+
+export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
+  return {
+    async listarCalculos() {
+      const filas = exigir(
+        await cliente
+          .from('calculo_sugerida')
+          .select(COLUMNAS_CALCULO)
+          .order('fecha_calculo', { ascending: false })
+          .order('id_calculo', { ascending: false }),
+      ) as unknown as FilaCalculo[];
+      return filas.map(mapearCalculo);
+    },
+
+    async obtenerCalculo(id) {
+      const fila = exigir(
+        await cliente
+          .from('calculo_sugerida')
+          .select(COLUMNAS_CALCULO)
+          .eq('id_calculo', id)
+          .maybeSingle(),
+      ) as unknown as FilaCalculo | null;
+      return fila === null ? null : mapearCalculo(fila);
+    },
+
+    async filasSugeridas(id) {
+      const filas = exigir(
+        await cliente
+          .from('sugerida_factor')
+          .select(
+            'id_factor, num_subfactores, total_citas, razon_citas, importancia_experto, ' +
+              'importancia_literatura, importancia_sugerida',
+          )
+          .eq('id_calculo', id),
+      ) as unknown as Database['public']['Tables']['sugerida_factor']['Row'][];
+      return filas.map((f): FilaSugerida => ({
+        idFactor: f.id_factor,
+        subfactores: f.num_subfactores,
+        citas: f.total_citas,
+        razon: Number(f.razon_citas),
+        ie: importancia(f.importancia_experto, 'importancia_experto'),
+        il: importancia(f.importancia_literatura, 'importancia_literatura'),
+        is: importancia(f.importancia_sugerida, 'importancia_sugerida'),
+      }));
+    },
+
+    async catalogo() {
+      const filas = exigir(
+        await cliente
+          .from('factor')
+          .select('id_factor, nombre, orden, subfactor(id_subfactor, enunciado, orden)'),
+      ) as unknown as {
+        id_factor: number;
+        nombre: string;
+        orden: number;
+        subfactor: { id_subfactor: number; enunciado: string; orden: number }[];
+      }[];
+      return filas
+        .map((f) => ({
+          id: f.id_factor,
+          nombre: f.nombre,
+          orden: f.orden,
+          subfactores: f.subfactor
+            .map((s) => ({ id: s.id_subfactor, enunciado: s.enunciado, orden: s.orden }))
+            .sort((a, b) => a.orden - b.orden),
+        }))
+        .sort((a, b) => a.orden - b.orden);
+    },
+
+    async referencias(id) {
+      const todas: Awaited<ReturnType<ApiAdmin['referencias']>> = [];
+      for (let desde = 0; ; desde += TAMANO_PAGINA) {
+        const filas =
+          exigir(
+            await cliente
+              .from('referencia')
+              .select('id_referencia, id_subfactor, titulo, anio, doi, base_datos')
+              .eq('id_calculo', id)
+              .order('id_referencia')
+              .range(desde, desde + TAMANO_PAGINA - 1),
+          ) ?? [];
+        for (const r of filas) {
+          todas.push({
+            id: r.id_referencia,
+            idSubfactor: r.id_subfactor,
+            titulo: r.titulo,
+            anio: r.anio,
+            doi: r.doi,
+            base: r.base_datos,
+          });
+        }
+        if (filas.length < TAMANO_PAGINA) return todas;
+      }
+    },
+
+    async iniciarRecalculo({ anioInicio, anioFin, fuentes }) {
+      const respuesta = await invocar<{ id_calculo: number }>(cliente, 'recalculo-iniciar', {
+        anio_inicio: anioInicio,
+        anio_fin: anioFin,
+        fuentes,
+      });
+      return respuesta.id_calculo;
+    },
+
+    pasoRecalculo(id) {
+      return invocar(cliente, 'recalculo-paso', { id_calculo: id });
+    },
+
+    pausar: (id) => rpcSinResultado(cliente, 'pausar_calculo', id),
+    publicar: (id) => rpcSinResultado(cliente, 'publicar_calculo', id),
+    descartar: (id) => rpcSinResultado(cliente, 'descartar_calculo', id),
+
+    async conteoCitas(id) {
+      const filas = exigir(await cliente.rpc('conteo_citas', { p_id_calculo: id })) ?? [];
+      return filas.map((f) => ({
+        idFactor: f.id_factor,
+        subfactores: f.num_subfactores,
+        citas: f.total_citas,
+      }));
+    },
+
+    async guardarResultado(id, filas) {
+      exigir(
+        await cliente.rpc('guardar_resultado_calculo', {
+          p_id_calculo: id,
+          p_filas: filas.map((f) => ({
+            id_factor: f.idFactor,
+            num_subfactores: f.subfactores,
+            total_citas: f.citas,
+            razon_citas: f.razon,
+            importancia_experto: f.ie,
+            importancia_literatura: f.il,
+            importancia_sugerida: f.is,
+          })),
+        }),
+      );
+    },
+  };
+}

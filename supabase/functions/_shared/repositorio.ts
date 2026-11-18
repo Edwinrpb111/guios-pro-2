@@ -58,9 +58,11 @@ export interface NuevaReferencia {
 export interface Repositorio {
   /** Los subfactores del catálogo, ordenados por factor y por subfactor. */
   catalogo(): Promise<SubfactorCatalogo[]>;
-  /** Crea el cálculo `en_proceso` y devuelve su id. */
-  crearCalculo(datos: NuevoCalculo): Promise<number>;
-  crearPasos(idCalculo: number, idsSubfactor: number[]): Promise<void>;
+  /**
+   * Crea, en una sola transacción, el cálculo `en_proceso` y un paso `pendiente` por cada
+   * subfactor del catálogo; devuelve su id. Si algo falla no queda nada creado.
+   */
+  crearCalculoConPasos(datos: NuevoCalculo): Promise<number>;
   obtenerCalculo(idCalculo: number): Promise<Calculo | null>;
   actualizarCalculo(
     idCalculo: number,

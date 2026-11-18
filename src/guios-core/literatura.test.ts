@@ -1,4 +1,12 @@
-import { IE_EXPERTOS, METODO_CUARTILES, cuartiles, il, razon, recalcularIS } from './literatura';
+import {
+  IE_EXPERTOS,
+  METODO_CUARTILES,
+  cuartiles,
+  il,
+  importanciaSugeridaPorFactor,
+  razon,
+  recalcularIS,
+} from './literatura';
 import tesis from './fixtures/is_tesis.json';
 
 describe('razon (RN-09)', () => {
@@ -63,5 +71,57 @@ describe('recalcularIS (RN-09, RN-10) — fixture §6.2', () => {
     const resultado = recalcularIS(entradas);
     expect(resultado.factores[0]?.r).toBe(4.125);
     expect(resultado.cuartiles.q2).toBeCloseTo(3.65, 10);
+  });
+});
+
+describe('importanciaSugeridaPorFactor (RN-09, RN-10) — resultado de un recálculo', () => {
+  const conteos = tesis.factores.map((f, i) => ({
+    idFactor: 100 + i,
+    subfactores: f.ns,
+    citas: f.tc,
+  }));
+
+  it('reproduce IL e IS de la Tabla 5.3 conservando el id de cada factor', () => {
+    const { factores, cuartiles: q } = importanciaSugeridaPorFactor(conteos);
+    expect(factores.map((f) => f.idFactor)).toEqual(conteos.map((c) => c.idFactor));
+    expect(factores.map((f) => f.il)).toEqual(tesis.factores.map((f) => f.il));
+    expect(factores.map((f) => f.is)).toEqual(tesis.factores.map((f) => f.is));
+    expect(q.q2).toBeCloseTo(tesis.cuartiles.q2, 10);
+  });
+
+  it('devuelve n, c, r exacta e IE = 3 de cada factor', () => {
+    const [compatibilidad] = importanciaSugeridaPorFactor(conteos).factores;
+    expect(compatibilidad).toEqual({
+      idFactor: 100,
+      subfactores: 8,
+      citas: 33,
+      r: 4.125,
+      ie: IE_EXPERTOS,
+      il: 3,
+      is: 3,
+    });
+  });
+
+  it('IL es relativa: si todos tienen la misma razón, todos quedan en IL 1 e IS 2', () => {
+    const iguales = [1, 2, 3].map((id) => ({ idFactor: id, subfactores: 2, citas: 0 }));
+    const { factores } = importanciaSugeridaPorFactor(iguales);
+    expect(factores.map((f) => [f.il, f.is])).toEqual([
+      [1, 2],
+      [1, 2],
+      [1, 2],
+    ]);
+  });
+
+  it('rechaza factores repetidos, una lista vacía o un factor sin subfactores', () => {
+    expect(() =>
+      importanciaSugeridaPorFactor([
+        { idFactor: 1, subfactores: 1, citas: 0 },
+        { idFactor: 1, subfactores: 1, citas: 2 },
+      ]),
+    ).toThrow(/repetido/);
+    expect(() => importanciaSugeridaPorFactor([])).toThrow(RangeError);
+    expect(() => importanciaSugeridaPorFactor([{ idFactor: 1, subfactores: 0, citas: 1 }])).toThrow(
+      RangeError,
+    );
   });
 });

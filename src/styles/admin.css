@@ -1,0 +1,375 @@
+/*
+ * Pantallas de administración de la importancia sugerida (P-08, P-09 y P-10).
+ * Basadas en vAdmin(), mNewRun() y dCalc() de docs/fuentes/GUIOS_PRO_2.0_prototipo.html,
+ * con los tokens de tokens.css. Punto de quiebre móvil: 760 px (BRIEF §12.3).
+ */
+.admin {
+  max-width: 1100px;
+}
+
+.admin__migas {
+  font-size: var(--texto-pequeno);
+  color: var(--muted);
+  margin-bottom: var(--espacio-2);
+}
+
+.admin__cabecera {
+  display: flex;
+  gap: var(--espacio-4);
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: var(--espacio-4);
+}
+.admin__cabecera h1 {
+  font-size: var(--texto-titulo);
+  color: var(--navy);
+  margin: 0;
+}
+.admin__descripcion {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+a.boton {
+  text-decoration: none;
+}
+
+.admin-ayuda {
+  font-size: var(--texto-pequeno);
+  color: var(--muted);
+}
+.admin-bloque {
+  display: block;
+  font-weight: 400;
+}
+.admin-crece {
+  flex: 1;
+  align-self: center;
+}
+
+/* ---------- avisos ---------- */
+.admin-aviso {
+  border-radius: var(--radio-medio);
+  padding: var(--espacio-3) var(--espacio-4);
+  margin: var(--espacio-3) 0;
+  border: 1px solid var(--line);
+  background: var(--Obg);
+  color: var(--text);
+}
+.admin-aviso--error {
+  background: var(--Abg);
+  border-color: var(--A);
+}
+.admin-aviso--exito {
+  background: var(--Fbg);
+  border-color: var(--F);
+}
+
+/* ---------- indicadores y tarjetas ---------- */
+.admin-indicadores {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--espacio-4);
+  margin-bottom: var(--espacio-4);
+}
+.admin-indicador,
+.admin-tarjeta {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+}
+.admin-indicador {
+  padding: var(--espacio-4);
+}
+.admin-indicador__titulo {
+  font-size: var(--texto-pequeno);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0;
+}
+.admin-indicador__valor {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--navy);
+  margin: 6px 0 0;
+}
+.admin-tarjeta {
+  padding: var(--espacio-4);
+  overflow-x: auto;
+}
+.admin-tarjeta__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--espacio-3);
+  flex-wrap: wrap;
+}
+.admin-tarjeta__cabecera h2 {
+  font-size: 16px;
+  margin: 0 0 var(--espacio-3);
+}
+
+/* ---------- tablas ---------- */
+.admin-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+.admin-tabla th,
+.admin-tabla td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.admin-tabla thead th {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.admin-tabla tbody th {
+  font-weight: 600;
+}
+.admin-tabla__acciones {
+  text-align: right;
+  white-space: nowrap;
+}
+.admin-tabla__acciones .boton + .boton {
+  margin-left: var(--espacio-2);
+}
+
+.admin-estado[data-estado='vigente'] {
+  background: var(--Fbg);
+  color: var(--F);
+  border-color: transparent;
+}
+.admin-estado[data-estado='pausado'],
+.admin-estado[data-estado='en_proceso'],
+.admin-estado[data-estado='completado'] {
+  background: var(--orange2);
+  color: var(--D);
+  border-color: transparent;
+}
+.admin-estado[data-estado='fallido'] {
+  background: var(--Abg);
+  color: var(--A);
+  border-color: transparent;
+}
+.chip[data-origen='ia'] {
+  background: var(--orange2);
+  color: var(--D);
+  border-color: transparent;
+}
+.chip[data-origen='tesis'] {
+  background: var(--navy3);
+  color: var(--navy);
+  border-color: transparent;
+}
+
+/* Nivel de importancia: el color acompaña al número y al texto (BRIEF §12.2). */
+.admin-nivel {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radio-pildora);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #fff;
+  white-space: nowrap;
+}
+.admin-nivel[data-nivel='1'] {
+  background: var(--l1);
+}
+.admin-nivel[data-nivel='2'] {
+  background: var(--l2);
+}
+.admin-nivel[data-nivel='3'] {
+  background: var(--l3);
+}
+.admin-nivel[data-nivel='4'] {
+  background: var(--l4);
+}
+.admin-variacion {
+  font-size: var(--texto-pequeno);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.admin-variacion[data-variacion='sube'] {
+  color: var(--F);
+}
+.admin-variacion[data-variacion='baja'] {
+  color: var(--A);
+}
+.admin-variacion[data-variacion='igual'] {
+  color: var(--muted);
+}
+
+.admin-enlace {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--O);
+  font-weight: 600;
+  text-decoration: underline;
+  text-align: left;
+}
+
+/* ---------- progreso (P-09) ---------- */
+.admin-progreso p {
+  margin: 0 0 6px;
+}
+.admin-progreso__barra {
+  height: 10px;
+  border-radius: var(--radio-pildora);
+  background: var(--line);
+  overflow: hidden;
+  margin-bottom: var(--espacio-3);
+}
+.admin-progreso__relleno {
+  height: 100%;
+  background: var(--orange);
+  transition: width 0.3s;
+}
+.admin-cierre {
+  font-weight: 600;
+}
+
+/* ---------- formulario (P-09) ---------- */
+.admin-formulario {
+  max-width: 640px;
+}
+.admin-formulario__anios {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--espacio-3);
+}
+.admin-formulario label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--espacio-3);
+}
+.admin-formulario input[inputmode='numeric'] {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 4px;
+  border: 1px solid var(--line2);
+  border-radius: var(--radio-medio);
+  padding: 0 10px;
+  font: inherit;
+}
+.admin-formulario fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 var(--espacio-3);
+}
+.admin-formulario legend {
+  font-weight: 600;
+  margin-bottom: var(--espacio-2);
+}
+.admin-formulario__fuente {
+  font-weight: 400 !important;
+}
+.admin-formulario__botones {
+  display: flex;
+  gap: var(--espacio-2);
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: var(--espacio-4);
+}
+
+/* ---------- panel lateral (P-10) ---------- */
+.admin-velo {
+  position: fixed;
+  inset: 0;
+  background: rgba(16, 30, 54, 0.35);
+  z-index: 40;
+}
+.admin-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(640px, 100%);
+  background: var(--surface);
+  box-shadow: var(--sombra);
+  z-index: 41;
+  overflow-y: auto;
+  padding: var(--espacio-4) var(--espacio-5);
+}
+.admin-panel__cabecera {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--espacio-3);
+  align-items: flex-start;
+}
+.admin-panel__cabecera h2 {
+  margin: 2px 0;
+  font-size: 18px;
+  color: var(--navy);
+}
+.admin-panel__cabecera p {
+  margin: 0;
+}
+.admin-parametros dl {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px var(--espacio-4);
+  margin: 0 0 var(--espacio-4);
+}
+.admin-parametros dt {
+  font-size: var(--texto-pequeno);
+  color: var(--muted);
+}
+.admin-parametros dd {
+  margin: 0;
+  font-weight: 600;
+}
+.admin-parametros h3,
+.admin-referencias h3 {
+  font-size: 14px;
+  margin: var(--espacio-4) 0 var(--espacio-2);
+}
+.admin-referencias ul {
+  margin: 0 0 var(--espacio-3);
+  padding-left: 18px;
+}
+.admin-referencias li {
+  margin-bottom: 6px;
+}
+.admin-referencias li > span {
+  display: block;
+}
+
+/* ---------- móvil: tablas en tarjetas ---------- */
+@media (max-width: 760px) {
+  .admin-indicadores {
+    grid-template-columns: 1fr;
+  }
+  .admin-tabla thead {
+    display: none;
+  }
+  .admin-tabla tr {
+    display: block;
+    border-bottom: 1px solid var(--line);
+    padding: var(--espacio-2) 0;
+  }
+  .admin-tabla th,
+  .admin-tabla td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--espacio-3);
+    border: 0;
+    padding: 4px 0;
+  }
+  .admin-tabla td[data-l]::before {
+    content: attr(data-l);
+    color: var(--muted);
+    font-size: var(--texto-pequeno);
+  }
+  .admin-tabla__acciones {
+    justify-content: flex-end;
+  }
+}

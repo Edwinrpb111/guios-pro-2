@@ -93,28 +93,14 @@ export async function iniciar(
     max_candidatos: configuracion.maxCandidatos,
   };
 
-  const idCalculo = await repositorio.crearCalculo({
+  // Cálculo y pasos en una sola transacción: nunca queda un cálculo en proceso sin sus pasos.
+  const idCalculo = await repositorio.crearCalculoConPasos({
     anio_inicio: anioInicio,
     anio_fin: anioFin,
     bases_datos: fuentes.map((f) => NOMBRE_BASE[f]).join(', '),
     parametros,
     creado_por: admin.idUsuario,
   });
-  try {
-    await repositorio.crearPasos(
-      idCalculo,
-      catalogo.map((s) => s.id_subfactor),
-    );
-  } catch (error) {
-    // Nunca queda un cálculo en proceso sin sus pasos.
-    await repositorio
-      .actualizarCalculo(idCalculo, {
-        estado: 'fallido',
-        mensaje_error: 'No se pudieron crear los pasos del cálculo. Inicia uno nuevo.',
-      })
-      .catch(() => undefined);
-    throw error;
-  }
 
   return { estado: 200, cuerpo: { id_calculo: idCalculo } };
 }
