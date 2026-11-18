@@ -101,8 +101,12 @@ begin
   if v_estado not in ('en_proceso', 'pausado') then
     raise exception 'El cálculo % está %: no admite resultados.', p_id_calculo, v_estado;
   end if;
+  -- Cada subfactor del catálogo debe tener su paso hecho (ningún pendiente ni con error).
   if exists (select 1 from public.recalculo_paso
-             where id_calculo = p_id_calculo and estado <> 'hecho') then
+             where id_calculo = p_id_calculo and estado <> 'hecho')
+     or (select count(*) from public.recalculo_paso
+         where id_calculo = p_id_calculo and estado = 'hecho')
+        <> (select count(*) from public.subfactor) then
     raise exception 'El cálculo % tiene pasos sin terminar.', p_id_calculo;
   end if;
 
@@ -156,7 +160,8 @@ begin
 end;
 $$;
 
--- Marca el cálculo como descartado; el vigente no se puede descartar.
+-- Marca el cálculo como descartado. No se descarta el vigente ni uno que usan evaluaciones,
+-- porque estas guardan su IS como fotografía (trampa 9).
 create function public.descartar_calculo(p_id_calculo integer)
 returns void
 language plpgsql
@@ -174,6 +179,9 @@ begin
   end if;
   if v_vigente then
     raise exception 'No se puede descartar el cálculo vigente.';
+  end if;
+  if exists (select 1 from public.evaluacion where id_calculo = p_id_calculo) then
+    raise exception 'No se puede descartar el cálculo %: lo usan evaluaciones.', p_id_calculo;
   end if;
 
   update public.calculo_sugerida set estado = 'descartado' where id_calculo = p_id_calculo;

@@ -38,11 +38,13 @@ El esquema vive en tres migraciones de `supabase/migrations/`:
 
 - **Borrado en cascada desde `auth.users`.** Al borrar una cuenta se borran su perfil, sus evaluaciones, organizaciones y software. Sin esto, el `ON DELETE CASCADE` de `perfil` fallaría por las claves foráneas. Los cálculos de IS no se borran: su `creado_por` pasa a `NULL`.
 - **El rol se protege con privilegios por columna.** El cliente solo puede actualizar `nombre_completo` e `id_organizacion` de su perfil, y no puede insertar ni borrar perfiles. Una política de RLS no puede comparar el valor viejo con el nuevo; el privilegio por columna sí impide tocar `rol`.
+- **La evaluación nace con el cálculo vigente y no lo cambia.** La política de `INSERT` exige que `id_calculo` sea el vigente (BRIEF §11.1). El privilegio por columna deja actualizar solo `id_software`, `titulo`, `estado`, `codigo_recomendacion`, `texto_recomendacion` y `causas`: ni `id_calculo` ni `id_usuario`.
+- **Sin `TRUNCATE`, `REFERENCES` ni `TRIGGER` para el cliente.** Supabase los concede por defecto a `anon` y `authenticated`, y `TRUNCATE` ignora RLS.
 - **Las valoraciones usan funciones `security definer`.** `es_evaluacion_propia()` y `es_valoracion_propia()` comprueban el dueño y el estado `en_curso` sin depender de las políticas de `evaluacion`, y evitan la recursión entre políticas.
 - **Escritura de las RPC.** Las cuatro funciones de §11.2 exigen `es_admin()` y fallan con el código `42501` para un decisor:
-  - `guardar_resultado_calculo` solo acepta un cálculo `en_proceso` o `pausado`, con todos sus pasos en `hecho` (un paso en `error` también lo bloquea), y exactamente 18 filas, una por factor distinto del catálogo.
+  - `guardar_resultado_calculo` solo acepta un cálculo `en_proceso` o `pausado` con un paso `hecho` por cada subfactor del catálogo (un paso en `error` o faltante también lo bloquea), y exactamente 18 filas, una por factor distinto del catálogo.
   - `publicar_calculo` solo publica un cálculo `completado`. Bloquea primero el vigente para serializar publicaciones simultáneas.
-  - `descartar_calculo` rechaza el vigente.
+  - `descartar_calculo` rechaza el vigente y cualquier cálculo que ya usen evaluaciones, porque guardan su IS como fotografía (trampa 9).
 - **`fecha_actualizacion`** se mantiene con un trigger en cada `UPDATE` de `evaluacion`.
 - **Índices** en las claves foráneas que usan las políticas (`creado_por`, `id_usuario`, `id_calculo`) y las consultas (`subfactor.id_factor`, `referencia.id_subfactor`).
 
@@ -51,4 +53,8 @@ El esquema vive en tres migraciones de `supabase/migrations/`:
 - Las pruebas de `supabase/tests/rls.test.sql` (pgTAP, `npm run test:db`) fijan este comportamiento, incluidos los dos casos de BRIEF §15.3: un usuario no lee la evaluación de otro y un decisor no publica cálculos.
 - La CI todavía no levanta Supabase: las pruebas de base de datos se corren en local antes de abrir un PR que toque `supabase/`.
 - Los tipos de `src/lib/database.types.ts` se regeneran con `npm run gen:types` después de cada migración.
+- Quedan como mejoras futuras, sin riesgo de lectura de datos ajenos:
+  - `perfil.id_organizacion` y `evaluacion.id_software` pueden apuntar a filas de otro usuario (solo revela si un id existe).
+  - `valoracion_subfactor.id_subfactor` no se valida contra el factor de su `valoracion_factor`.
+  - Un decisor lee todos los `calculo_sugerida`, incluidos `descartado` y `fallido`, como permite BRIEF §10.3.
 - Las Edge Functions (issue #10) escriben `referencia` y `recalculo_paso` con `service_role`, que omite RLS.

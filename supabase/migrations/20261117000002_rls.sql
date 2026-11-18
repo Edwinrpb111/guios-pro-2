@@ -74,9 +74,18 @@ create policy "software: creador" on public.software_evaluado
 -- Evaluación: su dueño; una evaluación finalizada no se modifica ni se borra.
 create policy "evaluacion: leer dueño" on public.evaluacion
   for select to authenticated using (id_usuario = (select auth.uid()));
+-- Un borrador nuevo usa el cálculo vigente (BRIEF §11.1); después, el cálculo y el dueño
+-- no se cambian (privilegio por columna, abajo), así la IS usada queda como fotografía.
 create policy "evaluacion: crear dueño" on public.evaluacion
   for insert to authenticated
-  with check (id_usuario = (select auth.uid()) and estado = 'en_curso');
+  with check (
+    id_usuario = (select auth.uid())
+    and estado = 'en_curso'
+    and exists (
+      select 1 from public.calculo_sugerida c
+      where c.id_calculo = evaluacion.id_calculo and c.vigente
+    )
+  );
 create policy "evaluacion: editar en curso" on public.evaluacion
   for update to authenticated
   using (id_usuario = (select auth.uid()) and estado = 'en_curso')
@@ -84,6 +93,9 @@ create policy "evaluacion: editar en curso" on public.evaluacion
 create policy "evaluacion: borrar en curso" on public.evaluacion
   for delete to authenticated
   using (id_usuario = (select auth.uid()) and estado = 'en_curso');
+revoke update on public.evaluacion from anon, authenticated;
+grant update (id_software, titulo, estado, codigo_recomendacion, texto_recomendacion, causas)
+  on public.evaluacion to authenticated;
 
 -- Valoraciones: el dueño lee siempre; escribe solo mientras la evaluación está en curso.
 create function public.es_evaluacion_propia(p_id_evaluacion integer, p_solo_en_curso boolean)
@@ -140,3 +152,6 @@ create policy "valoracion: editar en curso" on public.valoracion_subfactor
   with check (public.es_valoracion_propia(id_val_factor, true));
 create policy "valoracion: borrar en curso" on public.valoracion_subfactor
   for delete to authenticated using (public.es_valoracion_propia(id_val_factor, true));
+
+-- TRUNCATE ignora RLS; REFERENCES y TRIGGER no los necesita el cliente.
+revoke truncate, references, trigger on all tables in schema public from anon, authenticated;

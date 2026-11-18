@@ -2,7 +2,7 @@
 -- Se ejecutan con `npm run test:db` (supabase test db) sobre Supabase local.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(43);
+select plan(50);
 
 -- ---------------------------------------------------------------------------
 -- Datos de prueba (como postgres, sin RLS)
@@ -35,18 +35,22 @@ insert into public.calculo_sugerida (origen, etiqueta_rango, bases_datos, estado
   values ('tesis', 'RSL de la tesis', 'IEEE, ACM, Scopus, WoS', 'publicado', true);
 insert into public.calculo_sugerida (origen, anio_inicio, anio_fin, estado)
   values ('ia', 2020, 2025, 'en_proceso');
+insert into public.calculo_sugerida (origen, anio_inicio, anio_fin, estado, etiqueta_rango)
+  values ('ia', 2021, 2025, 'en_proceso', 'sin pasos');
 insert into public.recalculo_paso (id_calculo, id_subfactor, estado)
-  select (select id_calculo from public.calculo_sugerida where origen = 'ia'), id_subfactor, 'pendiente'
+  select (select id_calculo from public.calculo_sugerida where origen = 'ia' and etiqueta_rango is null),
+         id_subfactor, 'pendiente'
   from public.subfactor;
 insert into public.referencia (id_calculo, id_subfactor, titulo, anio, doi)
-  values ((select id_calculo from public.calculo_sugerida where origen = 'ia'),
+  values ((select id_calculo from public.calculo_sugerida where origen = 'ia' and etiqueta_rango is null),
           (select min(id_subfactor) from public.subfactor), 'Artículo', 2021, '10.1/x');
 
 create temporary table ctx (clave text primary key, valor int);
 grant all on ctx to authenticated, anon;
 insert into ctx values
   ('tesis', (select id_calculo from public.calculo_sugerida where origen = 'tesis')),
-  ('ia', (select id_calculo from public.calculo_sugerida where origen = 'ia')),
+  ('ia', (select id_calculo from public.calculo_sugerida where origen = 'ia' and etiqueta_rango is null)),
+  ('ia_sin_pasos', (select id_calculo from public.calculo_sugerida where etiqueta_rango = 'sin pasos')),
   ('factor', (select min(id_factor) from public.factor));
 
 -- ---------------------------------------------------------------------------
@@ -65,7 +69,9 @@ set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-00000000000a","r
 
 select is(public.es_admin(), false, 'es_admin() es falso para un decisor');
 select is((select count(*)::int from public.factor), 18, 'un autenticado lee el catálogo');
-select is((select count(*)::int from public.calculo_sugerida), 2, 'un autenticado lee los cálculos');
+select is((select count(*)::int from public.calculo_sugerida), 3, 'un autenticado lee los cálculos');
+select throws_ok($$ truncate public.valoracion_subfactor $$, '42501', null,
+  'un autenticado no vacía tablas con TRUNCATE (ignora RLS)');
 select is((select count(*)::int from public.referencia), 0, 'un decisor no lee referencias');
 select is((select count(*)::int from public.recalculo_paso), 0, 'un decisor no lee pasos del recálculo');
 
@@ -109,6 +115,15 @@ insert into public.valoracion_subfactor (id_val_factor, id_subfactor, nivel_cump
 
 select is((select id_usuario from public.evaluacion), '00000000-0000-0000-0000-00000000000a'::uuid,
   'la evaluación queda a nombre de quien la crea');
+select throws_ok(
+  $$ insert into public.evaluacion (id_calculo) values ((select valor from ctx where clave = 'ia')) $$,
+  '42501', null, 'una evaluación nueva solo usa el cálculo vigente');
+select throws_ok(
+  $$ update public.evaluacion set id_calculo = (select valor from ctx where clave = 'ia') $$,
+  '42501', null, 'el cálculo de una evaluación no se cambia después de crearla');
+select throws_ok(
+  $$ update public.evaluacion set id_usuario = '00000000-0000-0000-0000-00000000000b' $$,
+  '42501', null, 'el dueño de una evaluación no se cambia');
 select throws_ok(
   $$ insert into public.evaluacion (id_usuario, id_calculo)
      values ('00000000-0000-0000-0000-00000000000b', (select valor from ctx where clave = 'tesis')) $$,
@@ -173,6 +188,12 @@ select throws_ok(
           'razon_citas', 0, 'importancia_experto', 3, 'importancia_literatura', 1, 'importancia_sugerida', 2))
         from public.factor)) $$,
   'P0001', null, 'guardar_resultado_calculo falla si quedan pasos pendientes');
+select throws_ok(
+  $$ select public.guardar_resultado_calculo((select valor from ctx where clave = 'ia_sin_pasos'),
+       (select jsonb_agg(jsonb_build_object('id_factor', id_factor, 'num_subfactores', 1, 'total_citas', 0,
+          'razon_citas', 0, 'importancia_experto', 3, 'importancia_literatura', 1, 'importancia_sugerida', 2))
+        from public.factor)) $$,
+  'P0001', null, 'guardar_resultado_calculo exige un paso hecho por cada subfactor');
 reset role;
 update public.recalculo_paso set estado = 'hecho';
 set local role authenticated;
@@ -198,10 +219,15 @@ select throws_ok($$ select public.descartar_calculo((select valor from ctx where
 select lives_ok($$ select public.publicar_calculo((select valor from ctx where clave = 'ia')) $$,
   'un administrador publica un cálculo completado');
 select results_eq(
-  $$ select id_calculo, estado, vigente from public.calculo_sugerida order by id_calculo $$,
+  $$ select id_calculo, estado, vigente from public.calculo_sugerida
+     where id_calculo in (select valor from ctx where clave in ('tesis', 'ia')) order by id_calculo $$,
   $$ select (select valor from ctx where clave = 'tesis'), 'publicado'::varchar, false
      union all select (select valor from ctx where clave = 'ia'), 'publicado'::varchar, true $$,
   'publicar desmarca el vigente anterior y deja uno solo vigente');
+select throws_ok($$ select public.descartar_calculo((select valor from ctx where clave = 'tesis')) $$,
+  'P0001', null, 'no se descarta un cálculo que usan evaluaciones');
+select lives_ok($$ select public.descartar_calculo((select valor from ctx where clave = 'ia_sin_pasos')) $$,
+  'un administrador descarta un cálculo que nadie usa');
 reset role;
 
 select * from finish();
