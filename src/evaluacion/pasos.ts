@@ -58,7 +58,8 @@ export function pasosDeEvaluacion(
       titulo: 'Resultados',
       subtitulo: 'Pasos 5 y 6',
       completado: situacion.finalizada,
-      habilitado: situacion.finalizada || situacion.subfactoresCompletos,
+      // Con factores pendientes se pueden ver: se excluyen y los demás deciden (RN-08).
+      habilitado: situacion.finalizada || situacion.todosAsignados,
     },
   ];
 }

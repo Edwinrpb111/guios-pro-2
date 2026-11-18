@@ -8,13 +8,20 @@ import type {
   Catalogo,
   FactorCatalogo,
   FilaValoracionFactor,
+  RecomendacionGuardada,
   ValoracionFactor,
 } from '../datos/tipos';
 import {
   alcanceEfectivo,
   evaluarFactor,
+  ponderacionMedia,
+  recomendar,
+  TEXTOS_RECOMENDACION,
   type Alcance,
   type AlcanceCatalogo,
+  type CausaRecomendacion,
+  type CodigoRecomendacion,
+  type Cumplimiento,
   type EstadoFactor,
   type Foda,
   type Importancia,
@@ -156,4 +163,95 @@ export function textoAyudaImportanciaSugerida(fila: FilaFactor, nombreCalculo: s
     `Importancia sugerida = intersección de la importancia del experto (IE = ${fila.ie}) ` +
     `y la de la literatura (IL = ${fila.il}). Fuente: ${nombreCalculo}.`
   );
+}
+
+/** Recomendación lista para mostrar: código, título y texto de la tesis (§4.4) y sus causas. */
+export interface RecomendacionVista {
+  codigo: CodigoRecomendacion;
+  titulo: string;
+  texto: string;
+  causas: readonly CausaRecomendacion[];
+}
+
+/** Resultados de P-06: los factores por situación y la recomendación de `guios-core` (RN-08). */
+export interface ResultadosEvaluacion {
+  /** Factores con todos sus subfactores valorados (los únicos que cuentan, RN-08). */
+  evaluados: readonly FilaFactor[];
+  /** Relevantes con algún subfactor sin valorar: se excluyen de la recomendación. */
+  pendientes: readonly FilaFactor[];
+  /** Con importancia relativa 1: no se valoran. */
+  excluidos: readonly FilaFactor[];
+  /** `null` si ningún factor está evaluado. */
+  recomendacion: RecomendacionVista | null;
+}
+
+/** Arma una recomendación para mostrar a partir de su código, causas y (si se guardó) su texto. */
+export function vistaDeRecomendacion(
+  codigo: CodigoRecomendacion,
+  causas: readonly CausaRecomendacion[],
+  texto: string = TEXTOS_RECOMENDACION[codigo].texto,
+): RecomendacionVista {
+  return { codigo, titulo: TEXTOS_RECOMENDACION[codigo].titulo, texto, causas };
+}
+
+/** Clasifica los factores y emite la recomendación con `guios-core`: sin reglas propias. */
+export function derivarResultados(filas: readonly FilaFactor[]): ResultadosEvaluacion {
+  const evaluados = filas.filter((f) => f.estado === 'evaluado');
+  const resultado = recomendar(
+    evaluados.flatMap((f) => (f.ir === null ? [] : [{ nombre: f.nombre, ir: f.ir, foda: f.foda }])),
+  );
+  return {
+    evaluados,
+    pendientes: filas.filter((f) => f.estado === 'pendiente'),
+    excluidos: filas.filter((f) => f.estado === 'no_relevante'),
+    recomendacion: resultado && vistaDeRecomendacion(resultado.codigo, resultado.causas),
+  };
+}
+
+/** Fotografía de los factores con importancia asignada, para guardar al finalizar. */
+export const filasParaFinalizar = (filas: readonly FilaFactor[]): FilaValoracionFactor[] =>
+  filas.filter((f) => f.id !== null).map(filaParaGuardar);
+
+/** Recomendación a guardar al finalizar; `null` si no hay factores evaluados. */
+export function recomendacionParaGuardar(
+  resultados: ResultadosEvaluacion,
+): RecomendacionGuardada | null {
+  const { recomendacion } = resultados;
+  if (!recomendacion) return null;
+  return { codigo: recomendacion.codigo, texto: recomendacion.texto, causas: recomendacion.causas };
+}
+
+export interface SubfactorDetalle {
+  id: number;
+  enunciado: string;
+  /** Cumplimiento valorado; `null` si falta. */
+  ps: Cumplimiento | null;
+}
+
+export interface DetalleSubfactores {
+  subfactores: SubfactorDetalle[];
+  valorados: number;
+  total: number;
+  /** PM de los subfactores ya valorados: vista previa en vivo, sin FODA mientras falten (RN-06). */
+  pmParcial: number | null;
+}
+
+/** Subfactores de un factor con su PS y la PM en vivo de P-05 (la PM la calcula `guios-core`). */
+export function detalleSubfactores(
+  factor: FactorCatalogo,
+  enunciados: Readonly<Record<number, string>>,
+  valoracion: ValoracionFactor | undefined,
+): DetalleSubfactores {
+  const subfactores = factor.idsSubfactores.map((id) => ({
+    id,
+    enunciado: enunciados[id] ?? `Subfactor ${id}`,
+    ps: valoracion?.cumplimientos[id] ?? null,
+  }));
+  const valorados = subfactores.flatMap((s) => (s.ps === null ? [] : [s.ps]));
+  return {
+    subfactores,
+    valorados: valorados.length,
+    total: subfactores.length,
+    pmParcial: ponderacionMedia(valorados),
+  };
 }
