@@ -237,3 +237,13 @@
     grid-template-columns: 1fr;
   }
 }
+
+.chip--marino {
+  background: var(--navy3);
+  color: var(--navy);
+  border-color: transparent;
+}
+.estado-guardado {
+  font-size: var(--texto-pequeno);
+  color: var(--muted);
+}
