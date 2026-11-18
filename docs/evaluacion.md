@@ -15,6 +15,13 @@ Pantallas del issue #8 (HU-04, HU-05, HU-06, HU-12, HU-15). Siguen el flujo de B
 - **Finalizar**: `useFinalizarEvaluacion` → `repositorio.finalizarEvaluacion`. Vuelve a guardar la fotografía de **todos los factores con importancia asignada** (IR, PM, FODA recalculados) y, en un `update` con `estado = 'en_curso'` como condición, guarda `estado = 'finalizada'`, `codigo_recomendacion`, `texto_recomendacion` y `causas` (`[{factor, foda, ir}]`, ADR-003 ajuste 11). Con la evaluación finalizada, RLS rechaza cualquier escritura: ni subfactores ni una segunda finalización (lo comprueba `repositorio.integracion.test.ts`).
 - **Fotografía**: una evaluación finalizada muestra la recomendación **guardada** (código, texto y causas), no la que se derivaría hoy (BRIEF §5.9).
 
+## Eliminar desde el historial (P-02, issue #32)
+
+- **Qué se puede eliminar**: solo las evaluaciones propias **en curso** (borradores, también los «Evaluación sin título»). Una finalizada no se modifica ni se borra (BRIEF §10.3): su fila no ofrece «Eliminar» (`sePuedeEliminar` en `src/evaluacion/historial.ts`).
+- **Quién lo garantiza**: la política `evaluacion: borrar en curso` de `20261117000002_rls.sql` (dueño y `estado = 'en_curso'`); no hizo falta una migración nueva. Las valoraciones de factores y los PS se borran con el `ON DELETE CASCADE` del esquema; el software, la organización, el catálogo y los cálculos de IS no se tocan. Lo fija `supabase/tests/eliminar_evaluacion.test.sql` (pgTAP).
+- **Flujo**: «Eliminar «título»» en la fila → `VentanaModal` «Eliminar evaluación» que nombra la evaluación y avisa que no se puede deshacer → «Sí, eliminar» llama a `useEliminarEvaluacion` → `repositorio.eliminarEvaluacion`. Al confirmarse, la fila desaparece del historial y de los contadores y se relee el historial.
+- **Si falla** (sin red, ajena, ya borrada o finalizada: RLS no devuelve filas y el repositorio lo trata como error), el diálogo sigue abierto con el motivo (`role="alert"`) y la fila sigue en el historial.
+
 ## Casos borde de la recomendación (BRIEF §6.4) en la interfaz
 
 | Situación                                     | Qué se ve                                                                                                                         |

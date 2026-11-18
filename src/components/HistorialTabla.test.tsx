@@ -63,6 +63,36 @@ describe('HistorialTabla', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
+  it('«Eliminar» aparece en las filas eliminables, se nombra con la evaluación y emite su id', async () => {
+    const onEliminar = vi.fn();
+    const onAbrir = vi.fn();
+    render(
+      <HistorialTabla
+        filas={[
+          finalizada,
+          { ...enCurso, eliminable: true },
+          { ...enCurso, id: 3, titulo: '', eliminable: true },
+        ]}
+        onAbrir={onAbrir}
+        onEliminar={onEliminar}
+      />,
+    );
+    const fila = screen.getByRole('row', { name: /Adopción de LibreOffice/ });
+    expect(within(fila).queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Eliminar «Plataforma de aprendizaje»' }),
+    );
+    expect(onEliminar).toHaveBeenLastCalledWith(2);
+    await userEvent.click(screen.getByRole('button', { name: 'Eliminar «Evaluación sin título»' }));
+    expect(onEliminar).toHaveBeenLastCalledWith(3);
+    expect(onAbrir).not.toHaveBeenCalled();
+  });
+
+  it('sin onEliminar no ofrece «Eliminar»', () => {
+    render(<HistorialTabla filas={[{ ...enCurso, eliminable: true }]} onAbrir={() => {}} />);
+    expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument();
+  });
+
   it('una evaluación sin título se muestra como «Evaluación sin título»', () => {
     render(<HistorialTabla filas={[{ ...enCurso, titulo: '' }]} onAbrir={() => {}} />);
     expect(screen.getByText('Evaluación sin título')).toBeInTheDocument();
