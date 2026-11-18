@@ -16,6 +16,7 @@ Estilos y componentes visuales del Componente Práctico 1 (issue #6). La referen
 | `tokens.css`      | Variables CSS del CP1 (BRIEF §12.3): `--navy`, `--orange`, `--bg`, `--text`, FODA (`--F`, `--O`, `--D`, `--A`), `--recB`, importancia `--l1`..`--l4`, tamaños 22/14/12 px, radio 12 px, fuente Inter |
 | `componentes.css` | Estilos de los componentes, impresión (`@media print`) y versión móvil (`@media (max-width: 760px)`)                                                                                                 |
 | `global.css`      | Reinicio, fuente Inter e importación de los dos anteriores (cargado desde `src/main.tsx`)                                                                                                            |
+| `acceso.css`      | P-01 (issue #29): panel de marca y tarjeta del formulario, como la pantalla de login del prototipo; reutiliza `.campo`, `.boton`, `.alerta` y `.layout__logo`; una sola columna en móvil             |
 
 El punto de quiebre móvil es **760 px**: aparece la barra de navegación inferior, el stepper se reduce a «Paso n de N» y la matriz FODA pasa a una columna doble sin rótulos de eje.
 
@@ -45,4 +46,5 @@ El punto de quiebre móvil es **760 px**: aparece la barra de navegación inferi
 - Las descripciones de las opciones del `SegmentedSelector` van fuera de los botones para no alterar su nombre accesible.
 - `FodaMatrix` ordena los cuadrantes como el prototipo: fila interna (Fortalezas, Debilidades) y fila externa (Oportunidades, Amenazas).
 - Pruebas: Testing Library con `userEvent` (un clic, teclado, estados deshabilitados y texto visible), junto a cada componente (`*.test.tsx`).
+- **P-01** (`src/pages/LoginPage.tsx`) no usa `Layout`: dibuja su propio panel de marca. Las pestañas «Iniciar sesión» y «Crear cuenta» siguen el patrón de pestañas de WAI-ARIA (`tabpanel`, `aria-controls`, flechas, Inicio y Fin); la contraseña del registro describe su mínimo con `aria-describedby` y se marca con `aria-invalid` si es corta; el formulario lleva `aria-busy` mientras envía. No hay botón «Mostrar contraseña»: su nombre chocaría con la etiqueta «Contraseña» que usan las pruebas E2E.
 - `VentanaModal` se dibuja en un portal sobre `<body>`; mientras está abierta marca el resto de los nodos de `<body>` con `aria-hidden` y lo restaura al cerrar. La ayuda del método (P-11) la usa; ver [`ayuda-metodo.md`](ayuda-metodo.md).
