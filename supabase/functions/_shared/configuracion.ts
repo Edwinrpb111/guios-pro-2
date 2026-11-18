@@ -12,15 +12,12 @@ export interface Configuracion {
   openalexApiKey: string | undefined;
   crossrefMailto: string | undefined;
   geminiApiKey: string | undefined;
-  /** Orígenes del frontend aceptados por CORS (BRIEF §14). */
-  origenesPermitidos: string[];
 }
 
 const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
 const UMBRAL_POR_DEFECTO = 0.7;
 const MAX_CANDIDATOS_POR_DEFECTO = 50;
 const MAX_CANDIDATOS_TOPE = 200;
-const ORIGENES_POR_DEFECTO = ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 function invalida(variable: string, esperado: string): ErrorApi {
   return new ErrorApi(
@@ -61,11 +58,6 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
-  const origenes = (valor('ORIGENES_PERMITIDOS') ?? '')
-    .split(',')
-    .map((origen) => origen.trim())
-    .filter((origen) => origen !== '');
-
   return {
     proveedorLlm: proveedor,
     modelo: valor('LLM_MODEL') ?? MODELO_POR_DEFECTO,
@@ -74,6 +66,16 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     openalexApiKey: valor('OPENALEX_API_KEY'),
     crossrefMailto: valor('CROSSREF_MAILTO'),
     geminiApiKey: valor('GEMINI_API_KEY'),
-    origenesPermitidos: origenes.length > 0 ? origenes : ORIGENES_POR_DEFECTO,
   };
+}
+
+const ORIGENES_POR_DEFECTO = ['http://localhost:5173', 'http://127.0.0.1:5173'];
+
+/** Orígenes del frontend que CORS acepta (BRIEF §14), separados por comas en ORIGENES_PERMITIDOS. */
+export function leerOrigenes(leer: (nombre: string) => string | undefined): string[] {
+  const origenes = (leer('ORIGENES_PERMITIDOS') ?? '')
+    .split(',')
+    .map((origen) => origen.trim())
+    .filter((origen) => origen !== '');
+  return origenes.length > 0 ? origenes : ORIGENES_POR_DEFECTO;
 }

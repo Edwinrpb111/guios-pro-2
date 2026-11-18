@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
-import { leerConfiguracion } from './configuracion.ts';
+import { leerConfiguracion, leerOrigenes } from './configuracion.ts';
 import { ErrorApi } from './errores.ts';
 
 function entorno(valores: Record<string, string>) {
@@ -12,7 +12,6 @@ Deno.test('configuración: valores por defecto de BRIEF §13.7', () => {
   assertEquals(config.modelo, 'gemini-3.1-flash-lite');
   assertEquals(config.umbral, 0.7);
   assertEquals(config.maxCandidatos, 50);
-  assertEquals(config.origenesPermitidos, ['http://localhost:5173', 'http://127.0.0.1:5173']);
   assertEquals(config.openalexApiKey, undefined);
 });
 
@@ -26,7 +25,6 @@ Deno.test('configuración: lee las variables y trata una cadena vacía como ause
       OPENALEX_API_KEY: 'k1',
       GEMINI_API_KEY: '',
       CROSSREF_MAILTO: 'equipo@ejemplo.org',
-      ORIGENES_PERMITIDOS: 'https://guios.vercel.app, http://localhost:5173 ,',
     }),
   );
   assertEquals(config.proveedorLlm, 'fake');
@@ -36,7 +34,6 @@ Deno.test('configuración: lee las variables y trata una cadena vacía como ause
   assertEquals(config.openalexApiKey, 'k1');
   assertEquals(config.geminiApiKey, undefined);
   assertEquals(config.crossrefMailto, 'equipo@ejemplo.org');
-  assertEquals(config.origenesPermitidos, ['https://guios.vercel.app', 'http://localhost:5173']);
 });
 
 Deno.test('configuración: un valor inválido da 500 con el nombre de la variable', () => {
@@ -54,3 +51,16 @@ Deno.test('configuración: un valor inválido da 500 con el nombre de la variabl
     assertStringIncludes(error.message, variable);
   }
 });
+
+Deno.test(
+  'orígenes permitidos: por defecto el servidor de desarrollo; si no, la lista configurada',
+  () => {
+    assertEquals(leerOrigenes(entorno({})), ['http://localhost:5173', 'http://127.0.0.1:5173']);
+    assertEquals(
+      leerOrigenes(
+        entorno({ ORIGENES_PERMITIDOS: 'https://guios.vercel.app, http://localhost:5173 ,' }),
+      ),
+      ['https://guios.vercel.app', 'http://localhost:5173'],
+    );
+  },
+);
