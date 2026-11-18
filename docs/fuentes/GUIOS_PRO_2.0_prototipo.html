@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GUIOS PRO 2.0 · Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1B3047; --navy2:#264466; --navy3:#E8EEF5; --orange:#F28C1B; --orange2:#FFF1E2;
+  --bg:#F3F5F8; --surface:#FFFFFF; --line:#E1E6ED; --line2:#CBD3DE; --text:#1B2533; --muted:#5D6A7B;
+  --F:#2E8B57; --Fbg:#E6F4EC; --O:#2F6FB3; --Obg:#E5EFFA; --D:#C9701C; --Dbg:#FCEFE1; --A:#C0392B; --Abg:#FBE7E5;
+  --l1:#9AA6B5; --l2:#6FA3D8; --l3:#2F6FB3; --l4:#1B3047;
+  --r:12px; --shadow:0 1px 2px rgba(16,30,54,.06),0 4px 14px rgba(16,30,54,.06);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.45}
+button{font:inherit;cursor:pointer}
+input,select{font:inherit}
+a{color:var(--O);text-decoration:none}
+.hidden{display:none!important}
+/* ---------- layout ---------- */
+.app{display:grid;grid-template-columns:240px 1fr;grid-template-rows:60px 1fr;min-height:100vh}
+.topbar{grid-column:1/3;background:var(--navy);color:#fff;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:20}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:.2px;font-size:16px}
+.brand .logo{width:32px;height:32px;border-radius:8px;background:var(--orange);display:grid;place-items:center;color:var(--navy);font-weight:800;font-size:15px}
+.brand small{font-weight:500;opacity:.7;font-size:12px;margin-left:4px}
+.topbar .sp{flex:1}
+.topbar .iconbtn{background:transparent;border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;height:34px;padding:0 12px;display:flex;align-items:center;gap:6px}
+.user{display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:#fff;color:var(--navy);display:grid;place-items:center;font-weight:700;font-size:13px}
+.user .who{line-height:1.15}.user .who b{display:block;font-size:13px}.user .who span{font-size:11px;opacity:.75}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:18px 12px;position:sticky;top:60px;height:calc(100vh - 60px)}
+.nav a{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;color:var(--text);font-weight:500;margin-bottom:2px}
+.nav a:hover{background:var(--bg)}
+.nav a.on{background:var(--navy3);color:var(--navy);font-weight:700}
+.nav a svg{width:18px;height:18px;flex:none}
+.nav .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:16px 12px 6px;font-weight:600}
+.main{padding:24px 28px 110px;min-width:0}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.pagehead h1{font-size:22px;margin:0 0 4px;letter-spacing:-.2px}
+.pagehead p{margin:0;color:var(--muted)}
+.crumb{font-size:12px;color:var(--muted);margin-bottom:6px}
+/* ---------- components ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.pad{padding:18px}
+.btn{border:1px solid var(--line2);background:#fff;color:var(--text);border-radius:10px;height:38px;padding:0 16px;font-weight:600;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.btn:hover{border-color:var(--navy2)}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.primary:hover{background:var(--navy2)}
+.btn.accent{background:var(--orange);border-color:var(--orange);color:#1b1b1b}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.sm{height:30px;padding:0 10px;font-size:12.5px;border-radius:8px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.chip.F{background:var(--Fbg);color:var(--F);border-color:transparent}.chip.O{background:var(--Obg);color:var(--O);border-color:transparent}
+.chip.D{background:var(--Dbg);color:var(--D);border-color:transparent}.chip.A{background:var(--Abg);color:var(--A);border-color:transparent}
+.chip.navy{background:var(--navy3);color:var(--navy);border-color:transparent}
+.chip.org{background:var(--orange2);color:#9a5300;border-color:transparent}
+.grid{display:grid;gap:16px}.grid>*{min-width:0}.field input,.field select{min-width:0;width:100%}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:repeat(2,1fr)}
+.kpi .v{font-size:26px;font-weight:800;letter-spacing:-.5px}.kpi .k{color:var(--muted);font-size:12.5px}
+.muted{color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-weight:600;font-size:13px}
+.field input,.field select{height:40px;border:1px solid var(--line2);border-radius:10px;padding:0 12px;background:#fff}
+.field input:focus,.field select:focus{outline:2px solid #BFD3EA;border-color:var(--O)}
+.help{font-size:12px;color:var(--muted)}
+table.t{width:100%;border-collapse:collapse}
+table.t th{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:600;background:#FAFBFC}
+table.t td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+table.t tr:last-child td{border-bottom:none}
+.recbadge{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;font-weight:800;color:#fff}
+.recA{background:var(--F)}.recB{background:#D4A017}.recC{background:var(--A)}.recN{background:var(--l1)}
+/* ---------- stepper ---------- */
+.stepper{display:flex;gap:0;margin:0 0 18px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.step{flex:1;display:flex;align-items:center;gap:10px;padding:12px 16px;border-right:1px solid var(--line);color:var(--muted);background:none;border-top:0;border-bottom:0;border-left:0;text-align:left}
+.step:last-child{border-right:0}
+.step .n{width:26px;height:26px;border-radius:50%;border:2px solid var(--line2);display:grid;place-items:center;font-weight:700;font-size:12px;flex:none}
+.step b{display:block;color:var(--text);font-size:13px}.step span{font-size:11.5px}
+.step.on{background:var(--navy3)}.step.on .n{border-color:var(--navy);background:var(--navy);color:#fff}
+.step.done .n{border-color:var(--F);background:var(--F);color:#fff}
+.mstep{display:none}
+.footerbar{position:fixed;left:240px;right:0;bottom:0;background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border-top:1px solid var(--line);padding:12px 28px;display:flex;align-items:center;gap:10px;z-index:15}
+.footerbar .sp{flex:1}
+/* ---------- level selector ---------- */
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:#fff}
+.seg button{border:0;background:#fff;padding:7px 11px;font-size:12.5px;font-weight:600;color:var(--muted);border-right:1px solid var(--line);min-width:84px}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--bg)}
+.seg button.on{color:#fff}
+.seg.imp button.on[data-v="1"]{background:var(--l1)}.seg.imp button.on[data-v="2"]{background:var(--l2)}
+.seg.imp button.on[data-v="3"]{background:var(--l3)}.seg.imp button.on[data-v="4"]{background:var(--l4)}
+.seg.cum button.on[data-v="1"]{background:var(--A)}.seg.cum button.on[data-v="2"]{background:#8A94A3}
+.seg.cum button.on[data-v="3"]{background:#D4A017}.seg.cum button.on[data-v="4"]{background:var(--F)}
+.fac{display:grid;grid-template-columns:minmax(200px,1.3fr) 120px auto 150px;gap:14px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+.fac:last-child{border-bottom:0}
+.fac .nm b{display:block}
+.fac .nm .meta{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
+.sug{font-size:12px;color:var(--muted)}.sug b{color:var(--text);display:block;font-size:13px}
+.irbox{font-size:12px;text-align:right}
+.irbox b{display:block;font-size:13px}
+.rel{color:var(--F);font-weight:700}.norel{color:var(--muted)}
+.dimhead{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#FAFBFC;border-bottom:1px solid var(--line);border-radius:var(--r) var(--r) 0 0}
+.dimhead h3{margin:0;font-size:14px}
+.summary{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.tip{position:relative;display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--line);color:var(--muted);font-size:10px;font-weight:700;cursor:help;margin-left:4px}
+.tip:hover::after{content:attr(data-tip);position:absolute;bottom:22px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;font-weight:500;font-size:11.5px;padding:8px 10px;border-radius:8px;width:230px;line-height:1.35;z-index:30;white-space:normal}
+/* ---------- subfactors ---------- */
+.split{display:grid;grid-template-columns:290px 1fr;gap:16px;align-items:start}
+.flist{position:sticky;top:80px}
+.fitem{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line);cursor:pointer;width:100%;background:none;border-left:3px solid transparent;border-top:0;border-right:0;text-align:left}
+.fitem:hover{background:var(--bg)}
+.fitem.on{background:var(--navy3);border-left-color:var(--navy)}
+.fitem .nm{flex:1;min-width:0}.fitem .nm b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.fitem .nm span{font-size:11.5px;color:var(--muted)}
+.ring{width:34px;height:34px;flex:none}
+.subrow{display:grid;grid-template-columns:28px 1fr auto;gap:12px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.subrow:last-child{border-bottom:0}
+.subrow .k{width:24px;height:24px;border-radius:6px;background:var(--bg);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--muted)}
+.subrow.ok .k{background:var(--Fbg);color:var(--F)}
+.meter{height:10px;border-radius:999px;background:var(--bg);position:relative;overflow:visible}
+.meter .fill{height:100%;border-radius:999px;transition:width .25s}
+.meter .th{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--navy)}
+.fhead{display:flex;gap:18px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:16px 18px;border-bottom:1px solid var(--line)}
+.pmbox{min-width:260px}
+.pmbox .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.pmbox .big{font-size:22px;font-weight:800}
+/* ---------- results ---------- */
+.recbanner{display:flex;gap:18px;align-items:flex-start;padding:20px;border-radius:var(--r);color:#fff}
+.recbanner .letter{width:64px;height:64px;border-radius:14px;background:rgba(255,255,255,.18);display:grid;place-items:center;font-size:34px;font-weight:800;flex:none}
+.recbanner h2{margin:0 0 6px;font-size:18px}
+.recbanner p{margin:0;opacity:.95;max-width:820px}
+.bgA{background:linear-gradient(135deg,#2E8B57,#23704A)}.bgB{background:linear-gradient(135deg,#C9961A,#A97C10)}.bgC{background:linear-gradient(135deg,#C0392B,#9B2D22)}.bgN{background:linear-gradient(135deg,#6C7888,#525D6B)}
+.why{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.why .chip{background:rgba(255,255,255,.18);color:#fff;border-color:transparent}
+.foda{display:grid;grid-template-columns:34px 1fr 1fr;grid-template-rows:auto 1fr 1fr;gap:10px}
+.foda .ax{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;display:grid;place-items:center}
+.foda .ax.v{writing-mode:vertical-rl;transform:rotate(180deg)}
+.q{border-radius:12px;padding:14px;min-height:150px}
+.q h4{margin:0 0 10px;font-size:13px;display:flex;justify-content:space-between}
+.q .items{display:flex;flex-wrap:wrap;gap:6px}
+.q .it{background:#fff;border-radius:8px;padding:5px 9px;font-size:12px;font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer;border:0}
+.q .it small{font-weight:500;color:var(--muted);margin-left:4px}
+.qF{background:var(--Fbg)}.qF h4{color:var(--F)}.qO{background:var(--Obg)}.qO h4{color:var(--O)}
+.qD{background:var(--Dbg)}.qD h4{color:var(--D)}.qA{background:var(--Abg)}.qA h4{color:var(--A)}
+.bars .b{display:grid;grid-template-columns:170px 1fr 44px;gap:10px;align-items:center;margin-bottom:8px;font-size:12.5px}
+.bars .track{height:14px;background:var(--bg);border-radius:4px;position:relative}
+.bars .track .fill{height:100%;border-radius:4px}
+.bars .track .th{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--navy);left:66.66%}
+.bars .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bars .b>*{min-width:0}.q .it{max-width:100%;text-align:left}
+/* ---------- login ---------- */
+.login{min-height:100vh;display:grid;grid-template-columns:1.1fr 1fr}
+.login .hero{background:var(--navy);color:#fff;padding:56px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
+.login .hero h1{font-size:34px;line-height:1.15;margin:0 0 14px;letter-spacing:-.6px;max-width:460px}
+.login .hero p{opacity:.8;max-width:440px;margin:0}
+.login .hero .steps6{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:480px;margin-top:36px}
+.login .hero .steps6 div{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:12px;font-size:12px}
+.login .hero .steps6 b{display:block;color:var(--orange);font-size:12px;margin-bottom:3px}
+.login .formside{display:grid;place-items:center;padding:32px}
+.login .box{width:100%;max-width:380px}
+.tabs{display:flex;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tabs button{flex:1;background:none;border:0;padding:10px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent}
+.tabs button.on{color:var(--navy);border-bottom-color:var(--orange)}
+.demo{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.divider{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;margin:18px 0 8px}
+.divider::before,.divider::after{content:"";flex:1;height:1px;background:var(--line)}
+/* ---------- admin ---------- */
+.prog{height:8px;background:var(--bg);border-radius:999px;overflow:hidden}
+.prog .fill{height:100%;background:var(--orange);transition:width .2s}
+.st{font-size:12px;font-weight:600}
+.st.q0{color:var(--muted)}.st.q1{color:var(--O)}.st.q2{color:#9a5300}.st.q3{color:var(--F)}
+.delta.up{color:var(--F);font-weight:700}.delta.dn{color:var(--A);font-weight:700}.delta.eq{color:var(--muted)}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:520px;max-width:100%;background:#fff;box-shadow:-10px 0 30px rgba(0,0,0,.12);z-index:50;display:flex;flex-direction:column}
+.drawer .hd{padding:18px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.drawer .bd{padding:16px 20px;overflow:auto;flex:1}
+.ref{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12.5px}
+.ref b{display:block;margin-bottom:3px}
+.scrim{position:fixed;inset:0;background:rgba(16,30,54,.35);z-index:40}
+.modal{position:fixed;z-index:50;top:50%;left:50%;transform:translate(-50%,-50%);width:620px;max-width:calc(100% - 32px);max-height:calc(100% - 40px);overflow:auto;background:#fff;border-radius:16px;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal .hd{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.modal .bd{padding:18px 22px}
+.scale{display:grid;grid-template-columns:120px 1fr;gap:8px 14px;font-size:13px;margin-bottom:16px}
+.scale .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px}
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:10px 16px;border-radius:10px;font-weight:600;z-index:60;box-shadow:var(--shadow)}
+.check{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.alert{display:flex;gap:10px;padding:12px 14px;border-radius:10px;background:var(--orange2);color:#7a4300;font-size:13px}
+.alert.info{background:var(--Obg);color:#1f4f84}
+.bnav{display:none}
+@media print{.topbar,.side,.footerbar,.bnav,.noprint{display:none!important}.app{display:block}.main{padding:0}}
+/* ---------- responsive ---------- */
+@media (max-width:980px){
+  .g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr 1fr}
+  .split{grid-template-columns:1fr}.flist{position:static}
+  .fac{grid-template-columns:1fr auto;}
+  .fac .sug{grid-column:2;grid-row:1;text-align:right}
+  .fac .seg{grid-column:1/3}
+  .fac .irbox{grid-column:1/3;text-align:left;display:flex;gap:8px;align-items:center}
+  .fac .irbox b{display:inline}
+}
+@media (max-width:760px){
+  body{font-size:14px}
+  .app{grid-template-columns:1fr}
+  .side{display:none}
+  .topbar{padding:0 14px}.brand small,.user .who,.topbar .iconbtn span{display:none}
+  .main{padding:16px 16px 150px}
+  .footerbar{left:0;padding:10px 16px;bottom:58px}
+  .footerbar .hidem{display:none}
+  .bnav{display:flex;position:fixed;left:0;right:0;bottom:0;height:58px;background:#fff;border-top:1px solid var(--line);z-index:16}
+  .bnav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10.5px;color:var(--muted);font-weight:600}
+  .bnav a.on{color:var(--navy)}
+  .bnav svg{width:20px;height:20px}
+  .stepper{display:none}
+  .mstep{display:block;margin-bottom:14px}
+  .mstep .row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .mstep .row b{color:var(--text);font-size:14px}
+  .g4,.g3{grid-template-columns:1fr 1fr}.g2{grid-template-columns:1fr}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);width:100%}
+  .seg button{min-width:0;padding:8px 4px;font-size:11.5px}
+  .subrow{grid-template-columns:24px 1fr}
+  .subrow .seg{grid-column:1/3}
+  .foda{grid-template-columns:1fr 1fr;grid-template-rows:auto}
+  .foda .ax{display:none}
+  .q{min-height:110px;padding:10px}
+  .bars .b{grid-template-columns:110px 1fr 36px}
+  .login{grid-template-columns:1fr}.login .hero{padding:28px 20px}.login .hero h1{font-size:24px}.login .hero .steps6{display:none}
+  .recbanner{flex-direction:column;gap:10px}.recbanner .letter{width:48px;height:48px;font-size:26px}
+  table.t.resp thead{display:none}
+  table.t.resp tr{display:block;border-bottom:1px solid var(--line);padding:8px 0}
+  table.t.resp td{display:flex;justify-content:space-between;gap:10px;border:0;padding:5px 14px}
+  table.t.resp td::before{content:attr(data-l);font-size:11px;color:var(--muted);text-transform:uppercase;font-weight:600}
+  .pagehead h1{font-size:19px}
+  .drawer{width:100%}
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ===================================================================
+   GUIOS PRO 2.0 — Prototipo navegable (Componente Práctico 1)
+   Lógica del método: Rea (2022), Tablas 5.2–5.4 y Figura 5.10.
+   Datos de demostración. No conecta con servidor ni base de datos.
+   =================================================================== */
+const SUB = {"Compatibilidad": ["Una empresa proporciona una infraestructura de nube lista para usar para este software", "Los programas informáticos pueden exportar formatos propietarios", "El software interactúa y se integra con el software propietario existente", "El software está certificado para operar en su nicho de mercado", "El software es compatible con los casos de uso y las funcionalidades más comunes", "El software es compatible con múltiples componentes de hardware", "El software utiliza formatos estándar", "El software es compatible con varios sistemas operativos diferentes (el software es multiplataforma)"], "Personalización": ["El acceso al código fuente es un incentivo para la organización", "El software se puede ampliar fácilmente para satisfacer las necesidades de la organización modificando el código fuente", "Las innovaciones se introducen en el software a un ritmo rápido", "El software es fácil de personalizar sin necesidad de modificar el código fuente", "El software soporta nuevas funciones a través de módulos (el software es modular)", "Hay un repositorio público de extensiones para este software"], "Prueba": ["El software es fácil de desplegar y de probar"], "Fiabilidad": ["El software es fiable y estable", "El software tiene un buen historial en cuanto a errores de seguridad (el software es seguro)", "El software es más flexible que la solución propietaria", "El software es más confiable que la solución propietaria", "El programa proporciona una amplia variedad de funciones de control de acceso"], "Reusabilidad": ["La licencia permite extensiones propietarias", "El software se ofrece como una biblioteca / marco de trabajo"], "Usabilidad": ["El software proporciona una interfaz gráfica de usuario (GUI)", "El software es más fácil de usar que la alternativa propietaria", "El software es fácil de aprender", "El usuario está descontento con el software propietario"], "Mantenibilidad": ["El software es mantenido activamente por los desarrolladores"], "Portabilidad": ["Una versión de aplicación móvil de este software está disponible", "El software es un sistema de administración de base de datos independiente"], "Documentación": ["El software está bien documentado", "La documentación de desarrollo cubre todas las características", "La documentación está disponible en múltiples formatos", "La documentación es fácil de entender", "La documentación está actualizada", "La documentación está escrita por escritores especializados (no desarrolladores)", "La documentación del software es de alta calidad", "El software viene con documentación de desarrollo", "El software viene con documentación de usuario", "La documentación del usuario cubre todas las características", "Los formatos de datos están bien documentados"], "Formación": ["La adopción de este software permite a los usuarios mejorar las habilidades técnicas de TI", "El personal de la organización puede aprender fácilmente por sí mismo a utilizar este software", "El personal de la organización está capacitado para resolver problemas tecnológicos", "Los planes de entrenamiento de este software están disponibles"], "Tiempo de adopción": ["Los requisitos de instalación y despliegue del software son fáciles de cumplir", "El tiempo requerido para adoptar este software es bajo"], "Casos de estudio de adopción FLOSS": ["Hay informes públicos disponibles en Internet que describen el éxito de la adopción de este software"], "Centralidad de la tecnología de la información": ["La adopción de este software mejora el entorno de trabajo de los usuarios", "Centralizar la infraestructura de TI ayuda a acelerar la adopción de este software"], "Apoyo de la alta dirección": ["La alta dirección apoya la adopción exitosa de este software"], "Bloqueo de proveedores": ["El software reduce las dependencias de los proveedores en su entorno"], "Soporte": ["El soporte de la comunidad para este software está disponible", "Soporte de expertos y consultores externos para consultas específicas está disponible", "El soporte comercial de este software está disponible 24/7/365", "Hay desarrolladores en su organización que saben cómo desarrollar este software", "Soporte comercial para la personalización de software está disponible", "Es fácil contratar personal informático en la comunidad que conozca este software"], "Actitud hacia el cambio": ["El personal de la organización muestra poca resistencia al cambio tecnológico", "El personal técnico encargado del despliegue y soporte en la organización respalda la adopción de este software"], "Coste total de propiedad": ["Es poco probable que haya costos ocultos al adoptar este software", "La adopción de este software es menos costosa que la alternativa patentada"]};
+const LV = ['', 'Irrelevante', 'Opcional', 'Importante', 'Fundamental'];
+const CUM = ['', 'No cumple', 'No sé', 'Parcial', 'Cumple'];
+const CUMF = ['', 'No cumple el requisito', 'Desconozco si cumple', 'Cumple parcialmente', 'Cumple el requisito'];
+const DIMS = {T:'Tecnológica', O:'Organizacional', E:'Económica'};
+// Catálogo (Tabla 5.3 de la tesis / Tabla 4 de la Tarea 1)
+const F = [
+ ['Compatibilidad','T','Externo',33,3],['Personalización','T','Externo',30,4],['Prueba','T','Externo',4,3],
+ ['Fiabilidad','T','Externo',19,3],['Reusabilidad','T','Externo',5,2],['Usabilidad','T','Externo',14,2],
+ ['Mantenibilidad','T','Externo',4,3],['Portabilidad','T','Externo',4,2],['Documentación','T','Externo',20,1],
+ ['Formación','O','Interno',27,4],['Tiempo de adopción','O','Interno',2,1],['Casos de estudio de adopción FLOSS','O','Externo',1,1],
+ ['Centralidad de la tecnología de la información','O','Interno',2,1],['Apoyo de la alta dirección','O','Interno',5,4],
+ ['Bloqueo de proveedores','O','Externo',3,2],['Soporte','O','Ambos',43,4],['Actitud hacia el cambio','O','Interno',3,1],
+ ['Coste total de propiedad','E','Interno',24,4]
+].map((r,i)=>({i, n:r[0], dim:r[1], alc:r[2], tc:r[3], il:r[4], subs:SUB[r[0]], ns:SUB[r[0]].length}));
+F.forEach(f=>f.is = isf(3, f.il));
+
+/* ---------- reglas de negocio ---------- */
+function isf(a,b){return Math.floor((a+b)/2)}           // Fig. 5.10: intersección (RN-02 / RN-10)
+function relevante(ir){return ir>1}                      // RN-03
+function pm(vals){ if(!vals||vals.some(v=>!v)) return null; return vals.reduce((a,b)=>a+b,0)/vals.length } // RN-06
+function foda(p,alc){ if(p==null) return null; return alc==='Interno' ? (p>=3?'Fortaleza':'Debilidad') : (p>=3?'Oportunidad':'Amenaza') } // RN-07
+function quantile(arr,p){const s=[...arr].sort((a,b)=>a-b);const pos=(s.length-1)*p;const lo=Math.floor(pos);return s[lo]+(s[Math.min(lo+1,s.length-1)]-s[lo])*(pos-lo)}
+function ilFrom(rs){const q=[.25,.5,.75].map(p=>quantile(rs,p));return rs.map(r=>r<=q[0]?1:r<=q[1]?2:r<=q[2]?3:4)} // RN-09
+
+/* ---------- datos de demostración ---------- */
+const calcs = [
+ {id:1, origen:'tesis', nombre:'Cálculo inicial de la tesis', rango:'RSL de la tesis', fuentes:'IEEE, ACM, Scopus, WoS', fecha:'2022', vigente:true,
+  tc:F.map(f=>f.tc), il:F.map(f=>f.il), is:F.map(f=>f.is)}
+];
+function mkEval(o){return Object.assign({id:Date.now()+Math.random(), estado:'en_curso', calc:1, soporte:'Interno',
+  id_:Array(18).fill(0), sub:F.map(f=>Array(f.ns).fill(0)), fecha:'10/10/2026'}, o)}
+// Caso piloto de la tesis (Sección 6.2): LibreOffice en la UNEMI.
+function pilot(){
+  const id_=F.map(f=>3); [0,15].forEach(i=>id_[i]=4); [4,10,11].forEach(i=>id_[i]=2);
+  const target={0:'O',2:'O',3:'O',4:'O',5:'O',6:'O',11:'O',10:'F',13:'F',16:'F',17:'F',1:'A',7:'A',8:'A',14:'A',9:'D',12:'D',15:'D'};
+  const sub=F.map(f=>{const good='OF'.includes(target[f.i]);return f.subs.map((s,k)=> good ? (k%3===2?3:4) : [2,3,2,1][k%4])});
+  sub[0][0]=2; // la especialista desconoce si hay infraestructura en la nube (Fig. 6.4)
+  return mkEval({id:101,titulo:'Adopción de LibreOffice',sw:'LibreOffice',ver:'7.x',lic:'MPL 2.0',org:'Universidad Estatal de Milagro',estado:'finalizada',id_,sub,fecha:'03/10/2026'});
+}
+function partial(){
+  const e=mkEval({id:102,titulo:'Plataforma de aprendizaje',sw:'Moodle',ver:'4.4',lic:'GPL v3',org:'Universidad Estatal de Milagro',fecha:'08/10/2026'});
+  e.id_=[4,3,3,4,2,3,3,1,3,4,2,1,3,4,2,4,3,3];
+  e.sub=F.map((f,i)=> i<6 ? f.subs.map((s,k)=>k%4===1?3:4) : Array(f.ns).fill(0));
+  return e;
+}
+function third(){
+  const e=mkEval({id:103,titulo:'ERP para la gestión administrativa',sw:'Odoo Community',ver:'17',lic:'LGPL v3',org:'Universidad Estatal de Milagro',estado:'finalizada',fecha:'25/09/2026'});
+  e.id_=[3,2,2,3,1,2,2,1,2,3,2,1,2,3,2,3,2,4];
+  e.sub=F.map((f,i)=>f.subs.map((s,k)=> [4,3,4,3][(i+k)%4] - (i===9&&k<2?2:0)));
+  e.soporte='Externo';
+  return e;
+}
+const S = {
+  user:null, route:'login', evals:[pilot(),partial(),third()], cur:null, selF:null,
+  admin:{run:null}, toast:null, modal:null, drawer:null, cmp:[101,103], loginTab:'in'
+};
+
+/* ---------- derivaciones por evaluación ---------- */
+function calcOf(e){return calcs.find(c=>c.id===e.calc)}
+function alcOf(e,f){return f.alc==='Ambos'? e.soporte : f.alc}
+function derive(e){
+  const c=calcOf(e);
+  return F.map(f=>{
+    const IS=c.is[f.i], ID=e.id_[f.i], IR= ID? isf(IS,ID): null, rel= IR? relevante(IR): false;
+    const p= rel? pm(e.sub[f.i]) : null, al=alcOf(e,f), fo= rel? foda(p,al): null;
+    const done= rel? e.sub[f.i].filter(v=>v).length : 0;
+    return {f, IS, ID, IR, rel, pm:p, alc:al, foda:fo, done};
+  });
+}
+function recommend(d){ // RN-08
+  const ev=d.filter(x=>x.foda);
+  if(!ev.length) return {code:null};
+  const bad=x=>x.foda==='Debilidad'||x.foda==='Amenaza';
+  const c=ev.filter(x=>bad(x)&&x.IR>=3), b=ev.filter(x=>bad(x)&&x.IR===2);
+  if(c.length) return {code:'C', causes:c, title:'Se sugiere analizar la adopción y posponerla',
+    text:'Hay debilidades o amenazas en factores de importancia relativa Importante o Fundamental. La organización debe proporcionar los recursos necesarios que garanticen una adopción satisfactoria: si son factores internos, mejorar esos aspectos dentro de la organización; si son externos, dedicar recursos de ingeniería para mejorar el software.'};
+  if(b.length) return {code:'B', causes:b, title:'Es posible adoptar, con matices',
+    text:'Se detectaron amenazas o debilidades solo en factores de importancia relativa Opcional. Se sugiere revisar los subfactores que no cumplen con lo mínimo requerido antes de adoptar.'};
+  return {code:'A', causes:[], title:'Adoptar el software evaluado',
+    text:'Todos los factores evaluados son Fortalezas u Oportunidades. La organización cumple satisfactoriamente con los requisitos para adoptar la solución.'};
+}
+function progressOf(e){const d=derive(e);const assigned=e.id_.filter(v=>v).length;const rel=d.filter(x=>x.rel);
+  const subsT=rel.reduce((a,x)=>a+x.f.ns,0), subsD=rel.reduce((a,x)=>a+x.done,0);
+  return {assigned, rel:rel.length, subsT, subsD, pct: Math.round(((assigned/18)*0.4 + (subsT? subsD/subsT:0)*0.6)*100)}}
+
+/* ---------- utilidades ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n==null?'—':n.toFixed(2).replace('.',',');
+const fodaChip=fo=>fo?`<span class="chip ${fo[0]}">${fo}</span>`:'<span class="chip">Sin evaluar</span>';
+const ICON={
+ home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
+ plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>',
+ cmp:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="7" height="16" rx="1.5"/><rect x="14" y="4" width="7" height="16" rx="1.5"/></svg>',
+ ai:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.2 5.1L19 10l-4.8 1.9L12 17l-2.2-5.1L5 10l4.8-1.9z"/><path d="M19 16l.9 2.1L22 19l-2.1.9L19 22l-.9-2.1L16 19l2.1-.9z"/></svg>',
+ help:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17h.01"/></svg>',
+ out:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l4-4-4-4M14 12H4"/></svg>'
+};
+function ring(done,total){const r=14,c=2*Math.PI*r,p=total?done/total:0;const col=p===1?'var(--F)':'var(--orange)';
+  return `<svg class="ring" viewBox="0 0 34 34"><circle cx="17" cy="17" r="${r}" fill="none" stroke="#E6EAF0" stroke-width="4"/><circle cx="17" cy="17" r="${r}" fill="none" stroke="${col}" stroke-width="4" stroke-dasharray="${c*p} ${c}" transform="rotate(-90 17 17)" stroke-linecap="round"/><text x="17" y="21" text-anchor="middle" font-size="10" font-weight="700" fill="#1B2533">${done}/${total}</text></svg>`}
+function go(r){location.hash='#/'+r}
+function toast(m){S.toast=m;render();setTimeout(()=>{S.toast=null;render()},1800)}
+
+/* ---------- shell ---------- */
+function shell(content, opts={}){
+  const u=S.user, r=S.route;
+  const on=k=>r.startsWith(k)?'on':'';
+  const nav=`
+   <div class="nav">
+     <div class="lbl">Decisor</div>
+     <a href="#/inicio" class="${on('inicio')}">${ICON.home} Inicio e historial</a>
+     <a href="#/nueva" class="${on('nueva')||on('eval')}">${ICON.plus} Nueva evaluación</a>
+     <a href="#/comparar" class="${on('comparar')}">${ICON.cmp} Comparar</a>
+     ${u.rol==='admin'?`<div class="lbl">Administración</div><a href="#/admin" class="${on('admin')}">${ICON.ai} Importancia sugerida</a>`:''}
+     <div class="lbl">Soporte</div>
+     <a href="javascript:void 0" data-act="help">${ICON.help} Ayuda del método</a>
+     <a href="#/login" data-act="logout">${ICON.out} Cerrar sesión</a>
+   </div>`;
+  const bnav=`<nav class="bnav"><a href="#/inicio" class="${on('inicio')}">${ICON.home}Inicio</a><a href="#/nueva" class="${on('nueva')||on('eval')}">${ICON.plus}Evaluar</a><a href="#/comparar" class="${on('comparar')}">${ICON.cmp}Comparar</a>${u.rol==='admin'?`<a href="#/admin" class="${on('admin')}">${ICON.ai}IA</a>`:''}<a href="javascript:void 0" data-act="help">${ICON.help}Ayuda</a></nav>`;
+  return `<div class="app">
+   <header class="topbar"><div class="brand"><div class="logo">G</div>GUIOS PRO <span style="color:var(--orange)">2.0</span><small>Evaluación de adopción de software libre</small></div>
+     <div class="sp"></div><button class="iconbtn" data-act="help">${ICON.help.replace('<svg','<svg width="16" height="16"')}<span>Ayuda</span></button>
+     <div class="user"><div class="avatar">${u.ini}</div><div class="who"><b>${esc(u.nombre)}</b><span>${u.rol==='admin'?'Administrador':'Decisor'} · UNEMI</span></div></div></header>
+   <aside class="side">${nav}</aside>
+   <main class="main">${content}</main>
+   ${opts.footer||''}
+   ${bnav}
+  </div>`;
+}
+
+/* ---------- pantallas ---------- */
+function vLogin(){
+  const t=S.loginTab;
+  return `<div class="login">
+   <section class="hero">
+     <div class="brand"><div class="logo">G</div>GUIOS PRO <span style="color:var(--orange)">2.0</span></div>
+     <div><h1>Decide con evidencia si un software libre es adecuado para tu organización.</h1>
+     <p>Guía GUIOS: 18 factores y 61 subfactores validados por la literatura y por expertos, con clasificación FODA y una recomendación de adopción.</p>
+     <div class="steps6"><div><b>Pasos 1 y 2</b>Importancia y factores relevantes</div><div><b>Pasos 3 y 4</b>Subfactores y ponderación</div><div><b>Pasos 5 y 6</b>FODA y recomendación</div></div></div>
+     <p style="font-size:12px;opacity:.6">Basado en Rea Sánchez (2022). Prototipo académico · UNEMI</p>
+   </section>
+   <section class="formside"><div class="box">
+     <div class="tabs"><button class="${t==='in'?'on':''}" data-act="ltab" data-v="in">Iniciar sesión</button><button class="${t==='up'?'on':''}" data-act="ltab" data-v="up">Crear cuenta</button></div>
+     ${t==='in'?`
+       <div class="field"><label>Correo institucional</label><input placeholder="nombre@unemi.edu.ec" value="decisor@unemi.edu.ec"></div>
+       <div class="field"><label>Contraseña</label><input type="password" value="12345678"></div>
+       <button class="btn primary" style="width:100%;justify-content:center" data-act="login" data-v="dec">Ingresar</button>
+       <div class="divider">accesos de demostración</div>
+       <div class="demo"><button class="btn sm" data-act="login" data-v="dec">Entrar como decisor</button><button class="btn sm" data-act="login" data-v="admin">Entrar como administrador</button></div>`
+     :`
+       <div class="field"><label>Nombre completo</label><input placeholder="Ej.: María Pérez"></div>
+       <div class="field"><label>Correo</label><input placeholder="nombre@organizacion.com"></div>
+       <div class="field"><label>Organización</label><input placeholder="Ej.: Universidad Estatal de Milagro"></div>
+       <div class="field"><label>Contraseña</label><input type="password" placeholder="Mínimo 8 caracteres"></div>
+       <button class="btn primary" style="width:100%;justify-content:center" data-act="login" data-v="dec">Crear cuenta</button>
+       <p class="help" style="margin-top:10px">Las cuentas nuevas tienen rol de decisor. El rol de administrador lo asigna otro administrador.</p>`}
+   </div></section></div>`;
+}
+
+function vInicio(){
+  const ev=S.evals, fin=ev.filter(e=>e.estado==='finalizada').length;
+  const vig=calcs.find(c=>c.vigente);
+  const rows=ev.map(e=>{const d=derive(e),rc=recommend(d),p=progressOf(e);const code=e.estado==='finalizada'?rc.code:null;
+    return `<tr>
+     <td data-l="Evaluación"><b>${esc(e.titulo)}</b><div class="help">${esc(e.sw)} ${esc(e.ver)} · ${esc(e.lic)}</div></td>
+     <td data-l="Organización">${esc(e.org)}</td>
+     <td data-l="Fecha">${e.fecha}</td>
+     <td data-l="Estado">${e.estado==='finalizada'?'<span class="chip F">Finalizada</span>':`<span class="chip org">En curso · ${p.pct}%</span>`}</td>
+     <td data-l="Recomendación">${code?`<div class="recbadge rec${code}">${code}</div>`:'<span class="muted">—</span>'}</td>
+     <td data-l="" style="text-align:right"><button class="btn sm ${e.estado==='finalizada'?'':'primary'}" data-act="open" data-v="${e.id}">${e.estado==='finalizada'?'Ver resultados':'Continuar'}</button></td>
+    </tr>`}).join('');
+  return shell(`
+   <div class="pagehead"><div><h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1><p>Retoma una evaluación o inicia una nueva.</p></div>
+     <button class="btn accent" data-act="new">${ICON.plus.replace('<svg','<svg width="18" height="18"')} Nueva evaluación</button></div>
+   <div class="grid g4" style="margin-bottom:16px">
+     <div class="card pad kpi"><div class="k">Evaluaciones</div><div class="v">${ev.length}</div></div>
+     <div class="card pad kpi"><div class="k">Finalizadas</div><div class="v">${fin}</div></div>
+     <div class="card pad kpi"><div class="k">En curso</div><div class="v">${ev.length-fin}</div></div>
+     <div class="card pad kpi"><div class="k">Importancia sugerida vigente</div><div class="v" style="font-size:16px;margin-top:6px">${vig.nombre}</div><div class="help">${vig.rango} · ${vig.fecha}</div></div>
+   </div>
+   <div class="card"><div class="dimhead"><h3>Historial de evaluaciones</h3><span class="help">Solo tú puedes ver tus evaluaciones</span></div>
+     <table class="t resp"><thead><tr><th>Evaluación</th><th>Organización</th><th>Fecha</th><th>Estado</th><th>Rec.</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  `);
+}
+
+function stepperH(e,step){
+  const p=progressOf(e);
+  const steps=[['Contexto','Software y organización'],['Factores','Pasos 1 y 2'],['Subfactores','Pasos 3 y 4'],['Resultados','Pasos 5 y 6']];
+  const keys=['contexto','factores','subfactores','resultados'];
+  const idx=keys.indexOf(step);
+  const doneF=[!!e.sw, p.assigned===18, p.subsT>0&&p.subsD===p.subsT, e.estado==='finalizada'];
+  return `<div class="stepper">${steps.map((s,i)=>`<button class="step ${i===idx?'on':''} ${doneF[i]&&i!==idx?'done':''}" data-act="step" data-v="${keys[i]}"><div class="n">${doneF[i]&&i!==idx?'✓':i+1}</div><div><b>${s[0]}</b><span>${s[1]}</span></div></button>`).join('')}</div>
+   <div class="mstep"><div class="row"><span>Paso ${idx+1} de 4</span><b>${steps[idx][0]} · ${steps[idx][1]}</b></div><div class="prog"><div class="fill" style="width:${(idx+1)*25}%"></div></div></div>`;
+}
+function evalHead(e,sub){
+  return `<div class="crumb"><a href="#/inicio">Inicio</a> › ${esc(e.titulo||'Nueva evaluación')}</div>
+   <div class="pagehead"><div><h1>${esc(e.titulo||'Nueva evaluación')}</h1><p>${sub}</p></div>
+   <div class="noprint" style="display:flex;gap:8px"><span class="chip navy">IS: ${calcOf(e).nombre}</span></div></div>`;
+}
+function footer(e,prev,next,nextLbl,dis){
+  return `<div class="footerbar noprint">${prev?`<button class="btn" data-act="step" data-v="${prev}">← Atrás</button>`:''}<div class="sp"></div>
+   <button class="btn ghost hidem" data-act="save">Guardar borrador</button>
+   ${next?`<button class="btn primary" data-act="${next==='finish'?'finish':'step'}" data-v="${next}" ${dis?'disabled':''}>${nextLbl} →</button>`:''}</div>`;
+}
+
+function vContexto(e){
+  return shell(evalHead(e,'Registra qué software se evalúa y para qué organización.')+stepperH(e,'contexto')+`
+   <div class="grid g2">
+    <div class="card pad"><h3 style="margin-top:0">Software evaluado</h3>
+      <div class="field"><label>Título de la evaluación</label><input data-bind="titulo" value="${esc(e.titulo||'')}" placeholder="Ej.: Adopción de suite ofimática"></div>
+      <div class="grid g2" style="gap:12px"><div class="field"><label>Nombre del software</label><input data-bind="sw" value="${esc(e.sw||'')}" placeholder="Ej.: LibreOffice"></div>
+      <div class="field"><label>Versión</label><input data-bind="ver" value="${esc(e.ver||'')}" placeholder="Ej.: 7.6"></div></div>
+      <div class="field"><label>Tipo de licencia</label><select data-bind="lic">${['','GPL v3','LGPL v3','MPL 2.0','Apache 2.0','MIT','BSD','AGPL v3','Otra'].map(l=>`<option ${e.lic===l?'selected':''}>${l}</option>`).join('')}</select></div>
+    </div>
+    <div class="card pad"><h3 style="margin-top:0">Organización</h3>
+      <div class="field"><label>Organización</label><input data-bind="org" value="${esc(e.org||'')}" placeholder="Ej.: Universidad Estatal de Milagro"></div>
+      <div class="grid g2" style="gap:12px"><div class="field"><label>Sector</label><select><option>Educación</option><option>Gobierno</option><option>Salud</option><option>Comercio</option><option>Otro</option></select></div>
+      <div class="field"><label>País</label><input value="Ecuador"></div></div>
+      <div class="alert info"><b>i</b><div>Se usará la <b>importancia sugerida vigente</b> (${calcOf(e).nombre}). La evaluación queda asociada a ese cálculo para su trazabilidad.</div></div>
+    </div>
+   </div>`, {footer:footer(e,null,'factores','Continuar a factores', !e.sw)});
+}
+
+function vFactores(e){
+  const d=derive(e), p=progressOf(e);
+  const groups=['T','O','E'].map(k=>{
+    const items=d.filter(x=>x.f.dim===k);
+    return `<div class="card" style="margin-bottom:16px"><div class="dimhead"><h3>Dimensión ${DIMS[k]}</h3><span class="help">${items.length} factores</span></div>
+    ${items.map(x=>`<div class="fac">
+      <div class="nm"><b>${esc(x.f.n)}</b><div class="meta"><span class="chip">${x.f.ns} ${x.f.ns===1?'subfactor':'subfactores'}</span>${x.f.alc==='Ambos'
+        ?`<span class="seg" style="transform:scale(.88);transform-origin:left"><button class="${e.soporte==='Interno'?'on':''}" style="${e.soporte==='Interno'?'background:var(--navy);':''}min-width:0" data-act="sop" data-v="Interno">Interno</button><button class="${e.soporte==='Externo'?'on':''}" style="${e.soporte==='Externo'?'background:var(--navy);':''}min-width:0" data-act="sop" data-v="Externo">Externo</button></span>`
+        :`<span class="chip">${x.f.alc}</span>`}</div></div>
+      <div class="sug">Sugerida<span class="tip" data-tip="Importancia sugerida = intersección de la importancia del experto (IE = 3) y la de la literatura (IL = ${calcOf(e).il[x.f.i]}). Fuente: ${calcOf(e).nombre}.">?</span><b>${LV[x.IS]}</b></div>
+      <div class="seg imp">${[1,2,3,4].map(v=>`<button data-act="imp" data-f="${x.f.i}" data-v="${v}" class="${x.ID===v?'on':''}">${LV[v]}</button>`).join('')}</div>
+      <div class="irbox">${x.ID?`<span class="muted">Imp. relativa</span> <b>${LV[x.IR]}</b> ${x.rel?'<span class="rel">● Relevante</span>':'<span class="norel">○ Se excluye</span>'}`:'<span class="muted">Asigna tu importancia</span>'}</div>
+    </div>`).join('')}</div>`}).join('');
+  return shell(evalHead(e,'Indica qué tan importante es cada factor para tu organización. El sistema combina tu valoración con la sugerida.')+stepperH(e,'factores')+`
+   <div class="card pad" style="margin-bottom:16px"><div class="summary">
+     <div><b style="font-size:20px">${p.assigned}/18</b> <span class="muted">valorados</span></div>
+     <div><b style="font-size:20px;color:var(--F)">${p.rel}</b> <span class="muted">relevantes</span></div>
+     <div style="flex:1;min-width:160px"><div class="prog"><div class="fill" style="width:${p.assigned/18*100}%"></div></div></div>
+     <div class="legend"><span><i style="background:var(--l1)"></i>Irrelevante</span><span><i style="background:var(--l2)"></i>Opcional</span><span><i style="background:var(--l3)"></i>Importante</span><span><i style="background:var(--l4)"></i>Fundamental</span></div>
+     <button class="btn sm" data-act="help">¿Cómo se calcula?</button>
+   </div></div>${groups}`, {footer:footer(e,'contexto','subfactores','Continuar a subfactores', p.assigned<18)});
+}
+
+function vSubfactores(e){
+  const d=derive(e).filter(x=>x.rel);
+  if(!d.length) return shell(evalHead(e,'')+stepperH(e,'subfactores')+`<div class="card pad">No hay factores relevantes. Vuelve al paso anterior.</div>`,{footer:footer(e,'factores',null)});
+  if(S.selF==null || !d.find(x=>x.f.i===S.selF)) S.selF=(d.find(x=>x.done<x.f.ns)||d[0]).f.i;
+  const x=d.find(y=>y.f.i===S.selF);
+  const idx=d.indexOf(x), nxt=d[idx+1];
+  const pmv=x.pm, partialPm = (()=>{const v=e.sub[x.f.i].filter(Boolean);return v.length? v.reduce((a,b)=>a+b,0)/v.length:null})();
+  const shown = pmv ?? partialPm;
+  const col = shown==null?'var(--line2)': shown>=3?'var(--F)':'var(--A)';
+  const prevF = shown==null?null: foda(shown, x.alc);
+  const p=progressOf(e);
+  const list=d.map(y=>`<button class="fitem ${y.f.i===S.selF?'on':''}" data-act="self" data-v="${y.f.i}">${ring(y.done,y.f.ns)}<div class="nm"><b>${esc(y.f.n)}</b><span>${LV[y.IR]} · ${y.alc}</span></div>${y.foda?fodaChip(y.foda):''}</button>`).join('');
+  return shell(evalHead(e,'Para cada factor relevante, indica en qué medida el software y tu organización cumplen cada requisito. Un clic por subfactor.')+stepperH(e,'subfactores')+`
+   <div class="split">
+     <div class="card flist"><div class="dimhead"><h3>Factores relevantes</h3><span class="help">${p.subsD}/${p.subsT}</span></div>${list}</div>
+     <div class="card">
+       <div class="fhead"><div><div class="help">${DIMS[x.f.dim]} · Factor ${idx+1} de ${d.length}</div><h2 style="margin:2px 0 6px;font-size:19px">${esc(x.f.n)}</h2>
+         <div style="display:flex;gap:6px;flex-wrap:wrap"><span class="chip navy">Imp. relativa: ${LV[x.IR]}</span><span class="chip">Alcance ${x.alc}</span></div></div>
+         <div class="pmbox"><div class="row"><span class="muted">Ponderación media ${pmv==null&&partialPm!=null?'(parcial)':''}</span><span class="big" style="color:${col}">${fmt(shown)}</span></div>
+           <div class="meter"><div class="fill" style="width:${shown?((shown-1)/3*100):0}%;background:${col}"></div><div class="th" style="left:66.66%"></div></div>
+           <div class="help" style="display:flex;justify-content:space-between;margin-top:6px"><span>1,0</span><span>umbral 3,0 → ${prevF?fodaChip(prevF):'—'}</span><span>4,0</span></div></div>
+       </div>
+       ${x.f.subs.map((s,k)=>{const v=e.sub[x.f.i][k];return `<div class="subrow ${v?'ok':''}"><div class="k">${v?'✓':k+1}</div><div>${esc(s)}</div>
+         <div class="seg cum">${[1,2,3,4].map(n=>`<button data-act="cum" data-f="${x.f.i}" data-k="${k}" data-v="${n}" class="${v===n?'on':''}" title="${CUMF[n]}">${CUM[n]}</button>`).join('')}</div></div>`}).join('')}
+       <div style="padding:14px 18px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;border-top:1px solid var(--line);background:#FAFBFC;border-radius:0 0 var(--r) var(--r)">
+         <span class="help">La ponderación se calcula y guarda automáticamente.</span>
+         ${nxt?`<button class="btn sm" data-act="self" data-v="${nxt.f.i}">Siguiente factor: ${esc(nxt.f.n)} →</button>`:''}</div>
+     </div>
+   </div>`, {footer:footer(e,'factores','resultados','Ver resultados', false)});
+}
+
+function vResultados(e){
+  const d=derive(e), rc=recommend(d), ev=d.filter(x=>x.foda), pend=d.filter(x=>x.rel&&!x.foda);
+  const q=t=>ev.filter(x=>x.foda===t).map(x=>`<button class="it" data-act="gosub" data-v="${x.f.i}" title="Ver subfactores">${esc(x.f.n)}<small>${fmt(x.pm)}</small></button>`).join('')||'<span class="help">—</span>';
+  const cnt=t=>ev.filter(x=>x.foda===t).length;
+  const banner = rc.code? `<div class="recbanner bg${rc.code}"><div class="letter">${rc.code}</div><div><div style="font-size:12px;opacity:.85;font-weight:600;text-transform:uppercase;letter-spacing:.8px">Recomendación ${rc.code}</div><h2>${rc.title}</h2><p>${rc.text}</p>
+     ${rc.causes.length?`<div class="why"><span style="font-size:12px;font-weight:600;opacity:.9;margin-right:4px">Factores que la determinan:</span>${rc.causes.map(x=>`<span class="chip">${esc(x.f.n)} · ${x.foda} · ${LV[x.IR]}</span>`).join('')}</div>`:''}</div></div>`
+    : `<div class="recbanner bgN"><div class="letter">?</div><div><h2>Aún no hay factores evaluados</h2><p>Valora los subfactores de al menos un factor relevante para obtener una recomendación.</p></div></div>`;
+  const bars=ev.slice().sort((a,b)=>b.pm-a.pm).map(x=>`<div class="b"><span class="nm" title="${esc(x.f.n)}">${esc(x.f.n)}</span><div class="track"><div class="fill" style="width:${(x.pm-1)/3*100}%;background:var(--${x.foda[0]})"></div><div class="th"></div></div><b>${fmt(x.pm)}</b></div>`).join('');
+  const rows=d.map(x=>`<tr><td data-l="Factor"><b>${esc(x.f.n)}</b></td><td data-l="Sugerida">${LV[x.IS]}</td><td data-l="Decisor">${x.ID?LV[x.ID]:'—'}</td><td data-l="Relativa">${x.IR?LV[x.IR]:'—'}</td><td data-l="Alcance">${x.alc}</td><td data-l="Ponderación">${fmt(x.pm)}</td><td data-l="FODA">${x.rel?fodaChip(x.foda):'<span class="muted">No relevante</span>'}</td></tr>`).join('');
+  return shell(evalHead(e,`${esc(e.sw)} ${esc(e.ver)} · ${esc(e.org)}`)+stepperH(e,'resultados')+`
+   ${pend.length?`<div class="alert" style="margin-bottom:14px"><b>!</b><div>${pend.length} factor(es) relevante(s) sin completar (${pend.map(x=>esc(x.f.n)).join(', ')}). No se consideran en la recomendación (RN-08).</div></div>`:''}
+   ${banner}
+   <div class="grid g2" style="margin-top:16px;align-items:start">
+     <div class="card pad"><h3 style="margin:0 0 12px">Matriz FODA</h3>
+       <div class="foda"><div class="ax"></div><div class="ax">Ponderación ≥ 3</div><div class="ax">Ponderación &lt; 3</div>
+         <div class="ax v">Interno</div><div class="q qF"><h4>Fortalezas <span>${cnt('Fortaleza')}</span></h4><div class="items">${q('Fortaleza')}</div></div><div class="q qD"><h4>Debilidades <span>${cnt('Debilidad')}</span></h4><div class="items">${q('Debilidad')}</div></div>
+         <div class="ax v">Externo</div><div class="q qO"><h4>Oportunidades <span>${cnt('Oportunidad')}</span></h4><div class="items">${q('Oportunidad')}</div></div><div class="q qA"><h4>Amenazas <span>${cnt('Amenaza')}</span></h4><div class="items">${q('Amenaza')}</div></div></div>
+       <p class="help" style="margin:10px 0 0">Haz clic en un factor para revisar sus subfactores.</p></div>
+     <div class="card pad"><h3 style="margin:0 0 12px">Ponderación media por factor</h3><div class="bars">${bars||'<span class="help">Sin datos</span>'}</div><p class="help" style="margin:6px 0 0">La línea vertical marca el umbral 3,0.</p></div>
+   </div>
+   <div class="card" style="margin-top:16px"><div class="dimhead"><h3>Detalle por factor</h3><span class="help">Trazabilidad de cada cálculo</span></div>
+     <table class="t resp"><thead><tr><th>Factor</th><th>Sugerida</th><th>Decisor</th><th>Relativa</th><th>Alcance</th><th>Pond.</th><th>FODA</th></tr></thead><tbody>${rows}</tbody></table></div>
+  `, {footer:`<div class="footerbar noprint"><button class="btn" data-act="step" data-v="subfactores">← Atrás</button><div class="sp"></div><button class="btn hidem" data-act="print">Exportar PDF</button>${e.estado==='finalizada'?'<button class="btn primary" data-act="home">Volver al inicio</button>':`<button class="btn primary" data-act="finish" ${rc.code?'':'disabled'}>Finalizar evaluación</button>`}</div>`});
+}
+
+function vComparar(){
+  const fins=S.evals;
+  const [a,b]=S.cmp.map(id=>S.evals.find(e=>e.id===id));
+  const da=derive(a), db=derive(b), ra=recommend(da), rb=recommend(db);
+  const sel=(k,v)=>`<select data-act="cmpsel" data-k="${k}" style="height:38px;border:1px solid var(--line2);border-radius:10px;padding:0 10px;width:100%">${fins.map(e=>`<option value="${e.id}" ${e.id===v?'selected':''}>${esc(e.titulo)} — ${esc(e.sw)}</option>`).join('')}</select>`;
+  const head=(e,r)=>`<div class="card pad" style="display:flex;gap:14px;align-items:center"><div class="recbadge rec${r.code||'N'}" style="width:48px;height:48px;font-size:22px">${r.code||'—'}</div><div><b>${esc(e.sw)} ${esc(e.ver)}</b><div class="help">${r.title||'Sin recomendación'}</div></div></div>`;
+  const rows=F.map((f,i)=>{const x=da[i],y=db[i];const diff=x.foda!==y.foda;return `<tr style="${diff?'background:#FFFBF4':''}"><td data-l="Factor"><b>${esc(f.n)}</b></td><td data-l="A">${x.rel?fodaChip(x.foda):'<span class="muted">No relevante</span>'} <span class="help">${fmt(x.pm)}</span></td><td data-l="B">${y.rel?fodaChip(y.foda):'<span class="muted">No relevante</span>'} <span class="help">${fmt(y.pm)}</span></td></tr>`}).join('');
+  return shell(`<div class="pagehead"><div><h1>Comparar evaluaciones</h1><p>Contrasta dos alternativas de software factor por factor.</p></div></div>
+   <div class="grid g2" style="margin-bottom:12px"><div>${sel(0,a.id)}</div><div>${sel(1,b.id)}</div></div>
+   <div class="grid g2" style="margin-bottom:16px">${head(a,ra)}${head(b,rb)}</div>
+   <div class="card"><div class="dimhead"><h3>Clasificación por factor</h3><span class="help">Resaltadas las filas con diferencias</span></div>
+   <table class="t resp"><thead><tr><th>Factor</th><th>${esc(a.sw)}</th><th>${esc(b.sw)}</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+}
+
+function vAdmin(){
+  const vig=calcs.find(c=>c.vigente), run=S.admin.run;
+  const hist=calcs.slice().reverse().map(c=>`<tr><td data-l="Cálculo"><b>${c.nombre}</b><div class="help">${c.fuentes}</div></td><td data-l="Origen"><span class="chip ${c.origen==='ia'?'org':'navy'}">${c.origen==='ia'?'Búsqueda asistida por IA':'Tesis'}</span></td><td data-l="Rango">${c.rango}</td><td data-l="Fecha">${c.fecha}</td><td data-l="Estado">${c.vigente?'<span class="chip F">Vigente</span>':'<span class="chip">Histórico</span>'}</td><td style="text-align:right"><button class="btn sm" data-act="calcdet" data-v="${c.id}">Ver detalle</button></td></tr>`).join('');
+  let runH='';
+  if(run){
+    const done=run.items.filter(x=>x.st===3).length;
+    runH=`<div class="card" style="margin-top:16px"><div class="dimhead"><h3>${run.finished?'Resultado del recálculo':'Recálculo en curso'}</h3><span class="help">${run.desde}–${run.hasta} · ${run.fuentes.join(', ')}</span></div>
+     <div class="pad" style="padding-bottom:6px"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><b>${done} de 18 factores procesados</b><span class="help">${run.finished?'Completado':'El proceso continúa aunque cierres esta página (asíncrono)'}</span></div><div class="prog"><div class="fill" style="width:${done/18*100}%"></div></div></div>
+     <table class="t resp"><thead><tr><th>Factor</th><th>Estado</th><th style="text-transform:none">n</th><th style="text-transform:none">CITAS cᵢ</th><th style="text-transform:none">rᵢ = cᵢ/n</th><th>IL</th><th>IS nueva</th><th>IS vigente</th></tr></thead><tbody>
+     ${run.items.map((x,i)=>{const f=F[i];const ok=run.finished;const d= ok? x.is - vig.is[i]:0;
+       return `<tr><td data-l="Factor"><b>${esc(f.n)}</b></td><td data-l="Estado"><span class="st q${x.st}">${['En cola','Buscando artículos…','Clasificando con IA…','Listo'][x.st]}</span></td><td data-l="n">${f.ns}</td><td data-l="Citas">${x.st>=2?x.cShown:'—'}</td><td data-l="rᵢ">${ok?fmt(x.c/f.ns):'—'}</td><td data-l="IL">${ok?x.il:'—'}</td><td data-l="IS nueva">${ok?`<b>${LV[x.is]}</b>`:'—'}</td><td data-l="IS vigente">${LV[vig.is[i]]} ${ok?`<span class="delta ${d>0?'up':d<0?'dn':'eq'}">${d>0?'▲':d<0?'▼':'='}</span>`:''}</td></tr>`}).join('')}
+     </tbody></table>
+     ${run.finished?`<div style="padding:14px 18px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--line);flex-wrap:wrap"><span class="help" style="flex:1;align-self:center">IL se calcula con los cuartiles de las 18 razones rᵢ; IS = intersección de IE = 3 e IL. Los cálculos anteriores se conservan.</span><button class="btn" data-act="discard">Descartar</button><button class="btn primary" data-act="publish">Publicar como vigente</button></div>`:''}</div>`;
+  }
+  return shell(`<div class="pagehead"><div><div class="crumb">Administración</div><h1>Importancia sugerida</h1><p>Recalcula la importancia sugerida de los 18 factores con literatura reciente.</p></div>
+     <button class="btn accent" data-act="newrun" ${run&&!run.finished?'disabled':''}>${ICON.ai.replace('<svg','<svg width="18" height="18"')} Nuevo recálculo</button></div>
+   <div class="grid g3" style="margin-bottom:16px">
+     <div class="card pad kpi"><div class="k">Cálculo vigente</div><div class="v" style="font-size:17px;margin-top:4px">${vig.nombre}</div><div class="help">${vig.rango}</div></div>
+     <div class="card pad kpi"><div class="k">Factores con IS Importante</div><div class="v">${vig.is.filter(v=>v===3).length}</div></div>
+     <div class="card pad kpi"><div class="k">Cálculos registrados</div><div class="v">${calcs.length}</div></div>
+   </div>
+   <div class="card"><div class="dimhead"><h3>Historial de cálculos</h3><span class="help">Cada evaluación queda vinculada al cálculo con el que se hizo</span></div>
+   <table class="t resp"><thead><tr><th>Cálculo</th><th>Origen</th><th>Rango</th><th>Fecha</th><th>Estado</th><th></th></tr></thead><tbody>${hist}</tbody></table></div>
+   ${runH}`);
+}
+
+/* ---------- modales ---------- */
+function mHelp(){return `<div class="scrim" data-act="close"></div><div class="modal"><div class="hd"><h3 style="margin:0">Cómo funciona la evaluación</h3><button class="btn sm ghost" data-act="close">✕</button></div><div class="bd">
+  <p style="margin-top:0"><b>Escala de importancia</b> (pasos 1 y 2)</p>
+  <div class="scale"><span><i class="sw" style="background:var(--l1)"></i>Irrelevante</span><span>El factor no influye en la decisión.</span><span><i class="sw" style="background:var(--l2)"></i>Opcional</span><span>Conviene, pero no es decisivo.</span><span><i class="sw" style="background:var(--l3)"></i>Importante</span><span>Influye claramente en la decisión.</span><span><i class="sw" style="background:var(--l4)"></i>Fundamental</span><span>Sin este factor no se adopta.</span></div>
+  <p><b>Importancia relativa</b> = intersección entre la importancia <i>sugerida</i> y la del <i>decisor</i> (Figura 5.10 de la tesis). Si es mayor que Irrelevante, el factor es relevante y se valoran sus subfactores.</p>
+  <p><b>Escala de cumplimiento</b> (pasos 3 y 4): No cumple (1) · No sé (2) · Parcial (3) · Cumple (4). La <b>ponderación media</b> es el promedio de los subfactores.</p>
+  <p><b>FODA</b> (paso 5): interno ≥ 3 → Fortaleza; interno &lt; 3 → Debilidad; externo ≥ 3 → Oportunidad; externo &lt; 3 → Amenaza.</p>
+  <p style="margin-bottom:0"><b>Recomendación</b> (paso 6): <b>C</b> si hay debilidades o amenazas en factores Importantes o Fundamentales; <b>B</b> si solo las hay en factores Opcionales; <b>A</b> si todo son fortalezas u oportunidades.</p></div></div>`}
+function mNewRun(){return `<div class="scrim" data-act="close"></div><div class="modal"><div class="hd"><h3 style="margin:0">Nuevo recálculo de importancia sugerida</h3><button class="btn sm ghost" data-act="close">✕</button></div><div class="bd">
+  <div class="grid g2" style="gap:12px"><div class="field"><label>Desde (año)</label><input id="y1" value="2020"></div><div class="field"><label>Hasta (año)</label><input id="y2" value="2025"></div></div>
+  <div class="field"><label>Fuentes bibliográficas</label>
+   ${[['OpenAlex','abierta',1],['Crossref','abierta',1],['Semantic Scholar','abierta',1],['IEEE Xplore','requiere clave de API',0],['Scopus','requiere acceso institucional',0]].map(s=>`<label class="check"><input type="checkbox" class="src" value="${s[0]}" ${s[2]?'checked':''}> ${s[0]} <span class="help">· ${s[1]}</span></label>`).join('')}</div>
+  <div class="alert info" style="margin-bottom:16px"><b>i</b><div>Para cada <b>subfactor</b>, la IA recibe el factor y una descripción ampliada del subfactor, busca artículos sobre adopción de software y clasifica si cada artículo lo trata. cᵢ es la suma de las citas de los subfactores del factor (tesis, paso 2a).</div></div>
+  <div style="display:flex;justify-content:flex-end;gap:8px"><button class="btn" data-act="close">Cancelar</button><button class="btn primary" data-act="startrun">Iniciar recálculo</button></div></div></div>`}
+function dCalc(id){const c=calcs.find(x=>x.id===id);
+  return `<div class="scrim" data-act="close"></div><div class="drawer"><div class="hd"><div><div class="help">Detalle del cálculo</div><h3 style="margin:2px 0">${c.nombre}</h3><div class="help">${c.rango} · ${c.fuentes} · ${c.fecha}</div></div><button class="btn sm ghost" data-act="close">✕</button></div><div class="bd">
+   <table class="t"><thead><tr><th>Factor</th><th>n</th><th>cᵢ</th><th>rᵢ</th><th>IL</th><th>IS</th></tr></thead><tbody>
+   ${F.map((f,i)=>`<tr><td>${c.origen==='ia'?`<a href="javascript:void 0" data-act="refs" data-v="${id}:${i}">${esc(f.n)}</a>`:esc(f.n)}</td><td>${f.ns}</td><td>${c.tc[i]}</td><td>${fmt(c.tc[i]/f.ns)}</td><td>${c.il[i]}</td><td>${c.is[i]}</td></tr>`).join('')}</tbody></table>
+   ${c.refsFor!=null?refsH(c):`<p class="help">${c.origen==='ia'?'Selecciona un factor para ver sus referencias.':'Valores de la Tabla 5.3 de la tesis (revisión sistemática de la literatura).'}</p>`}
+  </div></div>`}
+function refsH(c){const f=F[c.refsFor];let n=0;
+  return `<h4 style="margin:18px 0 8px">Referencias de ${esc(f.n)} <span class="chip org">datos ficticios de demostración</span></h4>`+
+   f.subs.map((s,k)=>{const m=1+((c.refsFor*7+k*3)%3);return `<div class="help" style="margin:10px 0 4px"><b>Subfactor ${k+1}:</b> ${esc(s)}</div>`+Array.from({length:m},(_,j)=>{n++;return `<div class="ref"><b>Artículo de ejemplo ${n} sobre ${esc(f.n.toLowerCase())}</b>${2020+((k+j+c.refsFor)%6)} · OpenAlex · DOI 10.0000/demo.${c.refsFor}.${k}.${j}</div>`}).join('')}).join('')}
+
+/* ---------- render ---------- */
+function curEval(){return S.evals.find(e=>e.id===S.cur)}
+function render(){
+  const r=S.route; let h='';
+  if(!S.user && r!=='login'){location.hash='#/login';return}
+  if(r==='login') h=vLogin();
+  else if(r==='inicio') h=vInicio();
+  else if(r==='comparar') h=vComparar();
+  else if(r==='admin') h=S.user.rol==='admin'?vAdmin():vInicio();
+  else if(r.startsWith('eval/')){const [,id,step]=r.split('/');S.cur=+id;const e=curEval();if(!e){go('inicio');return}
+    h={contexto:vContexto,factores:vFactores,subfactores:vSubfactores,resultados:vResultados}[step||'contexto'](e)}
+  else h=vInicio();
+  if(S.modal==='help') h+=mHelp(); if(S.modal==='newrun') h+=mNewRun();
+  if(S.drawer!=null) h+=dCalc(S.drawer);
+  if(S.toast) h+=`<div class="toast">${S.toast}</div>`;
+  const y=window.scrollY; document.getElementById('root').innerHTML=h; window.scrollTo(0,y);
+}
+function route(){const r=(location.hash||'#/login').slice(2)||'login';
+  if(r==='nueva'){const e=mkEval({titulo:'',sw:'',ver:'',lic:'',org:S.user?'Universidad Estatal de Milagro':''});S.evals.unshift(e);location.replace('#/eval/'+e.id+'/contexto');return}
+  if(r!==S.route) {S.route=r; S.modal=null; S.drawer=null; window.scrollTo(0,0)}
+  render()}
+window.addEventListener('hashchange',route);
+
+/* ---------- eventos ---------- */
+document.addEventListener('click',ev=>{
+  const t=ev.target.closest('[data-act]'); if(!t) return;
+  const a=t.dataset.act, v=t.dataset.v, e=curEval();
+  if(t.tagName==='A' && t.getAttribute('href')==='javascript:void 0') ev.preventDefault();
+  switch(a){
+    case 'ltab': S.loginTab=v; render(); break;
+    case 'login': S.user= v==='admin'? {nombre:'Edwin Pastor',ini:'EP',rol:'admin'} : {nombre:'Laddy Rocha',ini:'LR',rol:'decisor'}; go('inicio'); break;
+    case 'logout': S.user=null; break;
+    case 'help': S.modal='help'; render(); break;
+    case 'close': S.modal=null; S.drawer=null; render(); break;
+    case 'new': go('nueva'); break;
+    case 'home': go('inicio'); break;
+    case 'open': {const x=S.evals.find(y=>y.id==v); const p=progressOf(x); go('eval/'+x.id+'/'+(x.estado==='finalizada'?'resultados': p.assigned<18?'factores':'subfactores')); break}
+    case 'step': S.selF=null; go('eval/'+e.id+'/'+v); break;
+    case 'imp': e.id_[+t.dataset.f]=+v; render(); break;
+    case 'sop': e.soporte=v; render(); break;
+    case 'self': S.selF=+v; render(); window.scrollTo({top:0,behavior:'smooth'}); break;
+    case 'cum': e.sub[+t.dataset.f][+t.dataset.k]=+v; render(); break;
+    case 'gosub': S.selF=+v; S.route=''; location.hash='#/eval/'+e.id+'/subfactores'; break;
+    case 'save': toast('Borrador guardado'); break;
+    case 'finish': e.estado='finalizada'; toast('Evaluación finalizada y guardada'); go('eval/'+e.id+'/resultados'); break;
+    case 'print': window.print(); break;
+    case 'newrun': S.modal='newrun'; render(); break;
+    case 'startrun': startRun(); break;
+    case 'publish': publish(); break;
+    case 'discard': S.admin.run=null; render(); break;
+    case 'calcdet': S.drawer=+v; render(); break;
+    case 'refs': {const [cid,fi]=v.split(':').map(Number); calcs.find(c=>c.id===cid).refsFor=fi; render(); break}
+  }
+});
+document.addEventListener('input',ev=>{const b=ev.target.dataset.bind; if(b){const e=curEval(); e[b]=ev.target.value;
+  const btn=document.querySelector('.footerbar .btn.primary'); if(btn&&b==='sw') btn.disabled=!e.sw;}});
+document.addEventListener('change',ev=>{const t=ev.target;
+  if(t.dataset.bind){curEval()[t.dataset.bind]=t.value}
+  if(t.dataset.act==='cmpsel'){S.cmp[+t.dataset.k]=+t.value; render()}});
+
+/* ---------- simulación del recálculo con IA ---------- */
+function startRun(){
+  const y1=$('#y1').value, y2=$('#y2').value, src=[...document.querySelectorAll('.src:checked')].map(x=>x.value);
+  // Conteos simulados y deterministas (demostración)
+  const mult=[6.2,5.1,9.5,6.8,7.4,8.9,11,8,4.6,5.6,14,22,13,8.2,10,4.9,12,4.4];
+  const items=F.map((f,i)=>({st:0, c:Math.round(f.tc*mult[i]+f.ns*3), cShown:0}));
+  const rs=items.map((x,i)=>x.c/F[i].ns), il=ilFrom(rs);
+  items.forEach((x,i)=>{x.il=il[i]; x.is=isf(3,il[i])});
+  S.admin.run={desde:y1,hasta:y2,fuentes:src,items,finished:false};
+  S.modal=null; render();
+  let i=0;
+  const tick=()=>{const run=S.admin.run; if(!run) return;
+    const it=run.items[i]; if(!it){run.finished=true; render(); return}
+    it.st++; if(it.st===2) it.cShown=Math.round(it.c*.6); if(it.st===3){it.cShown=it.c; i++}
+    if(S.route==='admin') render(); setTimeout(tick, 140)};
+  setTimeout(tick,200);
+}
+function publish(){
+  const run=S.admin.run, id=calcs.length+1;
+  calcs.forEach(c=>c.vigente=false);
+  calcs.push({id, origen:'ia', nombre:`Recálculo IA ${run.desde}–${run.hasta}`, rango:`${run.desde}–${run.hasta}`, fuentes:run.fuentes.join(', '), fecha:'10/10/2026', vigente:true,
+    tc:run.items.map(x=>x.c), il:run.items.map(x=>x.il), is:run.items.map(x=>x.is)});
+  S.admin.run=null; toast('Nuevo cálculo publicado como vigente'); render();
+}
+route();
+</script>
+</body>
+</html>
