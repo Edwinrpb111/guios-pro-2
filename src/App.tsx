@@ -1,16 +1,27 @@
 import { Route, Routes } from 'react-router';
+import { RutaAdmin } from './auth/RutaAdmin';
+import { RutaProtegida } from './auth/RutaProtegida';
+import { AdminSugeridaPage } from './pages/AdminSugeridaPage';
 import { InicioPage } from './pages/InicioPage';
+import { LoginPage } from './pages/LoginPage';
 import { NoEncontradaPage } from './pages/NoEncontradaPage';
 
 /**
- * Rutas de la aplicación (BRIEF §12.1). Se irán agregando P-01..P-11
- * en sus issues correspondientes.
+ * Rutas de la aplicación (BRIEF §12.1). Se irán agregando P-02..P-11
+ * en sus issues correspondientes. Todo exige sesión salvo /login, y
+ * /admin/* exige además el rol administrador.
  */
 export function App() {
   return (
     <Routes>
-      <Route path="/" element={<InicioPage />} />
-      <Route path="*" element={<NoEncontradaPage />} />
+      <Route path="/login" element={<LoginPage />} />
+      <Route element={<RutaProtegida />}>
+        <Route path="/" element={<InicioPage />} />
+        <Route path="/admin" element={<RutaAdmin />}>
+          <Route path="sugerida" element={<AdminSugeridaPage />} />
+        </Route>
+        <Route path="*" element={<NoEncontradaPage />} />
+      </Route>
     </Routes>
   );
 }

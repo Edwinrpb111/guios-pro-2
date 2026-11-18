@@ -16,6 +16,15 @@ VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=<anon key que muestra `supabase start`>
 ```
 
+## Pruebas de integración (solo en la terminal; nunca en Vercel ni en la CI)
+
+| Variable                    | Valor                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| `SUPABASE_URL_PRUEBAS`      | URL de la API de Supabase **local**, p. ej. `http://127.0.0.1:54321`             |
+| `SUPABASE_ANON_KEY_PRUEBAS` | _anon key_ de Supabase local (`npx supabase status -o env`, variable `ANON_KEY`) |
+
+Si faltan, `src/lib/auth.integracion.test.ts` se omite. Se pasan en la línea de comandos (ver README); no se guardan en `.env.local`, porque `vitest` solo expone al navegador las que empiezan con `VITE_`.
+
 ## Edge Functions (secretos de Supabase, `supabase secrets set`)
 
 | Variable                    | Tipo / valor                                                                                                                                           |

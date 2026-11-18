@@ -45,6 +45,16 @@ Las variables de entorno están descritas en [`docs/variables-entorno.md`](docs/
 | `npm run test:functions`          | Pruebas de las Edge Functions (Deno; proveedores falsos)    |
 | `npm run typecheck:functions`     | Verificación de tipos de las Edge Functions (Deno)          |
 
+### Prueba de integración de autenticación
+
+`src/lib/auth.integracion.test.ts` registra un usuario, lee su `perfil`, cierra e inicia sesión contra Supabase local. Se omite si no están definidas las variables `SUPABASE_URL_PRUEBAS` y `SUPABASE_ANON_KEY_PRUEBAS` (por eso la CI no la ejecuta). Con Supabase local arriba:
+
+```bash
+SUPABASE_URL_PRUEBAS=http://127.0.0.1:54321 SUPABASE_ANON_KEY_PRUEBAS=<anon key de `npx supabase status`> npx vitest run src/lib/auth.integracion.test.ts
+```
+
+Cada ejecución deja un usuario `prueba-<uuid>@example.com` en la base local; se descarta con `npm run db:reset`.
+
 ## Administrador inicial
 
 La semilla no crea usuarios. El administrador se registra en la app como cualquier usuario (queda como `decisor`) y después se le sube el rol desde el editor SQL de Supabase, con el correo de `ADMIN_EMAIL`:
@@ -69,6 +79,7 @@ src/
 └─ styles/       # Tokens y estilos del CP1
 supabase/        # Migraciones, semilla y Edge Functions
 docs/
+├─ componentes.md # Componentes base del CP1 (props, eventos, accesibilidad)
 ├─ fuentes/      # Datos y prototipo de referencia (catálogo CSV, prototipo HTML del CP1, PNG)
 └─ decisiones/   # ADR
 ```

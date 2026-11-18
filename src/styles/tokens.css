@@ -1,0 +1,70 @@
+/*
+ * Tokens de diseño del Componente Práctico 1 (BRIEF §12.3).
+ * Valores tomados de docs/fuentes/GUIOS_PRO_2.0_prototipo.html (bloque :root).
+ * Los nombres de color (--navy, --orange, --bg, --text, --F...) se conservan
+ * tal como los fija BRIEF §12.3; los tokens nuevos usan nombres en español.
+ *
+ * Punto de quiebre móvil: 760 px (no se puede expresar como variable en
+ * @media): barra inferior de navegación, stepper reducido y tablas en tarjetas.
+ */
+:root {
+  /* Marca y superficies */
+  --navy: #1b3047;
+  --navy2: #264466;
+  --navy3: #e8eef5;
+  --orange: #f28c1b;
+  --orange2: #fff1e2;
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --line: #e1e6ed;
+  --line2: #cbd3de;
+  --text: #1b2533;
+  --muted: #5d6a7b;
+
+  /* FODA: color del texto (F, O, D, A) y fondo suave (Fbg, Obg, Dbg, Abg) */
+  --F: #2e8b57;
+  --Fbg: #e6f4ec;
+  --O: #2f6fb3;
+  --Obg: #e5effa;
+  --D: #c9701c;
+  --Dbg: #fcefe1;
+  --A: #c0392b;
+  --Abg: #fbe7e5;
+
+  /* Recomendación B (ámbar) y estados de cumplimiento */
+  --recB: #d4a017;
+  --cumple-desconozco: #8a94a3;
+
+  /* Importancia 1 → 4 */
+  --l1: #9aa6b5;
+  --l2: #6fa3d8;
+  --l3: #2f6fb3;
+  --l4: #1b3047;
+
+  /* Tipografía: Inter, con alternativas del sistema */
+  --fuente: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --texto-titulo: 22px;
+  --texto-base: 14px;
+  --texto-pequeno: 12px;
+  --interlineado: 1.45;
+
+  /* Espaciado */
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 24px;
+  --espacio-6: 32px;
+
+  /* Radios */
+  --radio: 12px;
+  --radio-medio: 10px;
+  --radio-chico: 8px;
+  --radio-pildora: 999px;
+
+  /* Sombras */
+  --sombra: 0 1px 2px rgba(16, 30, 54, 0.06), 0 4px 14px rgba(16, 30, 54, 0.06);
+
+  /* Foco visible (accesibilidad) */
+  --foco: 2px solid var(--O);
+}

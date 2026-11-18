@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 import { App } from './App';
+import { ProveedorAuth } from './auth/ProveedorAuth';
 import './styles/global.css';
 
 const queryClient = new QueryClient();
@@ -13,7 +14,9 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <ProveedorAuth>
+          <App />
+        </ProveedorAuth>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,
