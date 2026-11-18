@@ -90,11 +90,7 @@ async function asignarImportanciaDelDecisor(pagina: Page) {
 }
 
 async function valorarSubfactores(pagina: Page) {
-  // HALLAZGO (src/, fuera del alcance del issue #9): al pasar de P-04 a P-05 sin recargar, la
-  // pantalla parte de la evaluación en caché (sin las valoraciones recién guardadas) y
-  // `useValoracionFactores` no la actualiza al llegar la lectura nueva: «Ningún factor es
-  // relevante». Recargar equivale a retomar la evaluación. Quitar la recarga al corregirlo.
-  await pagina.reload();
+  // Sin recargar: P-05 espera su propia lectura de la evaluación (issue #26).
   const lista = pagina.getByRole('navigation', { name: 'Factores relevantes' });
   for (const factor of piloto.factores) {
     await lista.getByRole('button', { name: new RegExp(`^${escapar(factor.nombre)} \\d`) }).click();
