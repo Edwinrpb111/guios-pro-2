@@ -26,16 +26,20 @@ Las variables de entorno están descritas en [`docs/variables-entorno.md`](docs/
 
 ## Comandos
 
-| Comando                           | Qué hace                                                  |
-| --------------------------------- | --------------------------------------------------------- |
-| `npm run dev`                     | Servidor de desarrollo                                    |
-| `npm test`                        | Pruebas unitarias y de componentes                        |
-| `npm run test:coverage`           | Pruebas con cobertura (exige ≥ 95 % en `src/guios-core/`) |
-| `npm run lint`                    | ESLint                                                    |
-| `npm run format` / `format:check` | Prettier                                                  |
-| `npm run typecheck`               | Verificación de tipos                                     |
-| `npm run build`                   | Build de producción                                       |
-| `npm run check`                   | Todo lo anterior, igual que la CI                         |
+| Comando                           | Qué hace                                                   |
+| --------------------------------- | ---------------------------------------------------------- |
+| `npm run dev`                     | Servidor de desarrollo                                     |
+| `npm test`                        | Pruebas unitarias y de componentes                         |
+| `npm run test:coverage`           | Pruebas con cobertura (exige ≥ 95 % en `src/guios-core/`)  |
+| `npm run lint`                    | ESLint                                                     |
+| `npm run format` / `format:check` | Prettier                                                   |
+| `npm run typecheck`               | Verificación de tipos                                      |
+| `npm run build`                   | Build de producción                                        |
+| `npm run check`                   | Todo lo anterior, igual que la CI                          |
+| `npx supabase start`              | Levanta Supabase local (necesita Docker Desktop)           |
+| `npm run db:reset`                | Recrea la base local aplicando las migraciones             |
+| `npm run test:db`                 | Pruebas de RLS y funciones SQL (pgTAP) sobre la base local |
+| `npm run gen:types`               | Regenera `src/lib/database.types.ts` desde la base local   |
 
 ## Estructura
 
