@@ -1,0 +1,18 @@
+/* Estilos globales mínimos. Los tokens del CP1 llegan en el issue #6 (tokens.css). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.pagina {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
