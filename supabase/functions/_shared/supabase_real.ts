@@ -56,34 +56,19 @@ export class RepositorioSupabase implements Repositorio {
       .sort((a, b) => a.orden_factor - b.orden_factor || a.orden - b.orden);
   }
 
-  async crearCalculo(datos: NuevoCalculo): Promise<number> {
-    const fila = exigir(
-      await this.#cliente
-        .from('calculo_sugerida')
-        .insert({
-          origen: 'ia',
-          anio_inicio: datos.anio_inicio,
-          anio_fin: datos.anio_fin,
-          bases_datos: datos.bases_datos,
-          estado: 'en_proceso',
-          progreso: 0,
-          parametros: datos.parametros,
-          creado_por: datos.creado_por,
-        })
-        .select('id_calculo')
-        .single(),
-      'No se pudo crear el cálculo',
+  /** La función SQL `crear_calculo_con_pasos` (solo service_role) lo hace en una transacción. */
+  async crearCalculoConPasos(datos: NuevoCalculo): Promise<number> {
+    const id = exigir(
+      await this.#cliente.rpc('crear_calculo_con_pasos', {
+        p_anio_inicio: datos.anio_inicio,
+        p_anio_fin: datos.anio_fin,
+        p_bases_datos: datos.bases_datos,
+        p_parametros: datos.parametros,
+        p_creado_por: datos.creado_por,
+      }),
+      'No se pudo crear el cálculo con sus pasos',
     );
-    return (fila as { id_calculo: number }).id_calculo;
-  }
-
-  async crearPasos(idCalculo: number, idsSubfactor: number[]): Promise<void> {
-    exigir(
-      await this.#cliente
-        .from('recalculo_paso')
-        .insert(idsSubfactor.map((id_subfactor) => ({ id_calculo: idCalculo, id_subfactor }))),
-      'No se pudieron crear los pasos',
-    );
+    return id as number;
   }
 
   async obtenerCalculo(idCalculo: number): Promise<Calculo | null> {

@@ -18,6 +18,8 @@ interface Guion {
   usuario?: { data: { user: { id: string } | null }; error: { message: string } | null };
   /** Resultado de la consulta a `perfil`. */
   perfil?: { data: { rol: string } | null; error: { message: string } | null };
+  /** Resultado de `rpc(...)`. */
+  rpc?: { data: unknown; error: { message: string } | null };
 }
 
 /** Cliente simulado: registra cada operación encadenada y responde según el guion. */
@@ -53,7 +55,13 @@ function crearClienteSimulado(guion: Guion = {}) {
     };
   };
 
+  const rpcs: { funcion: string; argumentos: unknown }[] = [];
+
   const cliente = {
+    rpc: (funcion: string, argumentos: unknown) => {
+      rpcs.push({ funcion, argumentos });
+      return Promise.resolve(guion.rpc ?? { data: null, error: null });
+    },
     auth: {
       getUser: (jwt: string) => {
         tokensConsultados.push(jwt);
@@ -65,7 +73,7 @@ function crearClienteSimulado(guion: Guion = {}) {
     from: desde,
   } as unknown as SupabaseClient;
 
-  return { cliente, llamadas, tokensConsultados };
+  return { cliente, llamadas, tokensConsultados, rpcs };
 }
 
 function solicitudCon(token: string): Request {
@@ -191,6 +199,64 @@ Deno.test(
     ]);
   },
 );
+
+Deno.test(
+  'RepositorioSupabase.crearCalculoConPasos: una sola RPC crea el cálculo y sus pasos',
+  async () => {
+    const { cliente, llamadas, rpcs } = crearClienteSimulado({ rpc: { data: 42, error: null } });
+    const parametros = {
+      anio_inicio: 2020,
+      anio_fin: 2025,
+      fuentes: ['openalex'],
+      umbral: 0.7,
+      modelo: 'fake',
+      proveedor_llm: 'fake',
+      version_prompt: 'v1',
+      max_candidatos: 50,
+    };
+
+    const id = await new RepositorioSupabase(cliente).crearCalculoConPasos({
+      anio_inicio: 2020,
+      anio_fin: 2025,
+      bases_datos: 'OpenAlex',
+      parametros,
+      creado_por: 'u-1',
+    });
+
+    assertEquals(id, 42);
+    assertEquals(rpcs, [
+      {
+        funcion: 'crear_calculo_con_pasos',
+        argumentos: {
+          p_anio_inicio: 2020,
+          p_anio_fin: 2025,
+          p_bases_datos: 'OpenAlex',
+          p_parametros: parametros,
+          p_creado_por: 'u-1',
+        },
+      },
+    ]);
+    assertEquals(llamadas.length, 0, 'no inserta filas por separado (sería no atómico)');
+  },
+);
+
+Deno.test('RepositorioSupabase.crearCalculoConPasos: un error de la RPC se propaga', async () => {
+  const { cliente } = crearClienteSimulado({
+    rpc: { data: null, error: { message: 'catálogo vacío' } },
+  });
+  await assertRejects(
+    () =>
+      new RepositorioSupabase(cliente).crearCalculoConPasos({
+        anio_inicio: 2020,
+        anio_fin: 2025,
+        bases_datos: 'OpenAlex',
+        parametros: {} as never,
+        creado_por: 'u-1',
+      }),
+    Error,
+    'catálogo vacío',
+  );
+});
 
 Deno.test(
   'RepositorioSupabase.completarPaso: sin referencias no hace upsert pero marca el paso',
