@@ -397,8 +397,21 @@ inspector_port = 8083
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Secretos solo para el entorno local (supabase start / functions serve). En Supabase se
+# definen con `supabase secrets set` (docs/variables-entorno.md). Con LLM_PROVIDER=fake el
+# recálculo funciona sin red, sin claves y con resultados repetibles (BRIEF §13.6).
+[edge_runtime.secrets]
+LLM_PROVIDER = "fake"
+
+# Edge Functions del recálculo de IS (BRIEF §11.3). verify_jwt exige un JWT válido; cada función
+# además comprueba que el usuario sea administrador y responde 403 a un decisor.
+[functions.recalculo-iniciar]
+enabled = true
+verify_jwt = true
+
+[functions.recalculo-paso]
+enabled = true
+verify_jwt = true
 
 [analytics]
 enabled = true
