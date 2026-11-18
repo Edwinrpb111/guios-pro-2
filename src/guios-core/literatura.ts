@@ -92,3 +92,55 @@ export function recalcularIS(
     }),
   };
 }
+
+/** Conteo de un factor en un cálculo: `citas` = suma de las citas de sus subfactores (trampa 6). */
+export interface ConteoFactor {
+  readonly idFactor: number;
+  readonly subfactores: number;
+  readonly citas: number;
+}
+
+export interface ImportanciaFactor extends ConteoFactor {
+  /** Razón exacta `c_i / n_i`; IL se clasifica sobre este valor, sin redondear. */
+  readonly r: number;
+  readonly ie: Importancia;
+  readonly il: Importancia;
+  readonly is: Importancia;
+}
+
+export interface ResultadoRecalculo {
+  readonly cuartiles: Cuartiles;
+  /** En el mismo orden que la entrada. */
+  readonly factores: readonly ImportanciaFactor[];
+}
+
+/**
+ * RN-09 + RN-10 sobre el conteo de un recálculo: IL e IS de cada factor, identificado por su id.
+ * Todos los factores se calculan juntos porque IL es relativa a los cuartiles del conjunto.
+ */
+export function importanciaSugeridaPorFactor(
+  conteos: readonly ConteoFactor[],
+  metodo: MetodoCuartiles = METODO_CUARTILES,
+): ResultadoRecalculo {
+  const ids = new Set<number>();
+  for (const { idFactor } of conteos) {
+    if (ids.has(idFactor)) throw new RangeError(`Factor repetido en el conteo: ${idFactor}`);
+    ids.add(idFactor);
+  }
+  const { cuartiles: q, factores } = recalcularIS(conteos, metodo);
+  return {
+    cuartiles: q,
+    factores: conteos.map((conteo, i) => {
+      const resultado = factores[i] as ResultadoLiteratura;
+      return {
+        idFactor: conteo.idFactor,
+        subfactores: conteo.subfactores,
+        citas: conteo.citas,
+        r: resultado.r,
+        ie: IE_EXPERTOS,
+        il: resultado.il,
+        is: resultado.is,
+      };
+    }),
+  };
+}

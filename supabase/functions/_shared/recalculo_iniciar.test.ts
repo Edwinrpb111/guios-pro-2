@@ -139,18 +139,17 @@ Deno.test('iniciar: valida la entrada con mensajes en español', async () => {
 });
 
 Deno.test(
-  'iniciar: si no se pueden crear los pasos el cálculo queda fallido, no a medias',
+  'iniciar: si falla la creación no queda ningún cálculo (cálculo y pasos son atómicos)',
   async () => {
     const deps = crearDependenciasPrueba();
-    deps.repositorio.fallarAlCrearPasos = true;
+    deps.repositorio.fallarAlCrear = true;
 
     const respuesta = await llamar(deps, ENTRADA);
 
     assertEquals(respuesta.status, 500);
     assertEquals((await respuesta.json()).codigo, 'error_interno');
-    const [calculo] = [...deps.repositorio.calculos.values()];
-    assertEquals(calculo?.estado, 'fallido');
-    assert((calculo?.mensaje_error ?? '').length > 0);
+    assertEquals(deps.repositorio.calculos.size, 0, 'no queda un cálculo huérfano');
+    assertEquals(deps.repositorio.pasos.size, 0);
   },
 );
 

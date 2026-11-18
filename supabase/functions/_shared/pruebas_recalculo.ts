@@ -44,8 +44,8 @@ export class RepositorioMemoria implements Repositorio {
   readonly calculos = new Map<number, CalculoGuardado>();
   readonly pasos = new Map<number, Map<number, PasoGuardado>>();
   readonly referencias: ReferenciaGuardada[] = [];
-  /** Simula una caída de la base al crear los pasos. */
-  fallarAlCrearPasos = false;
+  /** Simula una caída de la base al crear el cálculo con sus pasos (no deja nada creado). */
+  fallarAlCrear = false;
   #siguiente = 1;
 
   constructor(readonly subfactores: SubfactorCatalogo[] = CATALOGO_PRUEBA) {}
@@ -54,7 +54,8 @@ export class RepositorioMemoria implements Repositorio {
     return Promise.resolve([...this.subfactores]);
   }
 
-  crearCalculo(datos: NuevoCalculo): Promise<number> {
+  crearCalculoConPasos(datos: NuevoCalculo): Promise<number> {
+    if (this.fallarAlCrear) return Promise.reject(new Error('base caída'));
     const id = this.#siguiente++;
     this.calculos.set(id, {
       id_calculo: id,
@@ -68,16 +69,11 @@ export class RepositorioMemoria implements Repositorio {
       creado_por: datos.creado_por,
       mensaje_error: null,
     });
-    return Promise.resolve(id);
-  }
-
-  crearPasos(idCalculo: number, idsSubfactor: number[]): Promise<void> {
-    if (this.fallarAlCrearPasos) return Promise.reject(new Error('base caída'));
     const pasos = new Map<number, PasoGuardado>();
-    for (const id of idsSubfactor)
-      pasos.set(id, { estado: 'pendiente', candidatos: 0, detalle: null });
-    this.pasos.set(idCalculo, pasos);
-    return Promise.resolve();
+    for (const s of this.subfactores)
+      pasos.set(s.id_subfactor, { estado: 'pendiente', candidatos: 0, detalle: null });
+    this.pasos.set(id, pasos);
+    return Promise.resolve(id);
   }
 
   obtenerCalculo(idCalculo: number): Promise<Calculo | null> {

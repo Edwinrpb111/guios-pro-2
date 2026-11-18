@@ -210,9 +210,13 @@ select throws_ok(
   'P0001', null, 'guardar_resultado_calculo exige exactamente 18 filas');
 select lives_ok(
   $$ select public.guardar_resultado_calculo((select valor from ctx where clave = 'ia'),
-       (select jsonb_agg(jsonb_build_object('id_factor', id_factor, 'num_subfactores', 1, 'total_citas', 0,
+       (select jsonb_agg(jsonb_build_object('id_factor', f.id_factor, 'num_subfactores', 1,
+          'total_citas', (select count(*) from public.referencia r
+                          join public.subfactor s on s.id_subfactor = r.id_subfactor
+                          where r.id_calculo = (select valor from ctx where clave = 'ia')
+                            and s.id_factor = f.id_factor),
           'razon_citas', 0, 'importancia_experto', 3, 'importancia_literatura', 1, 'importancia_sugerida', 2))
-        from public.factor)) $$,
+        from public.factor f)) $$,
   'guardar_resultado_calculo guarda las 18 filas');
 select is((select estado from public.calculo_sugerida where id_calculo = (select valor from ctx where clave = 'ia')),
   'completado', 'el cálculo queda completado');
