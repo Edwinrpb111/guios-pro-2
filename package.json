@@ -21,7 +21,8 @@
     "check": "npm run lint && npm run format:check && npm run typecheck && npm run test:coverage && npm run build",
     "db:reset": "supabase db reset",
     "test:db": "supabase test db",
-    "gen:types": "supabase gen types typescript --local > src/lib/database.types.ts && prettier --write src/lib/database.types.ts"
+    "gen:types": "supabase gen types typescript --local > src/lib/database.types.ts && prettier --write src/lib/database.types.ts",
+    "db:semilla": "node scripts/generar-semilla.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
