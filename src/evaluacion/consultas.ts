@@ -61,7 +61,9 @@ export function useIdEvaluacion(): number | null {
  * Carga lo que necesitan los pasos de una evaluación: la evaluación con su contexto y
  * valoraciones, el catálogo y el cálculo de importancia sugerida **de la evaluación**
  * (no el vigente: así su IS queda como fotografía, BRIEF §10.3).
- * La evaluación no se conserva en caché al salir (`gcTime: 0`): cada pantalla lee lo guardado.
+ * La evaluación no se conserva en caché al salir (`gcTime: 0`) y, como al navegar entre pasos
+ * la consulta sigue observada y la caché sobrevive, cada pantalla espera su propia lectura
+ * (`isFetchedAfterMount`): los formularios toman la evaluación solo al montarse (issue #26).
  */
 export function useEvaluacionCargada(id: number | null) {
   const evaluacion = useQuery({
@@ -89,7 +91,8 @@ export function useEvaluacionCargada(id: number | null) {
   if (id === null) return { estado: 'no_encontrada' } as const;
   if (consultas.some((c) => c.isError)) return { estado: 'error', reintentar } as const;
   if (evaluacion.data === null) return { estado: 'no_encontrada' } as const;
-  if (!evaluacion.data || !calculo.data || !catalogo.data) return { estado: 'cargando' } as const;
+  if (!evaluacion.data || !evaluacion.isFetchedAfterMount || !calculo.data || !catalogo.data)
+    return { estado: 'cargando' } as const;
   return {
     estado: 'lista',
     evaluacion: evaluacion.data,
