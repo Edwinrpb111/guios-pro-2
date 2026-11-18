@@ -1,0 +1,45 @@
+# Recálculo de la importancia sugerida: IL, IS y publicación (HU-08)
+
+Cómo el administrador recalcula la IS de los 18 factores, la revisa y la publica (BRIEF §11.2, §13.2, §13.5; issue #11). La búsqueda y clasificación de artículos con las Edge Functions están en [`edge-functions.md`](edge-functions.md).
+
+## Pantallas (solo administradores)
+
+| ID   | Ruta                                  | Qué hace                                                                                                                                                                                                         |
+| ---- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P-08 | `/admin/sugerida`                     | Cálculo vigente, indicadores e historial (vigente, histórico, en proceso, pausado, listo para revisar, descartado, fallido). Si hay un recálculo en proceso o pausado, ofrece continuarlo y no deja iniciar otro |
+| P-09 | `/admin/sugerida/nuevo`               | Años y fuentes (OpenAlex, Crossref); llama a `recalculo-iniciar`                                                                                                                                                 |
+| P-09 | `/admin/sugerida/:id`                 | Progreso (0..18 factores), pausa y reanudación; al terminar calcula IL/IS, las guarda y muestra la revisión: IS nueva frente a la vigente, **Publicar como vigente** o **Descartar**                             |
+| P-10 | `/admin/sugerida?detalle=:id` (panel) | n, cᵢ, rᵢ, IL e IS por factor, parámetros guardados (RNF-09) y, en un recálculo con IA, las referencias de cada factor por subfactor con su DOI                                                                  |
+
+Las rutas de P-09 están en `src/admin/rutas.tsx` y cuelgan de `/admin`, protegido por `RutaAdmin`. La seguridad real está en la base y en las Edge Functions: todas las RPC exigen `es_admin()` y las funciones responden 403 a un decisor.
+
+## Flujo
+
+1. **Iniciar.** `recalculo-iniciar` llama a `crear_calculo_con_pasos`, que crea el `calculo_sugerida` (`en_proceso`) y un `recalculo_paso` pendiente por subfactor **en una sola transacción**: si algo falla no queda ningún cálculo huérfano.
+2. **Pasos.** P-09 (`useRecalculo`) invoca `recalculo-paso` una vez por subfactor hasta que `pendientes = 0`. Si se cierra la pestaña, al volver a `/admin/sugerida/:id` se retoma desde lo pendiente.
+3. **Pausa.** «Pausar» espera a que termine el subfactor en curso y llama a `pausar_calculo` (`en_proceso → pausado`). Un 429 o una caída de una API deja el cálculo `pausado` con el mensaje (lo hace la Edge Function) y la pantalla **no reintenta en bucle**. «Reanudar» vuelve a invocar `recalculo-paso`, que pasa el cálculo a `en_proceso`.
+4. **IL e IS.** Con `conteo_citas` se obtiene, por factor, n y cᵢ = **suma de las citas de sus subfactores** (trampa 6). `importanciaSugeridaPorFactor` de `guios-core` calcula rᵢ, cuartiles (interpolación lineal), IL e IS = ⌊(3 + IL) / 2⌋ (RN-09, RN-10), y `guardar_resultado_calculo` guarda las 18 filas y deja el cálculo `completado`.
+5. **Revisión.** El administrador compara la IS nueva con la vigente y **publica** (`publicar_calculo`) o **descarta** (`descartar_calculo`).
+
+## Reglas que garantiza la base
+
+| Regla                                                                                         | Dónde                                                          |
+| --------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| Cálculo y pasos se crean juntos o no se crea nada                                             | `crear_calculo_con_pasos` (solo `service_role`)                |
+| Solo se guarda con todos los pasos hechos y exactamente 18 filas                              | `guardar_resultado_calculo`                                    |
+| n, cᵢ e IE guardados coinciden con el catálogo y las referencias                              | `guardar_resultado_calculo`                                    |
+| Solo se publica un cálculo `completado`                                                       | `publicar_calculo`                                             |
+| Exactamente un cálculo vigente                                                                | `publicar_calculo` + índice único parcial `uq_calculo_vigente` |
+| Se conserva el histórico: el vigente anterior queda `publicado`, no vigente, con sus 18 filas | `publicar_calculo`, `descartar_calculo`                        |
+| No se descarta un cálculo publicado (vigente o histórico)                                     | `descartar_calculo`                                            |
+| Solo se pausa un cálculo `en_proceso`                                                         | `pausar_calculo`                                               |
+| Un recálculo pausado, fallido o descartado no afecta a las evaluaciones                       | Las evaluaciones guardan su `id_calculo` (trampa 9)            |
+
+Pruebas: `supabase/tests/recalculo.test.sql` (pgTAP) con `npm run test:db`.
+
+## Decisiones
+
+- **Creación atómica con una función SQL.** Antes, `recalculo-iniciar` insertaba el cálculo y luego los pasos; si la segunda inserción fallaba quedaba un cálculo marcado `fallido` (seguimiento del issue #10). Ahora una sola RPC lo hace en una transacción. Solo la ejecuta `service_role`: el administrador no puede crear cálculos sin pasar por la Edge Function.
+- **Pausa manual en la base.** Detener el bucle en el navegador no cambiaba el estado: P-08 seguía mostrando «en proceso». `pausar_calculo` deja constancia y el mismo mecanismo de reanudación de la Edge Function sirve para los dos casos.
+- **La base verifica n, cᵢ e IE, no IL ni IS.** IL e IS las calcula `guios-core` (ADR-002) y el método de cuartiles es una constante con nombre que puede cambiar (BRIEF §17.4); duplicarlo en SQL rompería ese punto único. Los conteos, en cambio, vienen de la base y se pueden comprobar sin duplicar reglas.
+- **Un publicado no se descarta.** El histórico debe conservar qué IS estuvo vigente y cuándo (RNF-09).
