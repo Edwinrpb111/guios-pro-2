@@ -1,0 +1,293 @@
+{
+  "version": "2026-11-18",
+  "factores": {
+    "1": { "nombre": "Compatibilidad", "terminos": ["compatibility", "interoperability"] },
+    "2": { "nombre": "Personalización", "terminos": ["customization", "extensibility"] },
+    "3": { "nombre": "Prueba", "terminos": ["trialability", "evaluation deployment"] },
+    "4": { "nombre": "Fiabilidad", "terminos": ["reliability", "security"] },
+    "5": { "nombre": "Reusabilidad", "terminos": ["reusability", "licensing"] },
+    "6": { "nombre": "Usabilidad", "terminos": ["usability", "ease of use"] },
+    "7": { "nombre": "Mantenibilidad", "terminos": ["maintainability", "maintenance"] },
+    "8": { "nombre": "Portabilidad", "terminos": ["portability", "platform independence"] },
+    "9": { "nombre": "Documentación", "terminos": ["documentation", "user manual"] },
+    "10": { "nombre": "Formación", "terminos": ["training", "skills"] },
+    "11": { "nombre": "Tiempo de adopción", "terminos": ["adoption time", "deployment effort"] },
+    "12": {
+      "nombre": "Casos de estudio de adopción FLOSS",
+      "terminos": ["case study", "migration experience"]
+    },
+    "13": {
+      "nombre": "Centralidad de la tecnología de la información",
+      "terminos": ["IT centrality", "IT infrastructure"]
+    },
+    "14": { "nombre": "Apoyo de la alta dirección", "terminos": ["top management support"] },
+    "15": {
+      "nombre": "Bloqueo de proveedores",
+      "terminos": ["vendor lock-in", "vendor dependence"]
+    },
+    "16": { "nombre": "Soporte", "terminos": ["support", "community support"] },
+    "17": {
+      "nombre": "Actitud hacia el cambio",
+      "terminos": ["attitude toward change", "resistance to change"]
+    },
+    "18": { "nombre": "Coste total de propiedad", "terminos": ["total cost of ownership", "cost"] }
+  },
+  "subfactores": {
+    "1.1": {
+      "terminos": ["cloud infrastructure", "cloud-ready", "software as a service"],
+      "contexto": "Un proveedor ofrece una infraestructura de nube lista para usar con este software (SaaS, hospedaje gestionado, imágenes de nube)."
+    },
+    "1.2": {
+      "terminos": ["proprietary file formats", "export", "format conversion"],
+      "contexto": "El software puede exportar o guardar en formatos propietarios (por ejemplo, los de Microsoft Office) para intercambiar archivos."
+    },
+    "1.3": {
+      "terminos": ["integration with proprietary software", "coexistence", "interoperability"],
+      "contexto": "El software se integra e interactúa con el software propietario que la organización ya usa; coexistencia y migración gradual."
+    },
+    "1.4": {
+      "terminos": ["certification", "market niche", "industry standards compliance"],
+      "contexto": "El software está certificado o es aceptado para operar en su nicho de mercado o sector (cumple normas del sector)."
+    },
+    "1.5": {
+      "terminos": ["functionality", "use cases", "feature completeness"],
+      "contexto": "El software cubre los casos de uso y las funcionalidades más comunes que necesita una organización típica."
+    },
+    "1.6": {
+      "terminos": ["hardware compatibility", "device drivers", "hardware support"],
+      "contexto": "El software funciona con distintos componentes de hardware (controladores, periféricos, arquitecturas)."
+    },
+    "1.7": {
+      "terminos": ["open standards", "standard formats", "open formats"],
+      "contexto": "El software utiliza formatos y estándares abiertos (por ejemplo, ODF) que evitan la dependencia de un formato propietario."
+    },
+    "1.8": {
+      "terminos": ["cross-platform", "multi-platform", "operating systems"],
+      "contexto": "El software corre en varios sistemas operativos (Windows, Linux, macOS); es multiplataforma."
+    },
+    "2.1": {
+      "terminos": ["source code access", "open source code", "code availability"],
+      "contexto": "El acceso al código fuente es un incentivo para que la organización adopte el software (transparencia, control, auditoría)."
+    },
+    "2.2": {
+      "terminos": ["source code modification", "extending software", "in-house development"],
+      "contexto": "Se puede ampliar el software modificando el código fuente para cubrir necesidades propias de la organización."
+    },
+    "2.3": {
+      "terminos": ["innovation", "rapid development", "release frequency"],
+      "contexto": "Las innovaciones y nuevas funciones llegan al software a un ritmo rápido (ciclos de publicación frecuentes)."
+    },
+    "2.4": {
+      "terminos": ["configuration", "customization without coding", "settings"],
+      "contexto": "El software se personaliza fácilmente mediante configuración, sin modificar el código fuente."
+    },
+    "2.5": {
+      "terminos": ["modular architecture", "plug-ins", "modularity"],
+      "contexto": "El software incorpora nuevas funciones mediante módulos o complementos; arquitectura modular."
+    },
+    "2.6": {
+      "terminos": ["extension repository", "plugin marketplace", "add-ons"],
+      "contexto": "Existe un repositorio público de extensiones o complementos desarrollados por la comunidad para este software."
+    },
+    "3.1": {
+      "terminos": ["ease of deployment", "installation", "pilot testing"],
+      "contexto": "El software es fácil de desplegar y de probar antes de comprometerse (instalación sencilla, prueba piloto, versión de evaluación)."
+    },
+    "4.1": {
+      "terminos": ["reliability", "stability", "software quality"],
+      "contexto": "El software es fiable y estable: pocos fallos, comportamiento predecible en producción."
+    },
+    "4.2": {
+      "terminos": ["security vulnerabilities", "security record", "secure software"],
+      "contexto": "El software tiene un buen historial de seguridad: pocas vulnerabilidades conocidas y corrección rápida."
+    },
+    "4.3": {
+      "terminos": ["flexibility", "comparison with proprietary", "adaptability"],
+      "contexto": "El software es más flexible que la solución propietaria equivalente."
+    },
+    "4.4": {
+      "terminos": ["reliability comparison", "open source versus proprietary", "dependability"],
+      "contexto": "El software es más confiable que la solución propietaria equivalente."
+    },
+    "4.5": {
+      "terminos": ["access control", "authentication", "permissions management"],
+      "contexto": "El software ofrece una amplia variedad de funciones de control de acceso (roles, permisos, autenticación)."
+    },
+    "5.1": {
+      "terminos": ["license", "proprietary extensions", "permissive license"],
+      "contexto": "La licencia del software permite crear extensiones propietarias sobre él (licencias permisivas frente a copyleft)."
+    },
+    "5.2": {
+      "terminos": ["software library", "framework", "reuse"],
+      "contexto": "El software se ofrece como biblioteca o marco de trabajo que otros programas pueden reutilizar."
+    },
+    "6.1": {
+      "terminos": ["graphical user interface", "GUI", "user interface"],
+      "contexto": "El software proporciona una interfaz gráfica de usuario (GUI), no solo línea de comandos."
+    },
+    "6.2": {
+      "terminos": ["ease of use", "usability comparison", "user experience"],
+      "contexto": "El software es más fácil de usar que la alternativa propietaria."
+    },
+    "6.3": {
+      "terminos": ["learnability", "learning curve", "ease of learning"],
+      "contexto": "El software es fácil de aprender para los usuarios nuevos (curva de aprendizaje corta)."
+    },
+    "6.4": {
+      "terminos": [
+        "user dissatisfaction",
+        "proprietary software dissatisfaction",
+        "user satisfaction"
+      ],
+      "contexto": "Los usuarios están descontentos con el software propietario que usan, lo que motiva el cambio."
+    },
+    "7.1": {
+      "terminos": ["active maintenance", "developer activity", "project activity"],
+      "contexto": "Los desarrolladores mantienen el software activamente (commits recientes, versiones frecuentes, proyecto vivo)."
+    },
+    "8.1": {
+      "terminos": ["mobile application", "mobile version", "smartphone"],
+      "contexto": "Existe una versión móvil (aplicación para teléfonos o tabletas) de este software."
+    },
+    "8.2": {
+      "terminos": ["database independence", "database management system", "DBMS portability"],
+      "contexto": "El software es independiente del sistema de gestión de base de datos o funciona con varios."
+    },
+    "9.1": {
+      "terminos": ["well documented", "documentation quality", "documentation availability"],
+      "contexto": "El software está bien documentado en general."
+    },
+    "9.2": {
+      "terminos": ["developer documentation", "API documentation", "technical documentation"],
+      "contexto": "La documentación de desarrollo cubre todas las características del software."
+    },
+    "9.3": {
+      "terminos": ["documentation formats", "multiple formats", "online help"],
+      "contexto": "La documentación está disponible en múltiples formatos (HTML, PDF, ayuda en línea)."
+    },
+    "9.4": {
+      "terminos": ["understandable documentation", "documentation clarity", "readability"],
+      "contexto": "La documentación es fácil de entender."
+    },
+    "9.5": {
+      "terminos": ["up-to-date documentation", "documentation currency", "outdated documentation"],
+      "contexto": "La documentación está actualizada respecto a la versión vigente del software."
+    },
+    "9.6": {
+      "terminos": ["technical writers", "documentation authors", "professional documentation"],
+      "contexto": "La documentación la escriben redactores especializados y no solo los desarrolladores."
+    },
+    "9.7": {
+      "terminos": [
+        "high quality documentation",
+        "documentation quality",
+        "documentation assessment"
+      ],
+      "contexto": "La documentación del software es de alta calidad."
+    },
+    "9.8": {
+      "terminos": ["development documentation", "developer guide", "design documents"],
+      "contexto": "El software incluye documentación de desarrollo (guías para desarrolladores, diseño, arquitectura)."
+    },
+    "9.9": {
+      "terminos": ["user documentation", "user manual", "user guide"],
+      "contexto": "El software incluye documentación de usuario (manuales, guías, tutoriales)."
+    },
+    "9.10": {
+      "terminos": ["user documentation coverage", "complete user manual", "feature documentation"],
+      "contexto": "La documentación de usuario cubre todas las características del software."
+    },
+    "9.11": {
+      "terminos": ["data format documentation", "file format specification", "open specification"],
+      "contexto": "Los formatos de datos del software están bien documentados (especificaciones públicas)."
+    },
+    "10.1": {
+      "terminos": ["IT skills improvement", "skill development", "technical skills"],
+      "contexto": "Adoptar el software permite que los usuarios mejoren sus habilidades técnicas de TI."
+    },
+    "10.2": {
+      "terminos": ["self-learning", "self-training", "staff learning"],
+      "contexto": "El personal de la organización puede aprender por sí mismo a usar el software."
+    },
+    "10.3": {
+      "terminos": ["technical problem solving", "IT staff competence", "in-house expertise"],
+      "contexto": "El personal de la organización está capacitado para resolver problemas tecnológicos relacionados con el software."
+    },
+    "10.4": {
+      "terminos": ["training plans", "training courses", "training availability"],
+      "contexto": "Existen planes o cursos de entrenamiento para este software."
+    },
+    "11.1": {
+      "terminos": [
+        "installation requirements",
+        "deployment requirements",
+        "infrastructure requirements"
+      ],
+      "contexto": "Los requisitos de instalación y despliegue del software son fáciles de cumplir."
+    },
+    "11.2": {
+      "terminos": ["adoption time", "time to adopt", "migration duration"],
+      "contexto": "El tiempo necesario para adoptar el software es bajo (migración rápida)."
+    },
+    "12.1": {
+      "terminos": ["adoption success report", "case study", "public report"],
+      "contexto": "Hay informes públicos en Internet (casos de estudio, experiencias) que describen una adopción exitosa de este software."
+    },
+    "13.1": {
+      "terminos": ["work environment", "user work environment", "workplace improvement"],
+      "contexto": "Adoptar el software mejora el entorno de trabajo de los usuarios."
+    },
+    "13.2": {
+      "terminos": ["centralized IT infrastructure", "IT centralization", "centralized management"],
+      "contexto": "Centralizar la infraestructura de TI ayuda a acelerar la adopción del software."
+    },
+    "14.1": {
+      "terminos": ["management support", "executive sponsorship", "top management commitment"],
+      "contexto": "La alta dirección apoya la adopción exitosa del software."
+    },
+    "15.1": {
+      "terminos": ["vendor lock-in", "vendor dependence", "vendor independence"],
+      "contexto": "El software reduce las dependencias de los proveedores en el entorno de la organización."
+    },
+    "16.1": {
+      "terminos": ["community support", "user forums", "mailing lists"],
+      "contexto": "Hay soporte de la comunidad (foros, listas de correo, wikis) para este software."
+    },
+    "16.2": {
+      "terminos": ["external consultants", "expert support", "consulting services"],
+      "contexto": "Hay expertos y consultores externos disponibles para consultas específicas."
+    },
+    "16.3": {
+      "terminos": ["commercial support", "24/7 support", "service level agreement"],
+      "contexto": "Hay soporte comercial disponible 24/7/365."
+    },
+    "16.4": {
+      "terminos": ["in-house developers", "internal developers", "developer expertise"],
+      "contexto": "Hay desarrolladores en la organización que saben cómo desarrollar o modificar este software."
+    },
+    "16.5": {
+      "terminos": ["commercial customization", "customization services", "professional services"],
+      "contexto": "Hay soporte comercial disponible para personalizar el software."
+    },
+    "16.6": {
+      "terminos": ["hiring IT staff", "labor market", "skilled professionals availability"],
+      "contexto": "Es fácil contratar personal informático de la comunidad que conozca este software."
+    },
+    "17.1": {
+      "terminos": ["resistance to change", "change management", "user acceptance"],
+      "contexto": "El personal de la organización muestra poca resistencia al cambio tecnológico."
+    },
+    "17.2": {
+      "terminos": ["technical staff support", "IT staff attitude", "IT staff buy-in"],
+      "contexto": "El personal técnico encargado del despliegue y soporte respalda la adopción del software."
+    },
+    "18.1": {
+      "terminos": ["hidden costs", "unexpected costs", "total cost of ownership"],
+      "contexto": "Es poco probable que haya costos ocultos al adoptar el software."
+    },
+    "18.2": {
+      "terminos": ["cost comparison", "cost savings", "proprietary software cost"],
+      "contexto": "Adoptar el software es menos costoso que la alternativa propietaria (licencias, mantenimiento, costo total)."
+    }
+  }
+}

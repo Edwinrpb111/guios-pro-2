@@ -33,3 +33,10 @@ jobs:
         run: npm run test:coverage
       - name: Build
         run: npm run build
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Tipos de las Edge Functions
+        run: npm run typecheck:functions
+      - name: Pruebas de las Edge Functions
+        run: npm run test:functions

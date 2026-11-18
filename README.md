@@ -14,6 +14,7 @@ React 18 + TypeScript estricto + Vite · React Router · TanStack Query · Supab
 
 - Node.js 22 o superior y npm.
 - Docker Desktop (para Supabase local, desde el issue #3).
+- Deno 2 (solo para probar las Edge Functions: `npm run test:functions`).
 
 ## Cómo levantarlo en local
 
@@ -41,6 +42,8 @@ Las variables de entorno están descritas en [`docs/variables-entorno.md`](docs/
 | `npm run db:semilla`              | Regenera `supabase/seed.sql` desde el CSV y la Tabla 5.3    |
 | `npm run test:db`                 | Pruebas de RLS y funciones SQL (pgTAP) sobre la base local  |
 | `npm run gen:types`               | Regenera `src/lib/database.types.ts` desde la base local    |
+| `npm run test:functions`          | Pruebas de las Edge Functions (Deno; proveedores falsos)    |
+| `npm run typecheck:functions`     | Verificación de tipos de las Edge Functions (Deno)          |
 
 ### Prueba de integración de autenticación
 
@@ -60,6 +63,10 @@ La semilla no crea usuarios. El administrador se registra en la app como cualqui
 update public.perfil set rol = 'administrador'
 where id = (select id from auth.users where email = '<ADMIN_EMAIL>');
 ```
+
+## Edge Functions del recálculo de IS
+
+`recalculo-iniciar` y `recalculo-paso` (solo administradores) buscan en OpenAlex y Crossref y clasifican con Gemini. En local usan `LLM_PROVIDER=fake`, sin red ni claves. Contrato, errores, pausa y reanudación, y cómo probarlas: [`docs/edge-functions.md`](docs/edge-functions.md).
 
 ## Estructura
 
