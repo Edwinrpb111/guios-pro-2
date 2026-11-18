@@ -1,6 +1,6 @@
 // Capa HTTP común de las Edge Functions: CORS solo para el frontend (BRIEF §14), exigencia de
 // administrador (§11.3) y errores como `{error, codigo}` con un mensaje en español.
-import { exigirAdmin, type UsuarioVerificado } from './auth.ts';
+import { exigirAdmin, exigirJwt, type UsuarioVerificado } from './auth.ts';
 import type { Dependencias } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
 
@@ -18,7 +18,10 @@ export type Accion = (
 export interface OpcionesServidor {
   /** Orígenes del frontend que CORS acepta. */
   origenes: string[];
-  /** Crea las dependencias; puede lanzar un `ErrorApi` si falta configuración. */
+  /**
+   * Crea las dependencias; puede lanzar un `ErrorApi` `configuracion_*` si falta configuración.
+   * Se invoca solo cuando la petición trae token, y ese error no se muestra al cliente.
+   */
   crear: () => Dependencias;
 }
 
@@ -50,6 +53,11 @@ async function leerCuerpo(peticion: Request): Promise<unknown> {
       'El cuerpo de la solicitud debe ser JSON válido.',
     );
   }
+}
+
+/** Los errores `configuracion_*` mencionan variables de entorno y no deben llegar al cliente. */
+function esErrorDeConfiguracion(error: ErrorApi): boolean {
+  return error.codigo.startsWith('configuracion_');
 }
 
 export async function atender(
@@ -86,13 +94,21 @@ export async function atender(
   }
 
   try {
+    // Primero el token: quien no se identifica recibe 401 sin que se toque la configuración, así
+    // que nunca ve detalles de ella. Validar el JWT y el rol requiere las dependencias (cliente de
+    // Supabase), por eso `crear` va después de comprobar que hay token.
+    exigirJwt(peticion);
     const dependencias = opciones.crear();
     const admin = await exigirAdmin(peticion, dependencias.verificador);
     const cuerpo = await leerCuerpo(peticion);
     const resultado = await accion(cuerpo, admin, dependencias);
     return responder(resultado.estado, resultado.cuerpo, cabeceras);
   } catch (error) {
-    if (error instanceof ErrorApi) return respuestaDeError(error, cabeceras);
+    if (error instanceof ErrorApi && !esErrorDeConfiguracion(error)) {
+      return respuestaDeError(error, cabeceras);
+    }
+    // Un fallo de configuración nombra variables: queda en el registro del servidor y el cliente
+    // recibe el mismo `error_interno` que ante cualquier fallo inesperado.
     console.error('Error inesperado en la Edge Function:', error);
     return respuestaDeError(
       new ErrorApi(

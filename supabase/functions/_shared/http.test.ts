@@ -137,21 +137,108 @@ Deno.test('un error inesperado es 500 error_interno y no revela su detalle', asy
   assert(!JSON.stringify(cuerpo).includes('secreto'));
 });
 
+/** Opciones cuyo `crear` falla como lo haría una configuración incompleta o inválida. */
+function opcionesConConfiguracionRota(creaciones: { cantidad: number }, error: Error) {
+  return {
+    origenes: ORIGENES,
+    crear: () => {
+      creaciones.cantidad++;
+      throw error;
+    },
+  };
+}
+
+const ERROR_CONFIGURACION = new ErrorApi(
+  500,
+  'configuracion_invalida',
+  'La variable LLM_UMBRAL no es válida.',
+);
+
 Deno.test(
-  'un error al crear las dependencias (configuración) se devuelve con su código',
+  'sin token y con configuración rota responde 401 sin nombrar variables ni crear dependencias',
   async () => {
+    const creaciones = { cantidad: 0 };
     const respuesta = await atender(
-      solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
-      {
-        origenes: ORIGENES,
-        crear: () => {
-          throw new ErrorApi(500, 'configuracion_invalida', 'La variable LLM_UMBRAL no es válida.');
-        },
-      },
+      solicitud({ origen: ORIGEN }),
+      opcionesConConfiguracionRota(creaciones, ERROR_CONFIGURACION),
       () => Promise.resolve({ estado: 200, cuerpo: {} }),
     );
-    assertEquals(respuesta.status, 500);
-    assertEquals((await respuesta.json()).codigo, 'configuracion_invalida');
+    assertEquals(respuesta.status, 401);
+    const texto = JSON.stringify(await respuesta.json());
+    assertEquals((JSON.parse(texto) as { codigo: string }).codigo, 'no_autenticado');
+    assert(!texto.includes('LLM_UMBRAL') && !texto.includes('SUPABASE'));
+    assertEquals(creaciones.cantidad, 0);
     assertEquals(respuesta.headers.get('access-control-allow-origin'), ORIGEN);
+  },
+);
+
+Deno.test(
+  'con token y configuración rota responde 500 error_interno sin nombrar variables',
+  async () => {
+    const registrado: unknown[][] = [];
+    const original = console.error;
+    console.error = (...argumentos: unknown[]) => void registrado.push(argumentos);
+    try {
+      for (const error of [
+        ERROR_CONFIGURACION,
+        new ErrorApi(
+          500,
+          'configuracion_incompleta',
+          'Faltan SUPABASE_URL o SUPABASE_SERVICE_ROLE_KEY en el entorno de la función.',
+        ),
+      ]) {
+        const respuesta = await atender(
+          solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
+          opcionesConConfiguracionRota({ cantidad: 0 }, error),
+          () => Promise.resolve({ estado: 200, cuerpo: {} }),
+        );
+        assertEquals(respuesta.status, 500);
+        const cuerpo = await respuesta.json();
+        assertEquals(cuerpo.codigo, 'error_interno');
+        assert(!JSON.stringify(cuerpo).match(/LLM_UMBRAL|SUPABASE|variable/i));
+        assertEquals(respuesta.headers.get('access-control-allow-origin'), ORIGEN);
+      }
+    } finally {
+      console.error = original;
+    }
+    // El detalle (con el nombre de la variable) queda solo en el registro del servidor.
+    const registro = registrado.map((a) => a.map(String).join(' ')).join(' | ');
+    assertStringIncludes(registro, 'LLM_UMBRAL');
+  },
+);
+
+Deno.test(
+  'un secreto que falta durante la acción (usuario ya autenticado) tampoco nombra la variable',
+  async () => {
+    const original = console.error;
+    console.error = () => {};
+    try {
+      const { respuesta } = await atenderCon(solicitud({ token: TOKEN_ADMIN }), () =>
+        Promise.reject(
+          new ErrorApi(
+            500,
+            'configuracion_incompleta',
+            'Falta configurar GEMINI_API_KEY en los secretos de Supabase.',
+          ),
+        ),
+      );
+      assertEquals(respuesta.status, 500);
+      const cuerpo = await respuesta.json();
+      assertEquals(cuerpo.codigo, 'error_interno');
+      assert(!JSON.stringify(cuerpo).includes('GEMINI_API_KEY'));
+    } finally {
+      console.error = original;
+    }
+  },
+);
+
+Deno.test(
+  'un decisor con configuración correcta sigue recibiendo 403 antes de leer el cuerpo',
+  async () => {
+    const { respuesta, ejecutada } = await atenderCon(
+      solicitud({ token: TOKEN_DECISOR, cuerpo: '{no es json' }),
+    );
+    assertEquals(respuesta.status, 403);
+    assertEquals(ejecutada(), false);
   },
 );

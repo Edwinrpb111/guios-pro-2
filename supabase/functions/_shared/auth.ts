@@ -18,15 +18,21 @@ export function extraerJwt(peticion: Request): string | null {
   return coincidencia?.[1] ?? null;
 }
 
+/** 401 si la petición no trae `Authorization: Bearer <jwt>`; no necesita configuración alguna. */
+export function exigirJwt(peticion: Request): string {
+  const jwt = extraerJwt(peticion);
+  if (jwt === null) {
+    throw new ErrorApi(401, 'no_autenticado', 'Inicia sesión para realizar esta operación.');
+  }
+  return jwt;
+}
+
 /** 401 sin sesión válida; 403 si el usuario es un decisor. */
 export async function exigirAdmin(
   peticion: Request,
   verificador: VerificadorAdmin,
 ): Promise<UsuarioVerificado> {
-  const jwt = extraerJwt(peticion);
-  if (jwt === null) {
-    throw new ErrorApi(401, 'no_autenticado', 'Inicia sesión para realizar esta operación.');
-  }
+  const jwt = exigirJwt(peticion);
   const usuario = await verificador.verificar(jwt);
   if (usuario === null) {
     throw new ErrorApi(

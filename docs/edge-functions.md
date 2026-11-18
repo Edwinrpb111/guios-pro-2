@@ -20,18 +20,20 @@ Las dos funciones exigen `Authorization: Bearer <JWT>` de un **administrador** y
 
 Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`estado`, `progreso`, `pendientes`).
 
-| HTTP | `codigo`                                                                                | Cuándo                                                                                                 |
-| ---- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 400  | `solicitud_invalida`                                                                    | Cuerpo que no es JSON o campos inválidos                                                               |
-| 401  | `no_autenticado`, `sesion_invalida`                                                     | Sin JWT o JWT inválido                                                                                 |
-| 403  | `solo_administrador`                                                                    | **Un decisor**                                                                                         |
-| 403  | `origen_no_permitido`                                                                   | `Origin` distinto del frontend (CORS)                                                                  |
-| 404  | `calculo_no_encontrado`                                                                 | `id_calculo` inexistente                                                                               |
-| 405  | `metodo_no_permitido`                                                                   | Método distinto de POST                                                                                |
-| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido`                             | El cálculo ya no está en curso; `LLM_PROVIDER` cambió desde que empezó; sin fuentes guardadas          |
-| 502  | `respuesta_invalida`                                                                    | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado` |
-| 503  | `proveedor_no_disponible`                                                               | 429, 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error`               |
-| 500  | `configuracion_incompleta`, `configuracion_invalida`, `catalogo_vacio`, `error_interno` | Falta un secreto, valor inválido, catálogo sin sembrar o fallo inesperado (sin detalle al cliente)     |
+| HTTP | `codigo`                                                    | Cuándo                                                                                                 |
+| ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                               |
+| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                 |
+| 403  | `solo_administrador`                                        | **Un decisor**                                                                                         |
+| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                  |
+| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                               |
+| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                |
+| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; `LLM_PROVIDER` cambió desde que empezó; sin fuentes guardadas          |
+| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado` |
+| 503  | `proveedor_no_disponible`                                   | 429, 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error`               |
+| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                   |
+
+**Orden de las comprobaciones.** Primero el token: sin `Authorization: Bearer` la respuesta es 401 sin tocar la configuración. Los errores de configuración (`configuracion_*`: variable ausente o inválida) se registran solo en el servidor y el cliente recibe `error_interno`, sin nombrar variables.
 
 ### Pausa y reanudación (BRIEF §13.5)
 

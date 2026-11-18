@@ -1,5 +1,5 @@
 // Acceso a datos del recálculo. La interfaz permite probar las funciones sin base de datos;
-// la implementación real (service_role) está en `repositorio_supabase.ts`.
+// la implementación real (service_role) está en `supabase_real.ts`.
 
 export interface SubfactorCatalogo {
   id_subfactor: number;

@@ -1,6 +1,6 @@
 // Implementaciones reales con Supabase: repositorio y verificador de administrador. La clave
 // `service_role` existe únicamente aquí, dentro de las Edge Functions (BRIEF §14).
-import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import type { UsuarioVerificado, VerificadorAdmin } from './auth.ts';
 import { ErrorApi } from './errores.ts';
 import type {
