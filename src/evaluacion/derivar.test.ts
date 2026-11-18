@@ -4,7 +4,13 @@ import type {
   FactorCatalogo,
   ValoracionFactor,
 } from '../datos/tipos';
-import { derivarFactor, derivarFactores, filaParaGuardar, resumirFactores } from './derivar';
+import {
+  derivarFactor,
+  derivarFactores,
+  filaParaGuardar,
+  resumirFactores,
+  textoAyudaImportanciaSugerida,
+} from './derivar';
 
 const compatibilidad: FactorCatalogo = {
   id: 10,
@@ -175,6 +181,15 @@ describe('filaParaGuardar', () => {
   it('no se puede guardar un factor sin importancia del decisor', () => {
     expect(() => filaParaGuardar(derivarFactor(soporte, calculo, undefined))).toThrow(
       /sin valorar/,
+    );
+  });
+});
+
+describe('textoAyudaImportanciaSugerida', () => {
+  it('explica la IS con IE, IL y el cálculo de origen', () => {
+    const fila = derivarFactor(usabilidad, calculo, undefined);
+    expect(textoAyudaImportanciaSugerida(fila, calculo.nombre)).toBe(
+      'Importancia sugerida = intersección de la importancia del experto (IE = 3) y la de la literatura (IL = 2). Fuente: Cálculo inicial de la tesis.',
     );
   });
 });

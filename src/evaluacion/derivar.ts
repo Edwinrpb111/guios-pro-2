@@ -149,3 +149,11 @@ export function filaParaGuardar(fila: FilaFactor): FilaValoracionFactor {
     foda: fila.foda,
   };
 }
+
+/** Ayuda de la IS (BRIEF §12.2): de dónde sale (IE, IL y cálculo vigente). */
+export function textoAyudaImportanciaSugerida(fila: FilaFactor, nombreCalculo: string): string {
+  return (
+    `Importancia sugerida = intersección de la importancia del experto (IE = ${fila.ie}) ` +
+    `y la de la literatura (IL = ${fila.il}). Fuente: ${nombreCalculo}.`
+  );
+}
