@@ -3,8 +3,16 @@
  * validan los dominios cerrados (escalas 1..4, alcances, estados) y fallan con un
  * mensaje claro si la base devolviera algo fuera de ellos (BRIEF §14).
  */
-import { esCumplimiento, esImportancia } from '../guios-core';
-import type { Alcance, AlcanceCatalogo, Cumplimiento, Importancia } from '../guios-core';
+import type { Json } from '../lib/database.types';
+import { FODA, esCumplimiento, esImportancia } from '../guios-core';
+import type {
+  Alcance,
+  AlcanceCatalogo,
+  CausaRecomendacion,
+  Cumplimiento,
+  Foda,
+  Importancia,
+} from '../guios-core';
 import type {
   CalculoImportancia,
   CalculoResumen,
@@ -14,6 +22,7 @@ import type {
   EstadoEvaluacion,
   EvaluacionDetalle,
   ImportanciaSugerida,
+  RecomendacionGuardada,
   ResumenEvaluacion,
   ValoracionFactor,
 } from './tipos';
@@ -28,7 +37,7 @@ export interface FilaCatalogo {
     nombre: string;
     alcance: string;
     orden: number;
-    subfactor: { id_subfactor: number; orden: number }[];
+    subfactor: { id_subfactor: number; orden: number; enunciado: string }[];
   }[];
 }
 
@@ -72,6 +81,10 @@ export interface FilaEvaluacion {
   titulo: string | null;
   estado: string;
   id_calculo: number;
+  fecha_actualizacion: string;
+  codigo_recomendacion: string | null;
+  texto_recomendacion: string | null;
+  causas: Json | null;
   software_evaluado: {
     id_software: number;
     nombre: string;
@@ -124,10 +137,51 @@ const codigo = (valor: string | null): CodigoRecomendacion | null => {
   throw new RangeError(`Código de recomendación desconocido: ${valor}`);
 };
 
+const foda = (valor: unknown): Foda => {
+  if (typeof valor === 'string' && (FODA as readonly string[]).includes(valor)) {
+    return valor as Foda;
+  }
+  throw new RangeError(`Clasificación FODA desconocida en las causas: ${String(valor)}`);
+};
+
+/** `causas` de la BD (`[{factor, foda, ir}]`, ADR-003 ajuste 11) → causas de `guios-core`. */
+function mapearCausas(causas: Json | null): CausaRecomendacion[] {
+  if (causas === null) return [];
+  if (!Array.isArray(causas))
+    throw new RangeError('Las causas de la recomendación no son una lista.');
+  return causas.map((causa) => {
+    if (typeof causa !== 'object' || causa === null || Array.isArray(causa)) {
+      throw new RangeError(`Causa de la recomendación inválida: ${JSON.stringify(causa)}`);
+    }
+    const { factor, foda: clasificacion, ir } = causa;
+    if (typeof factor !== 'string' || typeof ir !== 'number') {
+      throw new RangeError(`Causa de la recomendación inválida: ${JSON.stringify(causa)}`);
+    }
+    return { nombre: factor, foda: foda(clasificacion), ir: importancia(ir, 'las causas') };
+  });
+}
+
+/** Causas de `guios-core` → forma que guarda la BD (`[{factor, foda, ir}]`). */
+export const causasParaGuardar = (causas: readonly CausaRecomendacion[]) =>
+  causas.map(({ nombre, foda: clasificacion, ir }) => ({
+    factor: nombre,
+    foda: clasificacion,
+    ir,
+  }));
+
 // --- Catálogo y cálculo ------------------------------------------------------------------------
 
 export function mapearCatalogo(filas: readonly FilaCatalogo[]): Catalogo {
+  const subfactores: Record<number, string> = {};
+  for (const dimension of filas) {
+    for (const factor of dimension.factor) {
+      for (const subfactor of factor.subfactor) {
+        subfactores[subfactor.id_subfactor] = subfactor.enunciado;
+      }
+    }
+  }
   return {
+    subfactores,
     dimensiones: filas.map((dimension) => ({
       id: dimension.id_dimension,
       nombre: dimension.nombre,
@@ -240,9 +294,20 @@ export function mapearEvaluacion(fila: FilaEvaluacion): EvaluacionDetalle {
       cumplimientos,
     };
   });
+  const codigoGuardado = codigo(fila.codigo_recomendacion);
+  const recomendacion: RecomendacionGuardada | null =
+    codigoGuardado === null
+      ? null
+      : {
+          codigo: codigoGuardado,
+          texto: fila.texto_recomendacion ?? '',
+          causas: mapearCausas(fila.causas),
+        };
   return {
     id: fila.id_evaluacion,
     estado: estado(fila.estado),
+    fecha: fila.fecha_actualizacion,
+    recomendacion,
     idCalculo: fila.id_calculo,
     contexto: mapearContexto(fila),
     valoraciones,

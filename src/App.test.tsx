@@ -37,4 +37,30 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Página no encontrada' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Volver al inicio' })).toHaveAttribute('href', '/');
   });
+
+  it('con sesión abre los subfactores de una evaluación en /evaluaciones/:id/subfactores', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/subfactores',
+    });
+    expect(await screen.findByText(/Ningún factor es relevante/)).toBeInTheDocument();
+  });
+
+  it('con sesión abre los resultados de una evaluación en /evaluaciones/:id/resultados', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/resultados',
+    });
+    expect(await screen.findByRole('heading', { name: 'Sin recomendación' })).toBeInTheDocument();
+  });
+
+  it('con sesión abre el informe imprimible en /evaluaciones/:id/informe', async () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('decisor'),
+      ruta: '/evaluaciones/7/informe',
+    });
+    expect(
+      await screen.findByRole('article', { name: 'Informe de evaluación' }),
+    ).toBeInTheDocument();
+  });
 });

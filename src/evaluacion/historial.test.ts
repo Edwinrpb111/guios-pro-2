@@ -8,6 +8,7 @@ import {
 } from './historial';
 
 const catalogo: Catalogo = {
+  subfactores: {},
   dimensiones: [
     {
       id: 1,
@@ -116,6 +117,12 @@ describe('rutaDeEvaluacion', () => {
   it('arma la ruta de cada paso', () => {
     expect(rutaDeEvaluacion(7, 'contexto')).toBe('/evaluaciones/7/contexto');
     expect(rutaDeEvaluacion(7, 'factores')).toBe('/evaluaciones/7/factores');
+    expect(rutaDeEvaluacion(7, 'subfactores')).toBe('/evaluaciones/7/subfactores');
+    expect(rutaDeEvaluacion(7, 'resultados')).toBe('/evaluaciones/7/resultados');
+  });
+
+  it('arma la ruta del informe imprimible', () => {
+    expect(rutaDeEvaluacion(7, 'informe')).toBe('/evaluaciones/7/informe');
   });
 });
 

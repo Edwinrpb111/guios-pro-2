@@ -1,4 +1,5 @@
 import {
+  causasParaGuardar,
   mapearCalculo,
   mapearCatalogo,
   mapearEvaluacion,
@@ -30,8 +31,8 @@ describe('mapearCatalogo', () => {
             alcance: 'Ambos',
             orden: 2,
             subfactor: [
-              { id_subfactor: 22, orden: 2 },
-              { id_subfactor: 21, orden: 1 },
+              { id_subfactor: 22, orden: 2, enunciado: 'Segundo' },
+              { id_subfactor: 21, orden: 1, enunciado: 'Primero' },
             ],
           },
           { id_factor: 1, nombre: 'A', alcance: 'Externo', orden: 1, subfactor: [] },
@@ -41,6 +42,7 @@ describe('mapearCatalogo', () => {
     const factores = catalogo.dimensiones[0]?.factores;
     expect(factores?.map((f) => f.nombre)).toEqual(['A', 'B']);
     expect(factores?.[1]).toMatchObject({ alcance: 'Ambos', idsSubfactores: [21, 22] });
+    expect(catalogo.subfactores).toEqual({ 21: 'Primero', 22: 'Segundo' });
   });
 
   it('rechaza un alcance desconocido', () => {
@@ -186,12 +188,20 @@ describe('mapearResumen', () => {
 });
 
 describe('mapearEvaluacion', () => {
+  const sinRecomendacion = {
+    fecha_actualizacion: '2026-10-08T15:00:00Z',
+    codigo_recomendacion: null,
+    texto_recomendacion: null,
+    causas: null,
+  };
+
   it('sin software el contexto queda vacío y con él trae organización y cumplimientos', () => {
     const vacia = mapearEvaluacion({
       id_evaluacion: 1,
       titulo: null,
       estado: 'en_curso',
       id_calculo: 9,
+      ...sinRecomendacion,
       software_evaluado: null,
       valoracion_factor: [],
     });
@@ -201,12 +211,15 @@ describe('mapearEvaluacion', () => {
       organizacion: { id: null, nombre: '', sector: '', pais: '' },
     });
     expect(vacia.idCalculo).toBe(9);
+    expect(vacia.fecha).toBe('2026-10-08T15:00:00Z');
+    expect(vacia.recomendacion).toBeNull();
 
     const llena = mapearEvaluacion({
       id_evaluacion: 1,
       titulo: 'T',
       estado: 'en_curso',
       id_calculo: 9,
+      ...sinRecomendacion,
       software_evaluado: {
         id_software: 3,
         nombre: 'S',
@@ -239,6 +252,7 @@ describe('mapearEvaluacion', () => {
       titulo: null,
       estado: 'en_curso',
       id_calculo: 9,
+      ...sinRecomendacion,
       software_evaluado: null,
     };
     expect(() =>
@@ -267,5 +281,77 @@ describe('mapearEvaluacion', () => {
         ],
       }),
     ).toThrow(/cumplimiento/i);
+  });
+
+  it('trae la recomendación guardada al finalizar, con sus causas como fotografía', () => {
+    const finalizada = mapearEvaluacion({
+      id_evaluacion: 1,
+      titulo: null,
+      estado: 'finalizada',
+      id_calculo: 9,
+      ...sinRecomendacion,
+      codigo_recomendacion: 'C',
+      texto_recomendacion: 'Analizar la adopción',
+      causas: [
+        { factor: 'Personalización', foda: 'Amenaza', ir: 3 },
+        { factor: 'Soporte', foda: 'Debilidad', ir: 4 },
+      ],
+      software_evaluado: null,
+      valoracion_factor: [],
+    });
+    expect(finalizada.recomendacion).toEqual({
+      codigo: 'C',
+      texto: 'Analizar la adopción',
+      causas: [
+        { nombre: 'Personalización', foda: 'Amenaza', ir: 3 },
+        { nombre: 'Soporte', foda: 'Debilidad', ir: 4 },
+      ],
+    });
+  });
+
+  it('una recomendación A guardada sin causas tiene la lista vacía', () => {
+    const a = mapearEvaluacion({
+      id_evaluacion: 1,
+      titulo: null,
+      estado: 'finalizada',
+      id_calculo: 9,
+      ...sinRecomendacion,
+      codigo_recomendacion: 'A',
+      texto_recomendacion: 'Adoptar',
+      causas: [],
+      software_evaluado: null,
+      valoracion_factor: [],
+    });
+    expect(a.recomendacion).toEqual({ codigo: 'A', texto: 'Adoptar', causas: [] });
+  });
+
+  it('rechaza causas con una forma, una clasificación o una IR inválidas', () => {
+    const base = {
+      id_evaluacion: 1,
+      titulo: null,
+      estado: 'finalizada',
+      id_calculo: 9,
+      ...sinRecomendacion,
+      codigo_recomendacion: 'C',
+      texto_recomendacion: 'x',
+      software_evaluado: null,
+      valoracion_factor: [],
+    };
+    expect(() => mapearEvaluacion({ ...base, causas: { factor: 'X' } })).toThrow(/causas/i);
+    expect(() => mapearEvaluacion({ ...base, causas: ['X'] })).toThrow(/causa/i);
+    expect(() =>
+      mapearEvaluacion({ ...base, causas: [{ factor: 'X', foda: 'Neutral', ir: 3 }] }),
+    ).toThrow(/foda/i);
+    expect(() =>
+      mapearEvaluacion({ ...base, causas: [{ factor: 'X', foda: 'Amenaza', ir: 9 }] }),
+    ).toThrow(/importancia/i);
+  });
+});
+
+describe('causasParaGuardar', () => {
+  it('guarda las causas con la forma de la BD: {factor, foda, ir}', () => {
+    expect(causasParaGuardar([{ nombre: 'Soporte', foda: 'Debilidad', ir: 3 }])).toEqual([
+      { factor: 'Soporte', foda: 'Debilidad', ir: 3 },
+    ]);
   });
 });

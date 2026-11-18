@@ -20,6 +20,12 @@ describe('nombreDeUsuario', () => {
   it('sin usuario devuelve «Usuario»', () => {
     expect(nombreDeUsuario(null)).toBe('Usuario');
   });
+
+  it('sin nombre y con el correo vacío o sin parte local devuelve «Usuario»', () => {
+    expect(nombreDeUsuario({ email: '', user_metadata: {} })).toBe('Usuario');
+    expect(nombreDeUsuario({ email: '@example.com', user_metadata: {} })).toBe('Usuario');
+    expect(nombreDeUsuario({ user_metadata: {} })).toBe('Usuario');
+  });
 });
 
 describe('primerNombre e iniciales', () => {
@@ -29,5 +35,10 @@ describe('primerNombre e iniciales', () => {
     expect(iniciales('Edwin Pastor Bravo')).toBe('EP');
     expect(iniciales('ana')).toBe('A');
     expect(iniciales('   ')).toBe('?');
+  });
+
+  it('primerNombre ignora los espacios de los extremos', () => {
+    expect(primerNombre('  Laddy Rocha ')).toBe('Laddy');
+    expect(primerNombre('Ana')).toBe('Ana');
   });
 });

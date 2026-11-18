@@ -7,7 +7,10 @@ import type { Catalogo, EstadoEvaluacion, ResumenEvaluacion } from '../datos/tip
 /** Pasos de una evaluación y su ruta (BRIEF §12.1). */
 export type PasoEvaluacion = 'contexto' | 'factores' | 'subfactores' | 'resultados';
 
-export const rutaDeEvaluacion = (id: number, paso: PasoEvaluacion): string =>
+/** Pantallas de una evaluación: los cuatro pasos y el informe imprimible. */
+export type PantallaEvaluacion = PasoEvaluacion | 'informe';
+
+export const rutaDeEvaluacion = (id: number, paso: PantallaEvaluacion): string =>
   `/evaluaciones/${id}/${paso}`;
 
 // Pesos del prototipo del CP1 (`progressOf`): asignar importancias pesa 40 %; valorar los subfactores de los relevantes, 60 %.

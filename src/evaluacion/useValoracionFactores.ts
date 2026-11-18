@@ -5,17 +5,19 @@ import type {
   CalculoImportancia,
   Catalogo,
   FactorCatalogo,
+  FilaValoracionFactor,
   ValoracionFactor,
 } from '../datos/tipos';
-import { alcanceEfectivo, type Alcance, type Importancia } from '../guios-core';
+import { alcanceEfectivo, type Alcance, type Cumplimiento, type Importancia } from '../guios-core';
 import { CLAVES } from './consultas';
 import { derivarFactor, derivarFactores, filaParaGuardar, resumirFactores } from './derivar';
 import { useColaDeGuardado } from './useColaDeGuardado';
 
 /**
- * Valoración de factores (P-04): la ID de cada factor y el alcance de Soporte se aplican al
- * instante en pantalla y se guardan como borrador (*upsert*) en cada cambio. IR, relevancia,
- * PM y FODA los calcula `guios-core` (vía `derivar.ts`) y se guardan junto a la entrada.
+ * Valoración de factores y subfactores (P-04 y P-05): la ID de cada factor, el alcance de
+ * Soporte y el PS de cada subfactor se aplican al instante en pantalla y se guardan como
+ * borrador (*upsert*) en cada cambio. IR, relevancia, PM y FODA los calcula `guios-core`
+ * (vía `derivar.ts`) y se guardan junto a la entrada.
  */
 export function useValoracionFactores(
   idEvaluacion: number,
@@ -58,7 +60,12 @@ export function useValoracionFactores(
   }, []);
 
   const guardar = useCallback(
-    (nueva: ValoracionFactor, previa: ValoracionFactor | undefined) => {
+    (
+      nueva: ValoracionFactor,
+      previa: ValoracionFactor | undefined,
+      persistir: (fila: FilaValoracionFactor) => Promise<void> = (fila) =>
+        repositorio.guardarValoracionFactor(idEvaluacion, fila),
+    ) => {
       const entrada = factores.get(nueva.idFactor);
       if (!entrada) return;
       fijar(nueva.idFactor, nueva);
@@ -67,7 +74,7 @@ export function useValoracionFactores(
       );
       void encolar(
         async () => {
-          await repositorio.guardarValoracionFactor(idEvaluacion, fila);
+          await persistir(fila);
           void consultas.invalidateQueries({ queryKey: CLAVES.historial });
         },
         // Si no se pudo guardar, se vuelve al valor anterior (salvo que ya se haya cambiado otra vez).
@@ -102,11 +109,27 @@ export function useValoracionFactores(
     [guardar],
   );
 
+  /** Valora un subfactor: se aplica al instante y guarda el PS junto con la PM y el FODA del factor. */
+  const cambiarCumplimiento = useCallback(
+    (idFactor: number, idSubfactor: number, ps: Cumplimiento) => {
+      const previa = actuales.current.get(idFactor);
+      if (!previa) return;
+      guardar(
+        { ...previa, cumplimientos: { ...previa.cumplimientos, [idSubfactor]: ps } },
+        previa,
+        (fila) => repositorio.guardarValoracionSubfactor(idEvaluacion, fila, idSubfactor, ps),
+      );
+    },
+    [guardar, idEvaluacion],
+  );
+
   return {
     filas,
     resumen,
+    valoraciones,
     cambiarImportancia,
     cambiarAlcance,
+    cambiarCumplimiento,
     estado: cola.estado,
     error: cola.error,
     esperarGuardado: cola.esperar,

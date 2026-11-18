@@ -4,10 +4,17 @@ import type {
   FactorCatalogo,
   ValoracionFactor,
 } from '../datos/tipos';
+import { TEXTOS_RECOMENDACION } from '../guios-core';
 import {
   derivarFactor,
   derivarFactores,
+  derivarResultados,
+  detalleSubfactores,
+  recomendacionAMostrar,
+  type FilaFactor,
   filaParaGuardar,
+  filasParaFinalizar,
+  recomendacionParaGuardar,
   resumirFactores,
   textoAyudaImportanciaSugerida,
 } from './derivar';
@@ -35,6 +42,7 @@ const soporte: FactorCatalogo = {
 };
 
 const catalogo: Catalogo = {
+  subfactores: {},
   dimensiones: [
     { id: 1, nombre: 'Tecnológica', factores: [compatibilidad, usabilidad] },
     { id: 2, nombre: 'Organizacional', factores: [soporte] },
@@ -191,5 +199,200 @@ describe('textoAyudaImportanciaSugerida', () => {
     expect(textoAyudaImportanciaSugerida(fila, calculo.nombre)).toBe(
       'Importancia sugerida = intersección de la importancia del experto (IE = 3) y la de la literatura (IL = 2). Fuente: Cálculo inicial de la tesis.',
     );
+  });
+});
+
+describe('derivarResultados (RN-08 con guios-core)', () => {
+  const ev = (nombre: string, parcial: Partial<FilaFactor>): FilaFactor => ({
+    idFactor: 1,
+    nombre,
+    dimension: 'D',
+    alcanceCatalogo: 'Externo',
+    alcance: 'Externo',
+    totalSubfactores: 1,
+    ie: 3,
+    il: 3,
+    is: 3,
+    id: 3,
+    ir: 3,
+    relevante: true,
+    estado: 'evaluado',
+    pm: 4,
+    foda: 'Oportunidad',
+    ...parcial,
+  });
+  const pendiente = (nombre: string) =>
+    ev(nombre, { estado: 'pendiente', pm: null, foda: null, idFactor: 2 });
+  const excluido = (nombre: string) =>
+    ev(nombre, { id: 1, ir: 1, relevante: false, estado: 'no_relevante', pm: null, foda: null });
+  const sinValorar = (nombre: string) =>
+    ev(nombre, {
+      id: null,
+      ir: null,
+      relevante: false,
+      estado: 'sin_valorar',
+      pm: null,
+      foda: null,
+    });
+
+  it('ningún factor evaluado: sin recomendación', () => {
+    const r = derivarResultados([pendiente('P'), excluido('E'), sinValorar('S')]);
+    expect(r.recomendacion).toBeNull();
+    expect(r.evaluados).toEqual([]);
+    expect(r.pendientes.map((f) => f.nombre)).toEqual(['P']);
+    expect(r.excluidos.map((f) => f.nombre)).toEqual(['E']);
+  });
+
+  it('todos los evaluados son F u O: A, con el texto de la tesis y sin causas', () => {
+    const r = derivarResultados([ev('X', {}), ev('Y', { foda: 'Fortaleza', alcance: 'Interno' })]);
+    expect(r.recomendacion).toMatchObject({
+      codigo: 'A',
+      titulo: 'Adoptar el software evaluado',
+      causas: [],
+    });
+  });
+
+  it('una única Debilidad con IR 2 y el resto F u O: B', () => {
+    const r = derivarResultados([
+      ev('X', {}),
+      ev('Débil', { foda: 'Debilidad', ir: 2, pm: 2, alcance: 'Interno' }),
+    ]);
+    expect(r.recomendacion?.codigo).toBe('B');
+    expect(r.recomendacion?.causas).toEqual([{ nombre: 'Débil', foda: 'Debilidad', ir: 2 }]);
+  });
+
+  it('una Amenaza con IR 2 y una Debilidad con IR 4: C, causada solo por la de IR ≥ 3', () => {
+    const r = derivarResultados([
+      ev('Amenaza', { foda: 'Amenaza', ir: 2, pm: 2 }),
+      ev('Debilidad', { foda: 'Debilidad', ir: 4, pm: 1, alcance: 'Interno' }),
+    ]);
+    expect(r.recomendacion?.codigo).toBe('C');
+    expect(r.recomendacion?.causas).toEqual([{ nombre: 'Debilidad', foda: 'Debilidad', ir: 4 }]);
+  });
+
+  it('un factor relevante con un subfactor sin valorar se excluye; los demás deciden', () => {
+    const r = derivarResultados([ev('X', {}), pendiente('Incompleto')]);
+    expect(r.recomendacion?.codigo).toBe('A');
+    expect(r.pendientes.map((f) => f.nombre)).toEqual(['Incompleto']);
+  });
+
+  it('el texto de la recomendación viene de guios-core', () => {
+    const r = derivarResultados([ev('X', { foda: 'Amenaza', ir: 3, pm: 2 })]);
+    expect(r.recomendacion?.texto).toBe(TEXTOS_RECOMENDACION.C.texto);
+  });
+});
+
+describe('filasParaFinalizar y recomendacionParaGuardar', () => {
+  const evaluado = derivarFactor(
+    soporte,
+    calculo,
+    valoracion({ idFactor: 20, id: 4, cumplimientos: { 200: 2, 201: 3 } }),
+  );
+  const pendienteDeSubfactor = derivarFactor(
+    compatibilidad,
+    calculo,
+    valoracion({ idFactor: 10, id: 4, cumplimientos: { 100: 4 } }),
+  );
+  const sinId = derivarFactor(usabilidad, calculo, undefined);
+
+  it('guarda la fotografía de todos los factores con ID, evaluados o no', () => {
+    const filas = filasParaFinalizar([evaluado, pendienteDeSubfactor, sinId]);
+    expect(filas.map((f) => [f.idFactor, f.pm, f.foda])).toEqual([
+      [20, 2.5, 'Debilidad'],
+      [10, null, null],
+    ]);
+  });
+
+  it('la recomendación a guardar lleva código, texto de la tesis y causas', () => {
+    const r = derivarResultados([evaluado]);
+    expect(recomendacionParaGuardar(r)).toEqual({
+      codigo: 'C',
+      texto: TEXTOS_RECOMENDACION.C.texto,
+      causas: [{ nombre: 'Soporte', foda: 'Debilidad', ir: 3 }],
+    });
+  });
+
+  it('sin factores evaluados no hay nada que guardar', () => {
+    expect(recomendacionParaGuardar(derivarResultados([pendienteDeSubfactor]))).toBeNull();
+  });
+});
+
+describe('detalleSubfactores', () => {
+  const enunciados = { 100: 'Uno', 101: 'Dos' };
+
+  it('lista los subfactores en orden, con su PS y la PM parcial de los ya valorados', () => {
+    const detalle = detalleSubfactores(
+      compatibilidad,
+      enunciados,
+      valoracion({ idFactor: 10, cumplimientos: { 101: 2 } }),
+    );
+    expect(detalle).toEqual({
+      subfactores: [
+        { id: 100, enunciado: 'Uno', ps: null },
+        { id: 101, enunciado: 'Dos', ps: 2 },
+      ],
+      valorados: 1,
+      total: 2,
+      pmParcial: 2,
+    });
+  });
+
+  it('sin valoración ninguno está valorado y no hay PM parcial', () => {
+    expect(detalleSubfactores(compatibilidad, enunciados, undefined)).toMatchObject({
+      valorados: 0,
+      total: 2,
+      pmParcial: null,
+    });
+  });
+
+  it('con todos valorados la PM parcial coincide con la PM exacta, sin redondear', () => {
+    const detalle = detalleSubfactores(
+      compatibilidad,
+      enunciados,
+      valoracion({ idFactor: 10, cumplimientos: { 100: 4, 101: 3 } }),
+    );
+    expect(detalle.pmParcial).toBe(3.5);
+  });
+
+  it('un subfactor sin enunciado en el catálogo usa un texto de respaldo', () => {
+    expect(detalleSubfactores(compatibilidad, {}, undefined).subfactores[0]?.enunciado).toBe(
+      'Subfactor 100',
+    );
+  });
+});
+
+describe('recomendacionAMostrar', () => {
+  const derivada = derivarResultados([
+    derivarFactor(
+      soporte,
+      calculo,
+      valoracion({ idFactor: 20, id: 4, cumplimientos: { 200: 4, 201: 4 } }),
+    ),
+  ]).recomendacion;
+  const guardada = {
+    codigo: 'C' as const,
+    texto: 'Texto guardado',
+    causas: [{ nombre: 'Soporte', foda: 'Debilidad' as const, ir: 3 as const }],
+  };
+  const detalle = (estado: 'en_curso' | 'finalizada', recomendacion: typeof guardada | null) => ({
+    estado,
+    recomendacion,
+  });
+
+  it('en curso se muestra la recomendación derivada con guios-core', () => {
+    expect(recomendacionAMostrar(detalle('en_curso', null), derivada)?.codigo).toBe('A');
+  });
+
+  it('finalizada manda la fotografía guardada, con su texto y sus causas', () => {
+    expect(recomendacionAMostrar(detalle('finalizada', guardada), derivada)).toEqual({
+      codigo: 'C',
+      titulo: TEXTOS_RECOMENDACION.C.titulo,
+      texto: 'Texto guardado',
+      causas: guardada.causas,
+    });
+  });
+
+  it('una finalizada sin recomendación guardada cae en la derivada', () => {
+    expect(recomendacionAMostrar(detalle('finalizada', null), derivada)?.codigo).toBe('A');
   });
 });

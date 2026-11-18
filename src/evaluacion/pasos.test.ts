@@ -86,4 +86,24 @@ describe('pasosDeEvaluacion', () => {
     });
     expect(pasos[3]).toMatchObject({ habilitado: true, completado: false });
   });
+
+  it('los resultados se pueden ver con factores pendientes: el pendiente se excluye (RN-08)', () => {
+    const pasos = pasosDeEvaluacion({
+      tieneSoftware: true,
+      todosAsignados: true,
+      subfactoresCompletos: false,
+      finalizada: false,
+    });
+    expect(pasos[3]).toMatchObject({ habilitado: true, completado: false });
+  });
+
+  it('sin todos los factores asignados los resultados siguen bloqueados', () => {
+    const pasos = pasosDeEvaluacion({
+      tieneSoftware: true,
+      todosAsignados: false,
+      subfactoresCompletos: false,
+      finalizada: false,
+    });
+    expect(pasos[3]).toMatchObject({ habilitado: false });
+  });
 });

@@ -35,6 +35,9 @@ describe.skipIf(!url || !claveAnonima)('Repositorio contra Supabase local', () =
     expect(catalogo.dimensiones).toHaveLength(3);
     expect(factores).toHaveLength(18);
     expect(factores.flatMap((f) => f.idsSubfactores)).toHaveLength(61);
+    expect(Object.keys(catalogo.subfactores)).toHaveLength(61);
+    // Enunciados con las erratas corregidas (BRIEF §4.1).
+    expect(Object.values(catalogo.subfactores).join(' ')).toContain('código fuente');
     expect(factores.filter((f) => f.alcance === 'Ambos').map((f) => f.nombre)).toEqual(['Soporte']);
   });
 
@@ -184,5 +187,91 @@ describe.skipIf(!url || !claveAnonima)('Repositorio contra Supabase local', () =
       }),
     ).rejects.toThrow(/no se pudo guardar/i);
     expect((await dueno.leerEvaluacion(id))?.estado).toBe('finalizada');
+  });
+
+  it('valora subfactores (upsert) con la fotografía del factor y finaliza la evaluación', async () => {
+    const cliente = await registrarUsuario();
+    const repo = crearRepositorio(cliente);
+    const catalogo = await repo.leerCatalogo();
+    const formacion = catalogo.dimensiones
+      .flatMap((d) => d.factores)
+      .find((f) => f.nombre === 'Formación');
+    if (!formacion) throw new Error('falta Formación en el catálogo');
+    const [primero, segundo] = formacion.idsSubfactores;
+    if (primero === undefined || segundo === undefined) throw new Error('faltan subfactores');
+
+    const id = await repo.crearBorrador();
+    const factor = {
+      idFactor: formacion.id,
+      id: 3 as const,
+      alcance: 'Interno' as const,
+      ir: 3 as const,
+      relevante: true,
+      pm: null,
+      foda: null,
+    };
+    // El primer PS crea también la valoración del factor si no existía.
+    await repo.guardarValoracionSubfactor(id, factor, primero, 1);
+    await repo.guardarValoracionSubfactor(id, factor, primero, 2);
+    await repo.guardarValoracionSubfactor(
+      id,
+      { ...factor, pm: 2.6666667, foda: 'Debilidad' },
+      segundo,
+      4,
+    );
+    expect((await repo.leerEvaluacion(id))?.valoraciones).toEqual([
+      {
+        idFactor: formacion.id,
+        id: 3,
+        alcance: 'Interno',
+        cumplimientos: { [primero]: 2, [segundo]: 4 },
+      },
+    ]);
+    const fotografia = await cliente
+      .from('valoracion_factor')
+      .select('ponderacion_global, clasificacion_foda')
+      .eq('id_evaluacion', id)
+      .single();
+    expect(fotografia.data).toEqual({ ponderacion_global: 2.67, clasificacion_foda: 'Debilidad' });
+    const [resumen] = (await repo.listarEvaluaciones()).filter((e) => e.id === id);
+    expect(resumen?.factoresValorados).toEqual([
+      { idFactor: formacion.id, relevante: true, subfactoresValorados: 2 },
+    ]);
+
+    await repo.finalizarEvaluacion(id, {
+      factores: [{ ...factor, pm: 3, foda: 'Fortaleza' }],
+      recomendacion: {
+        codigo: 'C',
+        texto: 'Analizar la adopción; debería posponerse',
+        causas: [{ nombre: 'Formación', foda: 'Debilidad', ir: 3 }],
+      },
+    });
+    const finalizada = await repo.leerEvaluacion(id);
+    expect(finalizada).toMatchObject({
+      estado: 'finalizada',
+      recomendacion: {
+        codigo: 'C',
+        texto: 'Analizar la adopción; debería posponerse',
+        causas: [{ nombre: 'Formación', foda: 'Debilidad', ir: 3 }],
+      },
+    });
+    const refrescada = await cliente
+      .from('valoracion_factor')
+      .select('ponderacion_global, clasificacion_foda')
+      .eq('id_evaluacion', id)
+      .single();
+    expect(refrescada.data).toEqual({ ponderacion_global: 3, clasificacion_foda: 'Fortaleza' });
+
+    // Congelada: ni otro PS ni otra finalización.
+    await expect(repo.guardarValoracionSubfactor(id, factor, primero, 4)).rejects.toThrow(
+      /no se pudo guardar/i,
+    );
+    await expect(
+      repo.finalizarEvaluacion(id, {
+        factores: [],
+        recomendacion: { codigo: 'A', texto: 'x', causas: [] },
+      }),
+    ).rejects.toThrow(/no se pudo finalizar/i);
+    expect((await repo.leerEvaluacion(id))?.recomendacion?.codigo).toBe('C');
   });
 });

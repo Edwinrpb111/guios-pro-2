@@ -11,6 +11,14 @@ import type {
 } from '../datos/tipos';
 
 export const catalogoPrueba: Catalogo = {
+  subfactores: {
+    100: 'Es compatible con los formatos abiertos',
+    101: 'Se integra con los sistemas existentes',
+    110: 'La interfaz es fácil de aprender',
+    200: 'Existe soporte profesional disponible',
+    201: 'La comunidad responde con rapidez',
+    210: 'El personal recibe formación suficiente',
+  },
   dimensiones: [
     {
       id: 1,
@@ -54,6 +62,8 @@ export const calculoPrueba: CalculoImportancia = {
 export const evaluacionVaciaPrueba: EvaluacionDetalle = {
   id: 7,
   estado: 'en_curso',
+  fecha: '2026-10-08T15:00:00Z',
+  recomendacion: null,
   idCalculo: 1,
   contexto: {
     titulo: '',
@@ -86,6 +96,8 @@ export function crearRepositorioFalso(): Repositorio {
     leerEvaluacion: vi.fn(),
     guardarContexto: vi.fn(),
     guardarValoracionFactor: vi.fn(),
+    guardarValoracionSubfactor: vi.fn(),
+    finalizarEvaluacion: vi.fn(),
   };
 }
 
@@ -100,4 +112,6 @@ export function restablecerRepositorioFalso(repo: Repositorio): void {
   vi.mocked(repo.leerEvaluacion).mockResolvedValue(evaluacionVaciaPrueba);
   vi.mocked(repo.guardarContexto).mockImplementation((_id, contexto) => Promise.resolve(contexto));
   vi.mocked(repo.guardarValoracionFactor).mockResolvedValue(undefined);
+  vi.mocked(repo.guardarValoracionSubfactor).mockResolvedValue(undefined);
+  vi.mocked(repo.finalizarEvaluacion).mockResolvedValue(undefined);
 }
