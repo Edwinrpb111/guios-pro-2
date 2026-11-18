@@ -4,7 +4,7 @@ Sistema web para evaluar si un software libre (FLOSS) es adecuado para una organ
 
 UNEMI · Ingeniería de Software · Procesos y Calidad de Software · 2026.
 
-**En línea:** <https://guios-pro-2-kappa.vercel.app>
+**En línea:** <https://guios-pro-2.vercel.app>
 
 > La especificación completa está en [`BRIEF.md`](BRIEF.md). El reparto del trabajo y el proceso, en [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
@@ -170,7 +170,7 @@ docs/
 
 ## Despliegue
 
-Producción (issue #13): frontend en Vercel (<https://guios-pro-2-kappa.vercel.app>, rama `main`) y proyecto de Supabase `gnqkijgzeswsyzwjsifu` (us-east-1). Pasos para repetirlo en otro proyecto:
+Producción (issue #13): frontend en Vercel (<https://guios-pro-2.vercel.app>, rama `main`) y proyecto de Supabase `gnqkijgzeswsyzwjsifu` (us-east-1). Pasos para repetirlo en otro proyecto:
 
 1. **Supabase (proyecto hospedado):**
    - Crear el proyecto y enlazarlo: `npx supabase link --project-ref <ref>`.
