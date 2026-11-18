@@ -1,0 +1,170 @@
+{
+  "descripcion": "BRIEF §6.3: piloto LibreOffice–UNEMI. PS tomados de pilot() del prototipo CP1; Soporte con alcance Interno.",
+  "factores": [
+    {
+      "nombre": "Compatibilidad",
+      "alcance": "Externo",
+      "is": 3,
+      "id": 4,
+      "ps": [2, 4, 3, 4, 4, 3, 4, 4]
+    },
+    {
+      "nombre": "Personalización",
+      "alcance": "Externo",
+      "is": 3,
+      "id": 3,
+      "ps": [2, 3, 2, 1, 2, 3]
+    },
+    {
+      "nombre": "Prueba",
+      "alcance": "Externo",
+      "is": 3,
+      "id": 3,
+      "ps": [4]
+    },
+    {
+      "nombre": "Fiabilidad",
+      "alcance": "Externo",
+      "is": 3,
+      "id": 3,
+      "ps": [4, 4, 3, 4, 4]
+    },
+    {
+      "nombre": "Reusabilidad",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 2,
+      "ps": [4, 4]
+    },
+    {
+      "nombre": "Usabilidad",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 3,
+      "ps": [4, 4, 3, 4]
+    },
+    {
+      "nombre": "Mantenibilidad",
+      "alcance": "Externo",
+      "is": 3,
+      "id": 3,
+      "ps": [4]
+    },
+    {
+      "nombre": "Portabilidad",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 3,
+      "ps": [2, 3]
+    },
+    {
+      "nombre": "Documentación",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 3,
+      "ps": [2, 3, 2, 1, 2, 3, 2, 1, 2, 3, 2]
+    },
+    {
+      "nombre": "Formación",
+      "alcance": "Interno",
+      "is": 3,
+      "id": 3,
+      "ps": [2, 3, 2, 1]
+    },
+    {
+      "nombre": "Tiempo de adopción",
+      "alcance": "Interno",
+      "is": 2,
+      "id": 2,
+      "ps": [4, 4]
+    },
+    {
+      "nombre": "Casos de estudio de adopción FLOSS",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 2,
+      "ps": [4]
+    },
+    {
+      "nombre": "Centralidad de la tecnología de la información",
+      "alcance": "Interno",
+      "is": 2,
+      "id": 3,
+      "ps": [2, 3]
+    },
+    {
+      "nombre": "Apoyo de la alta dirección",
+      "alcance": "Interno",
+      "is": 3,
+      "id": 3,
+      "ps": [4]
+    },
+    {
+      "nombre": "Bloqueo de proveedores",
+      "alcance": "Externo",
+      "is": 2,
+      "id": 3,
+      "ps": [2]
+    },
+    {
+      "nombre": "Soporte",
+      "alcance": "Interno",
+      "is": 3,
+      "id": 4,
+      "ps": [2, 3, 2, 1, 2, 3]
+    },
+    {
+      "nombre": "Actitud hacia el cambio",
+      "alcance": "Interno",
+      "is": 2,
+      "id": 3,
+      "ps": [4, 4]
+    },
+    {
+      "nombre": "Coste total de propiedad",
+      "alcance": "Interno",
+      "is": 3,
+      "id": 3,
+      "ps": [4, 4]
+    }
+  ],
+  "fodaEsperado": {
+    "Oportunidad": [
+      "Compatibilidad",
+      "Prueba",
+      "Fiabilidad",
+      "Reusabilidad",
+      "Usabilidad",
+      "Mantenibilidad",
+      "Casos de estudio de adopción FLOSS"
+    ],
+    "Fortaleza": [
+      "Tiempo de adopción",
+      "Apoyo de la alta dirección",
+      "Actitud hacia el cambio",
+      "Coste total de propiedad"
+    ],
+    "Amenaza": ["Personalización", "Portabilidad", "Documentación", "Bloqueo de proveedores"],
+    "Debilidad": ["Formación", "Centralidad de la tecnología de la información", "Soporte"]
+  },
+  "recomendacionEsperada": {
+    "codigo": "C",
+    "causas": [
+      {
+        "nombre": "Personalización",
+        "foda": "Amenaza",
+        "ir": 3
+      },
+      {
+        "nombre": "Formación",
+        "foda": "Debilidad",
+        "ir": 3
+      },
+      {
+        "nombre": "Soporte",
+        "foda": "Debilidad",
+        "ir": 3
+      }
+    ]
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "descripcion": "BRIEF §6.2: IL e IS de la Tabla 5.3 desde NS y TC, IE = 3.",
+  "ie": 3,
+  "cuartiles": {
+    "q1": 1.8636,
+    "q2": 3.65,
+    "q3": 4.7813
+  },
+  "factores": [
+    {
+      "nombre": "Compatibilidad",
+      "ns": 8,
+      "tc": 33,
+      "il": 3,
+      "is": 3
+    },
+    {
+      "nombre": "Personalización",
+      "ns": 6,
+      "tc": 30,
+      "il": 4,
+      "is": 3
+    },
+    {
+      "nombre": "Prueba",
+      "ns": 1,
+      "tc": 4,
+      "il": 3,
+      "is": 3
+    },
+    {
+      "nombre": "Fiabilidad",
+      "ns": 5,
+      "tc": 19,
+      "il": 3,
+      "is": 3
+    },
+    {
+      "nombre": "Reusabilidad",
+      "ns": 2,
+      "tc": 5,
+      "il": 2,
+      "is": 2
+    },
+    {
+      "nombre": "Usabilidad",
+      "ns": 4,
+      "tc": 14,
+      "il": 2,
+      "is": 2
+    },
+    {
+      "nombre": "Mantenibilidad",
+      "ns": 1,
+      "tc": 4,
+      "il": 3,
+      "is": 3
+    },
+    {
+      "nombre": "Portabilidad",
+      "ns": 2,
+      "tc": 4,
+      "il": 2,
+      "is": 2
+    },
+    {
+      "nombre": "Documentación",
+      "ns": 11,
+      "tc": 20,
+      "il": 1,
+      "is": 2
+    },
+    {
+      "nombre": "Formación",
+      "ns": 4,
+      "tc": 27,
+      "il": 4,
+      "is": 3
+    },
+    {
+      "nombre": "Tiempo de adopción",
+      "ns": 2,
+      "tc": 2,
+      "il": 1,
+      "is": 2
+    },
+    {
+      "nombre": "Casos de estudio de adopción FLOSS",
+      "ns": 1,
+      "tc": 1,
+      "il": 1,
+      "is": 2
+    },
+    {
+      "nombre": "Centralidad de la tecnología de la información",
+      "ns": 2,
+      "tc": 2,
+      "il": 1,
+      "is": 2
+    },
+    {
+      "nombre": "Apoyo de la alta dirección",
+      "ns": 1,
+      "tc": 5,
+      "il": 4,
+      "is": 3
+    },
+    {
+      "nombre": "Bloqueo de proveedores",
+      "ns": 1,
+      "tc": 3,
+      "il": 2,
+      "is": 2
+    },
+    {
+      "nombre": "Soporte",
+      "ns": 6,
+      "tc": 43,
+      "il": 4,
+      "is": 3
+    },
+    {
+      "nombre": "Actitud hacia el cambio",
+      "ns": 2,
+      "tc": 3,
+      "il": 1,
+      "is": 2
+    },
+    {
+      "nombre": "Coste total de propiedad",
+      "ns": 2,
+      "tc": 24,
+      "il": 4,
+      "is": 3
+    }
+  ]
+}
