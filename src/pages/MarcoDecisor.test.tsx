@@ -65,6 +65,18 @@ describe('MarcoDecisor', () => {
     expect(screen.getByText('Administrador', { selector: '.layout__quien span' })).toBeVisible();
   });
 
+  it('la cabecera ofrece la ayuda del método (P-11) a cualquier rol', async () => {
+    for (const rol of ['decisor', 'administrador'] as const) {
+      const { unmount } = renderizar(rol);
+      await screen.findByText('0 evaluaciones');
+      await userEvent.click(
+        within(screen.getByRole('banner')).getByRole('button', { name: 'Ayuda del método' }),
+      );
+      expect(screen.getByRole('dialog', { name: 'Ayuda del método GUIOS' })).toBeVisible();
+      unmount();
+    }
+  });
+
   it('«Nueva evaluación» crea el borrador, invalida el historial y abre su contexto', async () => {
     vi.mocked(repositorio.listarEvaluaciones)
       .mockResolvedValueOnce([])
