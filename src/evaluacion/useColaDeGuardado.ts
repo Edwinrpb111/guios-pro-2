@@ -45,9 +45,10 @@ export function useColaDeGuardado() {
     [],
   );
 
-  /** Resuelve cuando se vació la cola (para no navegar con guardados en curso). */
-  const esperar = useCallback(async (): Promise<void> => {
+  /** Resuelve al vaciarse la cola (para no navegar con guardados en curso); `false` si alguno falló. */
+  const esperar = useCallback(async (): Promise<boolean> => {
     await cola.current;
+    return !huboFallo.current;
   }, []);
 
   return { estado, error, encolar, esperar };
