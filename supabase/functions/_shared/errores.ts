@@ -21,11 +21,43 @@ export class ErrorApi extends Error {
   }
 }
 
+/**
+ * Por qué terminó mal una llamada a la IA (un lote), para el registro del paso (issue #43).
+ * `error` agrupa lo demás: otro 5xx o una caída de red.
+ */
+export type MotivoLote =
+  | 'reintento_agotado'
+  | 'sin_tiempo'
+  | 'clave_rechazada'
+  | 'sin_saldo'
+  | 'respuesta_invalida'
+  | 'error';
+
+/** Mensaje cuando una llamada a la IA pasa de su tiempo propio de 45 s (issue #45, S16c). */
+export const MENSAJE_IA_TARDO = 'La IA tardó demasiado en responder.';
+
 /** 429, 5xx, caída de red o clave rechazada: el cálculo queda en `pausado` (BRIEF §13.5). */
 export class ErrorProveedorNoDisponible extends Error {
-  constructor(mensaje: string) {
+  readonly motivo: MotivoLote;
+
+  constructor(mensaje: string, motivo: MotivoLote = 'error') {
     super(mensaje);
     this.name = 'ErrorProveedorNoDisponible';
+    this.motivo = motivo;
+  }
+}
+
+/**
+ * El paso agotó su tiempo (110 s por invocación, issue #43). Sigue el camino de pausa de
+ * `ErrorProveedorNoDisponible`, pero el cálculo responde con su propio código (`paso_sin_tiempo`)
+ * y un mensaje que nombra el subfactor, que arma `recalculo_paso.ts`.
+ */
+export class ErrorPasoSinTiempo extends ErrorProveedorNoDisponible {
+  constructor(
+    mensaje = 'El paso tardó más de lo permitido. Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.',
+  ) {
+    super(mensaje, 'sin_tiempo');
+    this.name = 'ErrorPasoSinTiempo';
   }
 }
 

@@ -5,7 +5,15 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import tesis from '../guios-core/fixtures/is_tesis.json';
 import type { Importancia } from '../guios-core';
 import { ContextoApiAdmin } from './contexto';
-import type { ApiAdmin, CalculoResumen, FactorCatalogo, FilaSugerida } from './tipos';
+import type {
+  ApiAdmin,
+  CalculoResumen,
+  ConfiguracionRecalculo,
+  FactorCatalogo,
+  FilaSugerida,
+  LoteRegistro,
+  RegistroPaso,
+} from './tipos';
 
 export const CALCULO_TESIS: CalculoResumen = {
   id: 1,
@@ -75,6 +83,69 @@ export const CONTEO_TESIS = FILAS_TESIS.map(({ idFactor, subfactores, citas }) =
   citas,
 }));
 
+/** Configuración del recálculo de prueba: Gemini con su clave guardada (issue #33). */
+export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
+  parametros: {
+    proveedorLlm: 'gemini',
+    modelo: 'gemini-3.1-flash-lite',
+    umbral: 0.7,
+    maxCandidatos: null,
+    llamadasPorMinuto: null,
+    llamadasSimultaneas: null,
+    desactivarRazonamiento: null,
+    crossrefMailto: 'equipo@unemi.edu.ec',
+    openaiBaseUrl: null,
+    openaiModelo: null,
+  },
+  actualizadoEn: '2026-11-18T15:00:00Z',
+  claves: [
+    { nombre: 'GEMINI_API_KEY', configurada: true, actualizadaEn: '2026-11-18T15:00:00Z' },
+    { nombre: 'OPENAI_COMPAT_API_KEY', configurada: false, actualizadaEn: null },
+    { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
+  ],
+  cambios: [
+    {
+      id: 2,
+      cambio: 'clave GEMINI_API_KEY guardada',
+      realizadoPor: 'Ada Admin',
+      realizadoEn: '2026-11-18T15:00:00Z',
+    },
+    { id: 1, cambio: 'parametros', realizadoPor: null, realizadoEn: '2026-11-18T14:00:00Z' },
+  ],
+};
+
+export const SIN_TOKENS = { tokensEntrada: null, tokensSalida: null, tokensRazonamiento: null };
+
+/** Una tanda del registro con valores razonables; `parcial` pisa lo que haga falta. */
+export function crearLote(parcial: Partial<LoteRegistro> = {}): LoteRegistro {
+  return {
+    n: 1,
+    tamano: 10,
+    ms: 1000,
+    reintentos: 0,
+    resultado: 'ok',
+    aceptados: 0,
+    ...SIN_TOKENS,
+    ...parcial,
+  };
+}
+
+/** Un registro de paso vacío; `parcial` pisa lo que haga falta. */
+export function crearRegistro(parcial: Partial<RegistroPaso> = {}): RegistroPaso {
+  return {
+    intento: 1,
+    proveedor: 'gemini',
+    busqueda: [],
+    lotes: [],
+    etapa: null,
+    lotesTotal: null,
+    aceptados: null,
+    resultado: null,
+    mensaje: null,
+    ...parcial,
+  };
+}
+
 /** Valor que la prueba sabe que existe (evita aserciones no nulas). */
 export function definido<T>(valor: T | undefined): T {
   if (valor === undefined) throw new Error('Se esperaba un valor definido en la prueba');
@@ -92,11 +163,16 @@ export function crearApiFalsa(parcial: Partial<ApiAdmin> = {}): ApiFalsa {
     referencias: vi.fn().mockResolvedValue([]),
     iniciarRecalculo: vi.fn().mockResolvedValue(2),
     pasoRecalculo: vi.fn().mockResolvedValue({ progreso: 18, pendientes: 0, estado: 'en_proceso' }),
+    registroPasos: vi.fn().mockResolvedValue([]),
     pausar: vi.fn().mockResolvedValue(undefined),
     conteoCitas: vi.fn().mockResolvedValue(CONTEO_TESIS),
     guardarResultado: vi.fn().mockResolvedValue(undefined),
     publicar: vi.fn().mockResolvedValue(undefined),
     descartar: vi.fn().mockResolvedValue(undefined),
+    obtenerConfiguracion: vi.fn().mockResolvedValue(CONFIGURACION_PRUEBA),
+    guardarParametros: vi.fn().mockResolvedValue(undefined),
+    guardarClave: vi.fn().mockResolvedValue(undefined),
+    borrarClave: vi.fn().mockResolvedValue(undefined),
     ...parcial,
   };
   return api as ApiFalsa;

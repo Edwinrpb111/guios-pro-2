@@ -7,12 +7,6 @@
   max-width: 1100px;
 }
 
-.admin__migas {
-  font-size: var(--texto-pequeno);
-  color: var(--muted);
-  margin-bottom: var(--espacio-2);
-}
-
 .admin__cabecera {
   display: flex;
   gap: var(--espacio-4);
@@ -343,6 +337,149 @@ a.boton {
   display: block;
 }
 
+/* ---------- configuración del recálculo (issue #33) ---------- */
+.admin-configuracion {
+  max-width: 760px;
+}
+.admin-configuracion__bloque {
+  margin-bottom: var(--espacio-4);
+  max-width: none;
+}
+.admin-configuracion__bloque h2,
+.admin-clasificador__titulo {
+  font-size: var(--texto-base);
+  color: var(--navy);
+  margin: 0 0 var(--espacio-2);
+}
+.admin-campo {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--espacio-1);
+}
+.admin-campo input,
+.admin-campo select {
+  display: block;
+  width: 100%;
+  height: 38px;
+  margin-top: 4px;
+  border: 1px solid var(--line2);
+  border-radius: var(--radio-medio);
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 400;
+  background: #fff;
+}
+.admin-campo__ayuda {
+  display: block;
+  margin-bottom: var(--espacio-3);
+}
+.admin-formulario label.admin-campo {
+  margin-bottom: var(--espacio-1);
+}
+.admin-formulario__anios .admin-campo {
+  margin-bottom: var(--espacio-3);
+}
+.admin-clave fieldset {
+  border-top: 1px solid var(--line);
+  padding: var(--espacio-3) 0 0;
+  margin: var(--espacio-3) 0 0;
+}
+.admin-clave legend {
+  font-weight: 600;
+}
+.admin-clave__estado {
+  display: flex;
+  gap: var(--espacio-2);
+  align-items: center;
+  flex-wrap: wrap;
+  margin: var(--espacio-2) 0;
+}
+.chip[data-configurada='true'] {
+  background: var(--Fbg);
+  color: var(--F);
+  border-color: transparent;
+}
+.admin-cambios {
+  margin: 0;
+  padding-left: var(--espacio-4);
+}
+.admin-cambios li {
+  margin-bottom: 4px;
+}
+.admin-clasificador p {
+  margin: 0 0 6px;
+}
+.admin-clasificador p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- registro del recálculo (P-09, issue #43) ---------- */
+.admin-registro {
+  margin-top: var(--espacio-4);
+}
+.admin-registro > details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+  padding: var(--espacio-1) 0;
+}
+.admin-registro summary:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+.admin-registro__acciones {
+  margin: var(--espacio-2) 0;
+}
+.admin-registro__lista {
+  list-style: none;
+  margin: var(--espacio-3) 0 0;
+  padding: 0;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.admin-registro__lista > li {
+  border-top: 1px solid var(--line);
+  padding: var(--espacio-2) 0;
+}
+.admin-registro__lista summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  cursor: pointer;
+  min-height: 32px;
+}
+.admin-registro__nombre {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-registro__duracion {
+  color: var(--muted);
+  font-size: var(--texto-pequeno);
+  font-variant-numeric: tabular-nums;
+}
+.admin-registro__cuerpo {
+  padding: var(--espacio-2) 0 var(--espacio-1) var(--espacio-4);
+  font-size: var(--texto-pequeno);
+  overflow-wrap: anywhere;
+}
+.admin-registro__cuerpo p {
+  margin: 0 0 var(--espacio-1);
+}
+.admin-registro__cuerpo ul {
+  margin: 0 0 var(--espacio-1);
+  padding-left: var(--espacio-4);
+}
+.admin-registro__mensaje {
+  font-weight: 600;
+}
+.admin-registro__mensaje[data-resultado='error'],
+.admin-registro__mensaje[data-resultado='pausado'] {
+  color: var(--A);
+}
+
 /* ---------- móvil: tablas en tarjetas ---------- */
 @media (max-width: 760px) {
   .admin-indicadores {
@@ -371,5 +508,117 @@ a.boton {
   }
   .admin-tabla__acciones {
     justify-content: flex-end;
+  }
+}
+
+/* ---------- configuración guiada del clasificador (issue #37) ---------- */
+.admin-aviso--advertencia {
+  background: var(--Dbg);
+  border-color: var(--D);
+}
+.admin-aviso--advertencia p {
+  margin: 0 0 var(--espacio-2);
+}
+.admin-resumen__principal {
+  margin: 0 0 var(--espacio-2);
+}
+.admin-resumen__alerta {
+  margin: 0 0 var(--espacio-2);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 4px solid var(--D);
+  background: var(--Dbg);
+  border-radius: var(--radio-chico);
+}
+.admin-clasificador-bloque {
+  border: 0;
+  margin: 0 0 var(--espacio-3);
+  padding: 0;
+  min-width: 0;
+}
+.admin-clasificador-bloque legend {
+  font-size: var(--texto-base);
+  font-weight: 700;
+  color: var(--navy);
+  padding: 0;
+  margin-bottom: var(--espacio-2);
+}
+.admin-opciones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+.admin-opciones--una {
+  grid-template-columns: minmax(0, 1fr);
+}
+.admin-opcion {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--espacio-3);
+  align-items: start;
+  padding: var(--espacio-4);
+  border: 2px solid var(--line2);
+  border-radius: var(--radio);
+  background: #fff;
+}
+.admin-opcion[data-activa='true'] {
+  border-color: var(--navy2);
+  background: var(--navy3);
+}
+.admin-opcion:focus-within {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+.admin-opcion input[type='radio'] {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--navy2);
+}
+.admin-opcion__titulo {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--navy);
+  cursor: pointer;
+}
+/* Toda la tarjeta es clicable: el área del título se extiende sobre ella. */
+.admin-opcion__titulo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.admin-opcion__descripcion {
+  grid-column: 2;
+  margin: var(--espacio-1) 0 0;
+  color: var(--muted);
+}
+.admin-claves {
+  border-top: 1px solid var(--line);
+  padding-top: var(--espacio-3);
+}
+.admin-claves h3 {
+  font-size: var(--texto-base);
+  color: var(--navy);
+  margin: 0 0 var(--espacio-2);
+}
+.admin-avanzadas {
+  border-top: 1px solid var(--line);
+  padding-top: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+.admin-avanzadas > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+  padding: var(--espacio-1) 0;
+}
+.admin-avanzadas > summary:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .admin-opciones {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

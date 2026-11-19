@@ -189,6 +189,47 @@ describe.skipIf(!url || !claveAnonima)('Repositorio contra Supabase local', () =
     expect((await dueno.leerEvaluacion(id))?.estado).toBe('finalizada');
   });
 
+  it('elimina una evaluación en curso propia con sus valoraciones, no la de otro ni una finalizada', async () => {
+    const clienteDueno = await registrarUsuario();
+    const dueno = crearRepositorio(clienteDueno);
+    const ajeno = crearRepositorio(await registrarUsuario());
+    const factor = (await dueno.leerCatalogo()).dimensiones[0]?.factores[0];
+    if (!factor) throw new Error('catálogo vacío');
+
+    const id = await dueno.crearBorrador();
+    await dueno.guardarValoracionFactor(id, {
+      idFactor: factor.id,
+      id: 3,
+      alcance: 'Externo',
+      ir: 3,
+      relevante: true,
+      pm: null,
+      foda: null,
+    });
+    await expect(ajeno.eliminarEvaluacion(id)).rejects.toThrow(/no se pudo eliminar/i);
+    expect(await dueno.leerEvaluacion(id)).not.toBeNull();
+
+    await dueno.eliminarEvaluacion(id);
+    expect(await dueno.leerEvaluacion(id)).toBeNull();
+    expect((await dueno.listarEvaluaciones()).map((e) => e.id)).not.toContain(id);
+    const valoraciones = await clienteDueno
+      .from('valoracion_factor')
+      .select('id_val_factor')
+      .eq('id_evaluacion', id);
+    expect(valoraciones.data).toEqual([]);
+    // Ya no existe: eliminarla otra vez falla en lugar de fingir éxito.
+    await expect(dueno.eliminarEvaluacion(id)).rejects.toThrow(/no se pudo eliminar/i);
+
+    // Una finalizada no se borra (BRIEF §10.3).
+    const otra = await dueno.crearBorrador();
+    await dueno.finalizarEvaluacion(otra, {
+      factores: [],
+      recomendacion: { codigo: 'A', texto: 'Adoptar', causas: [] },
+    });
+    await expect(dueno.eliminarEvaluacion(otra)).rejects.toThrow(/no se pudo eliminar/i);
+    expect((await dueno.leerEvaluacion(otra))?.estado).toBe('finalizada');
+  });
+
   it('valora subfactores (upsert) con la fotografía del factor y finaliza la evaluación', async () => {
     const cliente = await registrarUsuario();
     const repo = crearRepositorio(cliente);

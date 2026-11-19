@@ -5,6 +5,7 @@ import {
   porcentajeAvance,
   rutaDeContinuacion,
   rutaDeEvaluacion,
+  sePuedeEliminar,
 } from './historial';
 
 const catalogo: Catalogo = {
@@ -171,5 +172,15 @@ describe('filtrarHistorial', () => {
 
   it('combina estado y texto', () => {
     expect(filtrarHistorial(lista, { estado: 'finalizada', texto: 'erp' })).toEqual([]);
+  });
+});
+
+describe('sePuedeEliminar', () => {
+  it('una evaluación en curso se puede eliminar', () => {
+    expect(sePuedeEliminar(evaluacion())).toBe(true);
+  });
+
+  it('una finalizada no se elimina (BRIEF §10.3)', () => {
+    expect(sePuedeEliminar(evaluacion({ estado: 'finalizada' }))).toBe(false);
   });
 });

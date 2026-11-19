@@ -1,6 +1,7 @@
 // Repositorio en memoria y dependencias falsas para probar los manejadores sin base de datos.
 import type { Configuracion } from './configuracion.ts';
 import type { Dependencias } from './dependencias.ts';
+import type { RegistroPaso } from './registro.ts';
 import type {
   Calculo,
   EstadoCalculo,
@@ -33,7 +34,13 @@ export interface PasoGuardado {
   estado: EstadoPaso;
   candidatos: number;
   detalle: string | null;
+  /** Registro del último intento (issue #43); nulos hasta que el paso se intenta. */
+  iniciado_en: string | null;
+  duracion_ms: number | null;
+  registro: RegistroPaso | null;
 }
+
+const SIN_REGISTRO = { iniciado_en: null, duracion_ms: null, registro: null } as const;
 
 export interface ReferenciaGuardada extends NuevaReferencia {
   id_calculo: number;
@@ -71,7 +78,12 @@ export class RepositorioMemoria implements Repositorio {
     });
     const pasos = new Map<number, PasoGuardado>();
     for (const s of this.subfactores)
-      pasos.set(s.id_subfactor, { estado: 'pendiente', candidatos: 0, detalle: null });
+      pasos.set(s.id_subfactor, {
+        estado: 'pendiente',
+        candidatos: 0,
+        detalle: null,
+        ...SIN_REGISTRO,
+      });
     this.pasos.set(id, pasos);
     return Promise.resolve(id);
   }
@@ -112,12 +124,39 @@ export class RepositorioMemoria implements Repositorio {
       if (!repetida)
         this.referencias.push({ ...r, id_calculo: idCalculo, id_subfactor: idSubfactor });
     }
-    this.pasos.get(idCalculo)?.set(idSubfactor, { estado: 'hecho', candidatos, detalle: null });
+    const anterior = this.pasos.get(idCalculo)?.get(idSubfactor);
+    this.pasos.get(idCalculo)?.set(idSubfactor, {
+      ...SIN_REGISTRO,
+      ...anterior,
+      estado: 'hecho',
+      candidatos,
+      detalle: null,
+    });
     return Promise.resolve();
   }
 
   marcarPasoConError(idCalculo: number, idSubfactor: number, detalle: string): Promise<void> {
-    this.pasos.get(idCalculo)?.set(idSubfactor, { estado: 'error', candidatos: 0, detalle });
+    const anterior = this.pasos.get(idCalculo)?.get(idSubfactor);
+    this.pasos
+      .get(idCalculo)
+      ?.set(idSubfactor, { ...SIN_REGISTRO, ...anterior, estado: 'error', candidatos: 0, detalle });
+    return Promise.resolve();
+  }
+
+  intentosDelPaso(idCalculo: number, idSubfactor: number): Promise<number> {
+    return Promise.resolve(this.pasos.get(idCalculo)?.get(idSubfactor)?.registro?.intento ?? 0);
+  }
+
+  guardarRegistroPaso(
+    idCalculo: number,
+    idSubfactor: number,
+    datos: { iniciado_en?: string; duracion_ms: number | null; registro: RegistroPaso },
+  ): Promise<void> {
+    const fila = this.pasos.get(idCalculo)?.get(idSubfactor);
+    if (fila === undefined) return Promise.reject(new Error('no existe el paso'));
+    if (datos.iniciado_en !== undefined) fila.iniciado_en = datos.iniciado_en;
+    fila.duracion_ms = datos.duracion_ms;
+    fila.registro = datos.registro;
     return Promise.resolve();
   }
 
@@ -134,9 +173,15 @@ export const CONFIGURACION_PRUEBA: Configuracion = {
   modelo: 'fake',
   umbral: 0.7,
   maxCandidatos: 50,
+  llamadasPorMinuto: 15,
+  llamadasSimultaneas: 5,
+  desactivarRazonamiento: false,
   openalexApiKey: undefined,
   crossrefMailto: undefined,
   geminiApiKey: undefined,
+  openaiBaseUrl: undefined,
+  openaiModelo: undefined,
+  openaiApiKey: undefined,
 };
 
 /** Cada subfactor trae 3 candidatos con DOI propios de la consulta (se aceptan todos por defecto). */
@@ -163,6 +208,8 @@ export function crearDependenciasPrueba(
     repositorio: new RepositorioMemoria(),
     contexto: CONTEXTO_PRUEBA,
     configuracion: CONFIGURACION_PRUEBA,
+    ahora: () => 0,
+    esperar: () => Promise.resolve(),
     proveedores: (fuentes) => fuentes.map((f) => proveedorPorConsulta(f)),
     clasificador: () => clasificador,
     ...cambios,

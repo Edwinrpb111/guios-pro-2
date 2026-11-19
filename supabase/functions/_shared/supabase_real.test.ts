@@ -4,7 +4,11 @@ import { assert, assertEquals, assertRejects } from 'jsr:@std/assert@1';
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { exigirAdmin } from './auth.ts';
 import { ErrorApi } from './errores.ts';
-import { RepositorioSupabase, VerificadorSupabase } from './supabase_real.ts';
+import {
+  leerConfiguracionGuardada,
+  RepositorioSupabase,
+  VerificadorSupabase,
+} from './supabase_real.ts';
 
 interface Llamada {
   tabla: string;
@@ -20,6 +24,8 @@ interface Guion {
   perfil?: { data: { rol: string } | null; error: { message: string } | null };
   /** Resultado de `rpc(...)`. */
   rpc?: { data: unknown; error: { message: string } | null };
+  /** Resultado de las consultas a `recalculo_paso`. */
+  paso?: { data: unknown; error: { message: string } | null };
 }
 
 /** Cliente simulado: registra cada operación encadenada y responde según el guion. */
@@ -31,10 +37,11 @@ function crearClienteSimulado(guion: Guion = {}) {
     const nueva = (operacion: string, argumentos: unknown[]) => {
       const llamada: Llamada = { tabla, operacion, argumentos, filtros: [] };
       llamadas.push(llamada);
-      const resultado = () =>
-        tabla === 'perfil'
-          ? (guion.perfil ?? { data: null, error: null })
-          : { data: null, error: null };
+      const resultado = () => {
+        if (tabla === 'perfil') return guion.perfil ?? { data: null, error: null };
+        if (tabla === 'recalculo_paso') return guion.paso ?? { data: null, error: null };
+        return { data: null, error: null };
+      };
       const cadena = {
         eq(columna: string, valor: unknown) {
           llamada.filtros.push([columna, valor]);
@@ -268,3 +275,100 @@ Deno.test(
     assertEquals(llamadas.filter((l) => l.operacion === 'update').length, 1);
   },
 );
+
+Deno.test(
+  'RepositorioSupabase.intentosDelPaso: lee el intento del registro guardado y es 0 sin registro',
+  async () => {
+    const con = (data: unknown) => crearClienteSimulado({ paso: { data, error: null } });
+
+    const guardado = con({ registro: { intento: 3 } });
+    assertEquals(await new RepositorioSupabase(guardado.cliente).intentosDelPaso(7, 11), 3);
+    assertEquals(guardado.llamadas[0]!.tabla, 'recalculo_paso');
+    assertEquals(guardado.llamadas[0]!.argumentos, ['registro']);
+    assertEquals(guardado.llamadas[0]!.filtros, [
+      ['id_calculo', 7],
+      ['id_subfactor', 11],
+    ]);
+
+    for (const sin of [
+      null,
+      { registro: null },
+      { registro: {} },
+      { registro: { intento: 'x' } },
+    ]) {
+      assertEquals(await new RepositorioSupabase(con(sin).cliente).intentosDelPaso(7, 11), 0);
+    }
+  },
+);
+
+Deno.test('RepositorioSupabase.intentosDelPaso: un error de la base se propaga', async () => {
+  const { cliente } = crearClienteSimulado({ paso: { data: null, error: { message: 'caída' } } });
+  await assertRejects(
+    () => new RepositorioSupabase(cliente).intentosDelPaso(7, 11),
+    Error,
+    'No se pudo leer el registro del paso',
+  );
+});
+
+Deno.test(
+  'RepositorioSupabase.guardarRegistroPaso: escribe solo iniciado_en, duracion_ms y registro',
+  async () => {
+    const { cliente, llamadas } = crearClienteSimulado();
+    const repositorio = new RepositorioSupabase(cliente);
+    const registro = {
+      intento: 2,
+      proveedor: 'fake',
+      busqueda: [],
+      lotes: [],
+      etapa: null,
+      lotes_total: 0,
+      aceptados: 0,
+      resultado: 'hecho' as const,
+      mensaje: null,
+    };
+
+    await repositorio.guardarRegistroPaso(7, 11, {
+      iniciado_en: '2026-11-22T10:00:00.000Z',
+      duracion_ms: null,
+      registro,
+    });
+    await repositorio.guardarRegistroPaso(7, 11, { duracion_ms: 1500, registro });
+
+    assertEquals(
+      llamadas.map((l) => [l.tabla, l.operacion]),
+      [
+        ['recalculo_paso', 'update'],
+        ['recalculo_paso', 'update'],
+      ],
+    );
+    assertEquals(llamadas[0]!.argumentos, [
+      { iniciado_en: '2026-11-22T10:00:00.000Z', duracion_ms: null, registro },
+    ]);
+    assertEquals(llamadas[1]!.argumentos, [{ duracion_ms: 1500, registro }]);
+    assertEquals(llamadas[1]!.filtros, [
+      ['id_calculo', 7],
+      ['id_subfactor', 11],
+    ]);
+  },
+);
+
+Deno.test(
+  'leerConfiguracionGuardada: usa la RPC de service_role y devuelve su única fila',
+  async () => {
+    const fila = { proveedor_llm: 'gemini', umbral: 0.8, gemini_api_key: 'k' };
+    const { cliente, rpcs } = crearClienteSimulado({ rpc: { data: [fila], error: null } });
+    assertEquals(await leerConfiguracionGuardada(cliente), fila);
+    assertEquals(rpcs, [{ funcion: 'configuracion_recalculo_servicio', argumentos: undefined }]);
+  },
+);
+
+Deno.test('leerConfiguracionGuardada: sin fila devuelve null (se usa el entorno)', async () => {
+  const { cliente } = crearClienteSimulado({ rpc: { data: [], error: null } });
+  assertEquals(await leerConfiguracionGuardada(cliente), null);
+});
+
+Deno.test('leerConfiguracionGuardada: un error de la base es un error interno', async () => {
+  const { cliente } = crearClienteSimulado({ rpc: { data: null, error: { message: 'caída' } } });
+  const error = await assertRejects(() => leerConfiguracionGuardada(cliente), Error);
+  assert(!(error instanceof ErrorApi));
+});

@@ -162,6 +162,87 @@ describe('InicioPage (P-02)', () => {
     expect(screen.queryByTestId('ubicacion')).not.toBeInTheDocument();
   });
 
+  describe('eliminar una evaluación', () => {
+    const kpi = (titulo: string) =>
+      screen.getByText(titulo, { selector: '.kpi__titulo' }).parentElement;
+
+    // El repositorio falso borra de verdad: la relectura del historial ya no la trae.
+    beforeEach(() => {
+      let lista = [...evaluaciones, resumenPrueba({ id: 4, titulo: '', software: null })];
+      vi.mocked(repositorio.listarEvaluaciones).mockImplementation(() => Promise.resolve(lista));
+      vi.mocked(repositorio.eliminarEvaluacion).mockImplementation((id) => {
+        lista = lista.filter((e) => e.id !== id);
+        return Promise.resolve();
+      });
+    });
+
+    it('se ofrece en las evaluaciones en curso, no en las finalizadas', async () => {
+      renderizar();
+      const tabla = await screen.findByRole('table');
+      const libre = within(tabla).getByRole('row', { name: /Adopción de LibreOffice/ });
+      expect(within(libre).queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Eliminar «ERP administrativo»' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Eliminar «Evaluación sin título»' }),
+      ).toBeInTheDocument();
+    });
+
+    it('pide confirmación nombrando la evaluación; «Cancelar» no borra nada', async () => {
+      renderizar();
+      await screen.findByRole('table');
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar «ERP administrativo»' }));
+      const dialogo = screen.getByRole('dialog', { name: 'Eliminar evaluación' });
+      expect(dialogo).toHaveTextContent('«ERP administrativo»');
+      expect(dialogo).toHaveTextContent('no se puede deshacer');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(repositorio.eliminarEvaluacion).not.toHaveBeenCalled();
+      expect(screen.getByText('ERP administrativo')).toBeInTheDocument();
+    });
+
+    it('al confirmar la quita del historial y de los contadores', async () => {
+      renderizar();
+      await screen.findByRole('table');
+      expect(kpi('Evaluaciones')).toHaveTextContent('4');
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Eliminar «Evaluación sin título»' }),
+      );
+      const dialogo = screen.getByRole('dialog', { name: 'Eliminar evaluación' });
+      expect(dialogo).toHaveTextContent('«Evaluación sin título»');
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Sí, eliminar' }));
+      expect(repositorio.eliminarEvaluacion).toHaveBeenCalledWith(4);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.queryByText('Evaluación sin título')).not.toBeInTheDocument();
+      expect(kpi('Evaluaciones')).toHaveTextContent('3');
+      expect(kpi('En curso')).toHaveTextContent('2');
+      expect(kpi('Finalizadas')).toHaveTextContent('1');
+    });
+
+    it('si falla lo informa y la fila sigue ahí', async () => {
+      vi.mocked(repositorio.eliminarEvaluacion).mockRejectedValue(
+        new Error('No se pudo eliminar la evaluación: sin red.'),
+      );
+      renderizar();
+      await screen.findByRole('table');
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar «ERP administrativo»' }));
+      const dialogo = screen.getByRole('dialog', { name: 'Eliminar evaluación' });
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Sí, eliminar' }));
+      expect(await within(dialogo).findByRole('alert')).toHaveTextContent(
+        'No se pudo eliminar la evaluación: sin red.',
+      );
+      await userEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }));
+      expect(screen.getByText('ERP administrativo')).toBeInTheDocument();
+      expect(kpi('Evaluaciones')).toHaveTextContent('4');
+      // Al reabrir la confirmación ya no arrastra el error anterior.
+      await userEvent.click(screen.getByRole('button', { name: 'Eliminar «ERP administrativo»' }));
+      expect(
+        within(screen.getByRole('dialog', { name: 'Eliminar evaluación' })).queryByRole('alert'),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   it('sin evaluaciones invita a crear la primera', async () => {
     vi.mocked(repositorio.listarEvaluaciones).mockResolvedValue([]);
     renderizar();

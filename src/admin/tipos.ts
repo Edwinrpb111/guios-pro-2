@@ -83,6 +83,68 @@ export interface ConteoCitas {
   citas: number;
 }
 
+/** Estado de un `recalculo_paso` en la base. */
+export type EstadoPaso = 'pendiente' | 'hecho' | 'error';
+
+/** Una búsqueda bibliográfica del paso (OpenAlex o Crossref). Todo puede faltar (JSON no confiable). */
+export interface BusquedaRegistro {
+  fuente: string | null;
+  ms: number | null;
+  candidatos: number | null;
+  error: string | null;
+}
+
+/** Etapa de un paso en curso (`registro.etapa`, issue #45); `null` = el paso terminó. */
+export type EtapaPaso = 'buscando' | 'clasificando' | 'guardando';
+
+/** Una tanda (lote) enviada a la IA. */
+export interface LoteRegistro {
+  n: number | null;
+  tamano: number | null;
+  ms: number | null;
+  reintentos: number | null;
+  resultado: string | null;
+  aceptados: number | null;
+  /** Tokens que gastó la tanda (si el proveedor los informa): entrada, salida y razonamiento. */
+  tokensEntrada: number | null;
+  tokensSalida: number | null;
+  tokensRazonamiento: number | null;
+}
+
+/** Registro del último intento de un paso (`recalculo_paso.registro`), ya validado. */
+export interface RegistroPaso {
+  intento: number | null;
+  proveedor: string | null;
+  busqueda: BusquedaRegistro[];
+  /** Tandas ya terminadas, en el orden en que terminaron. */
+  lotes: LoteRegistro[];
+  /** Etapa del paso mientras corre; `null` si terminó o el registro no la trae. */
+  etapa: EtapaPaso | null;
+  /** Tandas planificadas para el paso; `null` hasta que termina la búsqueda. */
+  lotesTotal: number | null;
+  aceptados: number | null;
+  resultado: string | null;
+  mensaje: string | null;
+}
+
+/** Un paso del recálculo con su registro, para el panel «Registro del recálculo». */
+export interface PasoRegistro {
+  idSubfactor: number;
+  /** Enunciado del subfactor; `null` si no se pudo leer. */
+  nombre: string | null;
+  estado: EstadoPaso;
+  /** Inicio del último intento; `null` si el paso nunca empezó. */
+  iniciadoEn: string | null;
+  /** `null` mientras corre o si la plataforma lo cortó. */
+  duracionMs: number | null;
+  candidatos: number;
+  aceptados: number;
+  /** Último error guardado por la Edge Function, si lo hay. */
+  detalle: string | null;
+  /** `null` si no hay registro o no se pudo interpretar. */
+  registro: RegistroPaso | null;
+}
+
 export interface EntradaRecalculo {
   anioInicio: number;
   anioFin: number;
@@ -96,17 +158,88 @@ export interface ResultadoPaso {
   estado: string;
 }
 
+/** Proveedor del clasificador: `fake` es el modo de demostración sin red (BRIEF §13.6). */
+export type ProveedorLlm = 'gemini' | 'openai' | 'fake';
+
+/** Claves de las APIs que se guardan en Supabase Vault (issue #33). */
+export type NombreClave = 'GEMINI_API_KEY' | 'OPENAI_COMPAT_API_KEY' | 'OPENALEX_API_KEY';
+
+export const CLAVES: readonly { nombre: NombreClave; servicio: string }[] = [
+  { nombre: 'GEMINI_API_KEY', servicio: 'Gemini' },
+  { nombre: 'OPENAI_COMPAT_API_KEY', servicio: 'la IA compatible con OpenAI' },
+  { nombre: 'OPENALEX_API_KEY', servicio: 'OpenAlex' },
+];
+
+/**
+ * Parámetros no secretos del recálculo guardados desde la app. `null` = no definido: la Edge
+ * Function usa el secreto de entorno (LLM_PROVIDER, LLM_MODEL…) o su valor por defecto.
+ */
+export interface ParametrosRecalculo {
+  proveedorLlm: ProveedorLlm | null;
+  modelo: string | null;
+  umbral: number | null;
+  maxCandidatos: number | null;
+  /** Llamadas por minuto a la IA (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
+  llamadasPorMinuto: number | null;
+  /** Tandas de un paso mandadas a la IA a la vez (1..10); `null` = LLM_LLAMADAS_SIMULTANEAS o 5. */
+  llamadasSimultaneas: number | null;
+  /** Pide al modelo que no razone antes de responder; `null` = LLM_DESACTIVAR_RAZONAMIENTO o false. */
+  desactivarRazonamiento: boolean | null;
+  crossrefMailto: string | null;
+  /** Dirección base https del proveedor compatible con OpenAI (issue #40); `null` = OPENAI_COMPAT_BASE_URL. */
+  openaiBaseUrl: string | null;
+  /** Modelo del proveedor compatible con OpenAI; `null` = OPENAI_COMPAT_MODEL. */
+  openaiModelo: string | null;
+}
+
+/** Estado de una clave: nunca su valor. */
+export interface EstadoClave {
+  nombre: NombreClave;
+  configurada: boolean;
+  actualizadaEn: string | null;
+}
+
+/** Un cambio de la configuración: qué, quién y cuándo (sin valores de claves). */
+export interface CambioConfiguracion {
+  id: number;
+  cambio: string;
+  realizadoPor: string | null;
+  realizadoEn: string;
+}
+
+export interface ConfiguracionRecalculo {
+  parametros: ParametrosRecalculo;
+  actualizadoEn: string;
+  claves: EstadoClave[];
+  /** Los más recientes primero. */
+  cambios: CambioConfiguracion[];
+}
+
+/**
+ * Clase del error de una Edge Function, para decidir si se reintenta el paso (issue #43):
+ * `tiempo` = la plataforma cortó el paso (504, 546, relay); `red` = la petición no llegó a
+ * obtener respuesta; `otro` = cualquier otro error, con o sin mensaje del servidor.
+ */
+export type TipoErrorAdmin = 'tiempo' | 'red' | 'otro';
+
 /** Error de la API con el mensaje en español que se muestra al administrador. */
 export class ErrorAdmin extends Error {
   readonly codigo: string | null;
   /** Estado del cálculo informado por la Edge Function (p. ej. `pausado`). */
   readonly estado: string | null;
+  readonly tipo: TipoErrorAdmin;
 
-  constructor(mensaje: string, codigo: string | null = null, estado: string | null = null) {
+  constructor(
+    mensaje: string,
+    codigo: string | null = null,
+    estado: string | null = null,
+    tipo: TipoErrorAdmin = 'otro',
+  ) {
     super(mensaje);
     this.name = 'ErrorAdmin';
     this.codigo = codigo;
     this.estado = estado;
+    this.tipo = tipo;
   }
 }
 
@@ -119,9 +252,17 @@ export interface ApiAdmin {
   referencias(id: number): Promise<ReferenciaCalculo[]>;
   iniciarRecalculo(entrada: EntradaRecalculo): Promise<number>;
   pasoRecalculo(id: number): Promise<ResultadoPaso>;
+  /** Pasos con actividad del cálculo, del más reciente al más antiguo (registro del recálculo). */
+  registroPasos(id: number): Promise<PasoRegistro[]>;
   pausar(id: number): Promise<void>;
   conteoCitas(id: number): Promise<ConteoCitas[]>;
   guardarResultado(id: number, filas: FilaSugerida[]): Promise<void>;
   publicar(id: number): Promise<void>;
   descartar(id: number): Promise<void>;
+  /** Configuración del recálculo (issue #33): parámetros, estado de las claves y cambios. */
+  obtenerConfiguracion(): Promise<ConfiguracionRecalculo>;
+  guardarParametros(parametros: ParametrosRecalculo): Promise<void>;
+  /** Guarda o reemplaza una clave en Vault. La clave nunca vuelve al navegador. */
+  guardarClave(nombre: NombreClave, valor: string): Promise<void>;
+  borrarClave(nombre: NombreClave): Promise<void>;
 }

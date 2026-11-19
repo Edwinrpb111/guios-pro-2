@@ -33,11 +33,30 @@ export interface Veredicto {
   evidencia: string;
 }
 
+/**
+ * Lo que el clasificador anota de UNA llamada (un lote) en el objeto que le pasa quien llama
+ * (issue #45): así cada tanda tiene sus propios números aunque varias corran a la vez. Los tokens
+ * salen del `usage` del proveedor tal como los informa; `null` si no los informa.
+ */
+export interface MedicionLlamada {
+  /** Reintentos (429/503) de esta llamada. */
+  reintentos: number;
+  tokensEntrada: number | null;
+  tokensSalida: number | null;
+  tokensRazonamiento: number | null;
+}
+
 export interface Clasificador {
+  /**
+   * Reintentos acumulados por este clasificador en el paso (429/503 reintentados). Es opcional: el
+   * falso no reintenta. El registro del paso reparte la diferencia entre lote y lote (issue #43).
+   */
+  readonly reintentos?: number;
   clasificar(
     factor: string,
     subfactor: string,
     contexto: string,
     candidatos: Candidato[],
+    medicion?: MedicionLlamada,
   ): Promise<Veredicto[]>;
 }

@@ -3,8 +3,11 @@
 import { aceptarVeredictos } from './clasificador.ts';
 import { type ContextoSubfactores, contextoDe } from './contexto.ts';
 import { normalizarDoi } from './doi.ts';
+import { ErrorPasoSinTiempo } from './errores.ts';
+import type { PresupuestoPaso } from './presupuesto.ts';
+import { type EntradaLote, mensajeSeguro, motivoDe, type RegistradorPaso } from './registro.ts';
 import type { NuevaReferencia, SubfactorCatalogo } from './repositorio.ts';
-import type { Candidato, Clasificador, ProveedorBusqueda } from './tipos.ts';
+import type { Candidato, Clasificador, MedicionLlamada, ProveedorBusqueda } from './tipos.ts';
 
 export const TAMANO_LOTE = 10;
 
@@ -78,9 +81,26 @@ export async function buscarYClasificar(entrada: {
   anioFin: number;
   umbral: number;
   maxCandidatos: number;
+  /** Tope de tiempo del paso (110 s): sin tiempo no se busca ni se empieza un lote (issue #43). */
+  presupuesto?: PresupuestoPaso;
+  /** Tandas que se mandan a la IA a la vez (1..10); sin indicar, una tras otra (issue #45). */
+  llamadasSimultaneas?: number;
+  /** Si se da, anota cada búsqueda y cada lote (tiempos, conteos y motivo), sin textos. */
+  registro?: RegistradorPaso;
 }): Promise<ResultadoBusqueda> {
-  const { subfactor, proveedores, clasificador, anioInicio, anioFin, umbral, maxCandidatos } =
-    entrada;
+  const {
+    subfactor,
+    proveedores,
+    clasificador,
+    anioInicio,
+    anioFin,
+    umbral,
+    maxCandidatos,
+    presupuesto,
+    registro,
+    llamadasSimultaneas = 1,
+  } = entrada;
+  const ahora = presupuesto?.ahora.bind(presupuesto) ?? Date.now;
   const { terminosFactor, terminosSubfactor, descripcion } = contextoDe(
     entrada.contexto,
     subfactor,
@@ -90,21 +110,101 @@ export async function buscarYClasificar(entrada: {
   // En serie, como pide Crossref (BRIEF §13.3).
   const listas: Candidato[][] = [];
   for (const proveedor of proveedores) {
-    listas.push(await proveedor.buscar(consulta, anioInicio, anioFin, maxCandidatos));
+    const desde = ahora();
+    try {
+      if (presupuesto !== undefined && presupuesto.restante() <= 0) throw new ErrorPasoSinTiempo();
+      const lista = await proveedor.buscar(consulta, anioInicio, anioFin, maxCandidatos);
+      listas.push(lista);
+      registro?.anotarBusqueda({
+        fuente: proveedor.nombre,
+        ms: ahora() - desde,
+        candidatos: lista.length,
+        error: null,
+      });
+    } catch (error) {
+      registro?.anotarBusqueda({
+        fuente: proveedor.nombre,
+        ms: ahora() - desde,
+        candidatos: 0,
+        error: mensajeSeguro(error),
+      });
+      throw error;
+    }
   }
   const candidatos = depurar(intercalar(listas), anioInicio, anioFin).slice(0, maxCandidatos);
 
-  const aceptados: Candidato[] = [];
+  // Tandas de TAMANO_LOTE candidatos. Hasta `llamadasSimultaneas` van a la IA a la vez (issue #45);
+  // el ritmo por minuto lo reparte el clasificador entre todas (`RitmoDeLlamadas`).
+  const lotes: Candidato[][] = [];
   for (let i = 0; i < candidatos.length; i += TAMANO_LOTE) {
-    const lote = candidatos.slice(i, i + TAMANO_LOTE);
-    const veredictos = await clasificador.clasificar(
-      subfactor.nombre_factor,
-      subfactor.enunciado,
-      descripcion,
-      lote,
-    );
-    aceptados.push(...aceptarVeredictos(lote, veredictos, umbral));
+    lotes.push(candidatos.slice(i, i + TAMANO_LOTE));
   }
+  await registro?.clasificando(lotes.length);
+  const aceptadosPorLote: Candidato[][] = lotes.map(() => []);
+  let siguiente = 0;
+  let fallo: { error: unknown } | undefined;
+
+  const clasificarLote = async (indice: number) => {
+    const lote = lotes[indice]!;
+    const n = indice + 1;
+    const desde = ahora();
+    // El clasificador anota aquí los reintentos y tokens de ESTA llamada (varias corren a la vez).
+    const medicion: MedicionLlamada = {
+      reintentos: 0,
+      tokensEntrada: null,
+      tokensSalida: null,
+      tokensRazonamiento: null,
+    };
+    const anotar = (resultado: EntradaLote['resultado'], aceptadosLote: number): void => {
+      registro?.anotarLote({
+        n,
+        tamano: lote.length,
+        ms: ahora() - desde,
+        reintentos: medicion.reintentos,
+        resultado,
+        aceptados: aceptadosLote,
+        tokens_entrada: medicion.tokensEntrada,
+        tokens_salida: medicion.tokensSalida,
+        tokens_razonamiento: medicion.tokensRazonamiento,
+      });
+      // No se espera: la escritura va en cola y `vaciar()` la espera al final del paso.
+      void registro?.publicar();
+    };
+    try {
+      // Con poco tiempo no se empieza el lote: se pausa y se reanuda con todo el tiempo.
+      presupuesto?.exigirTiempoParaLote();
+      const veredictos = await clasificador.clasificar(
+        subfactor.nombre_factor,
+        subfactor.enunciado,
+        descripcion,
+        lote,
+        medicion,
+      );
+      const delLote = aceptarVeredictos(lote, veredictos, umbral);
+      aceptadosPorLote[indice] = delLote;
+      anotar('ok', delLote.length);
+    } catch (error) {
+      anotar(motivoDe(error), 0);
+      throw error;
+    }
+  };
+
+  const trabajador = async () => {
+    while (fallo === undefined && siguiente < lotes.length) {
+      const indice = siguiente++;
+      try {
+        await clasificarLote(indice);
+      } catch (error) {
+        // El primer error manda; las tandas en vuelo terminan y se anotan, pero no se lanzan más.
+        fallo ??= { error };
+      }
+    }
+  };
+  const trabajadores = Math.max(1, Math.min(llamadasSimultaneas, lotes.length));
+  await Promise.all(Array.from({ length: trabajadores }, trabajador));
+  if (fallo !== undefined) throw fallo.error;
+  await registro?.guardando();
+  const aceptados = aceptadosPorLote.flat();
 
   return {
     candidatos: candidatos.length,

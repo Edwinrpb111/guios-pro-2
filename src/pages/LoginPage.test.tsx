@@ -105,6 +105,91 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('muestra la marca, el método y la institución en el panel de presentación', () => {
+    renderConAuth(<Rutas />, { ruta: '/login' });
+    expect(screen.getByRole('heading', { level: 1, name: 'GUIOS PRO 2.0' })).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Decide con evidencia si un software libre es adecuado para tu organización.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Pasos del método' })).toBeInTheDocument();
+    expect(screen.getByText(/UNEMI/)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Ingresa a tu cuenta' }),
+    ).toBeInTheDocument();
+  });
+
+  it('las pestañas controlan el panel del formulario y se recorren con el teclado', async () => {
+    renderConAuth(<Rutas />, { ruta: '/login' });
+    const ingresar = screen.getByRole('tab', { name: 'Iniciar sesión' });
+    const registro = screen.getByRole('tab', { name: 'Crear cuenta' });
+    expect(screen.getByRole('tabpanel', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(ingresar).toHaveAttribute('tabindex', '0');
+    expect(registro).toHaveAttribute('tabindex', '-1');
+
+    ingresar.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(registro).toHaveAttribute('aria-selected', 'true');
+    expect(registro).toHaveFocus();
+    expect(screen.getByLabelText('Nombre completo')).toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { name: 'Crear cuenta' })).toBeInTheDocument();
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(ingresar).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    expect(registro).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    expect(ingresar).toHaveFocus();
+    expect(ingresar).toHaveAttribute('aria-selected', 'true');
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(registro).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    expect(registro).toHaveFocus();
+    expect(registro).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('el registro indica el mínimo de la contraseña y la marca inválida si es corta', async () => {
+    renderConAuth(<Rutas />, { ruta: '/login' });
+    expect(screen.getByLabelText('Contraseña')).not.toHaveAccessibleDescription();
+    await userEvent.click(screen.getByRole('tab', { name: 'Crear cuenta' }));
+    const contrasena = screen.getByLabelText('Contraseña');
+    expect(contrasena).toHaveAccessibleDescription('Mínimo 8 caracteres.');
+    expect(contrasena).not.toHaveAttribute('aria-invalid', 'true');
+    await userEvent.type(screen.getByLabelText('Nombre completo'), 'Ana');
+    await userEvent.type(screen.getByLabelText('Correo electrónico'), 'ana@example.com');
+    await userEvent.type(contrasena, 'corta');
+    await userEvent.click(screen.getByRole('button', { name: 'Crear cuenta' }));
+    expect(contrasena).toHaveAttribute('aria-invalid', 'true');
+    expect(contrasena).toHaveAccessibleDescription(
+      'Mínimo 8 caracteres. La contraseña debe tener al menos 8 caracteres.',
+    );
+  });
+
+  it('el registro aclara que las cuentas nuevas tienen rol de decisor', async () => {
+    renderConAuth(<Rutas />, { ruta: '/login' });
+    expect(screen.queryByText(/rol de decisor/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'Crear cuenta' }));
+    expect(screen.getByRole('heading', { level: 2, name: 'Crea tu cuenta' })).toBeInTheDocument();
+    expect(screen.getByText(/Las cuentas nuevas tienen rol de decisor/)).toBeInTheDocument();
+  });
+
+  it('mientras envía marca el formulario como ocupado', async () => {
+    let resolver: (valor: { error: null }) => void = () => undefined;
+    const auth = crearAuth({
+      iniciarSesion: vi.fn().mockReturnValue(new Promise((r) => (resolver = r))),
+    });
+    renderConAuth(<Rutas />, { auth, ruta: '/login' });
+    const formulario = screen.getByRole('form', { name: 'Iniciar sesión' });
+    expect(formulario).toHaveAttribute('aria-busy', 'false');
+    await userEvent.type(screen.getByLabelText('Correo electrónico'), 'ana@example.com');
+    await userEvent.type(screen.getByLabelText('Contraseña'), 'clave1234');
+    await userEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }));
+    expect(formulario).toHaveAttribute('aria-busy', 'true');
+    resolver({ error: null });
+    await waitFor(() => expect(formulario).toHaveAttribute('aria-busy', 'false'));
+  });
+
   it('con sesión activa redirige a /', () => {
     renderConAuth(<Rutas />, { auth: crearAuthConSesion('decisor'), ruta: '/login' });
     expect(screen.getByText('Pantalla de inicio')).toBeInTheDocument();

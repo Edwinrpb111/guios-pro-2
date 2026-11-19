@@ -72,6 +72,99 @@ export type Database = {
         };
         Relationships: [];
       };
+      configuracion_recalculo: {
+        Row: {
+          actualizado_en: string;
+          actualizado_por: string | null;
+          crossref_mailto: string | null;
+          desactivar_razonamiento: boolean | null;
+          id: boolean;
+          llamadas_por_minuto: number | null;
+          llamadas_simultaneas: number | null;
+          max_candidatos: number | null;
+          modelo: string | null;
+          openai_base_url: string | null;
+          openai_modelo: string | null;
+          proveedor_llm: string | null;
+          umbral: number | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          actualizado_en?: string;
+          actualizado_por?: string | null;
+          crossref_mailto?: string | null;
+          desactivar_razonamiento?: boolean | null;
+          id?: boolean;
+          llamadas_por_minuto?: number | null;
+          llamadas_simultaneas?: number | null;
+          max_candidatos?: number | null;
+          modelo?: string | null;
+          openai_base_url?: string | null;
+          openai_modelo?: string | null;
+          proveedor_llm?: string | null;
+          umbral?: number | null;
+        };
+        Update: {
+          actualizado_en?: string;
+          actualizado_por?: string | null;
+          crossref_mailto?: string | null;
+          desactivar_razonamiento?: boolean | null;
+          id?: boolean;
+          llamadas_por_minuto?: number | null;
+          llamadas_simultaneas?: number | null;
+          max_candidatos?: number | null;
+          modelo?: string | null;
+          openai_base_url?: string | null;
+          openai_modelo?: string | null;
+          proveedor_llm?: string | null;
+          umbral?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'configuracion_recalculo_actualizado_por_fkey';
+            columns: ['actualizado_por'];
+            isOneToOne: false;
+            referencedRelation: 'perfil';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      configuracion_recalculo_cambio: {
+        Row: {
+          cambio: string;
+          detalle: Json | null;
+          id_cambio: number;
+          realizado_en: string;
+          realizado_por: string | null;
+          realizado_por_nombre: string | null;
+        };
+        ComputedFields: never;
+        Insert: {
+          cambio: string;
+          detalle?: Json | null;
+          id_cambio?: never;
+          realizado_en?: string;
+          realizado_por?: string | null;
+          realizado_por_nombre?: string | null;
+        };
+        Update: {
+          cambio?: string;
+          detalle?: Json | null;
+          id_cambio?: never;
+          realizado_en?: string;
+          realizado_por?: string | null;
+          realizado_por_nombre?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'configuracion_recalculo_cambio_realizado_por_fkey';
+            columns: ['realizado_por'];
+            isOneToOne: false;
+            referencedRelation: 'perfil';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       dimension: {
         Row: {
           id_dimension: number;
@@ -252,26 +345,35 @@ export type Database = {
           aceptados: number;
           candidatos: number;
           detalle: string | null;
+          duracion_ms: number | null;
           estado: string;
           id_calculo: number;
           id_subfactor: number;
+          iniciado_en: string | null;
+          registro: Json | null;
         };
         ComputedFields: never;
         Insert: {
           aceptados?: number;
           candidatos?: number;
           detalle?: string | null;
+          duracion_ms?: number | null;
           estado?: string;
           id_calculo: number;
           id_subfactor: number;
+          iniciado_en?: string | null;
+          registro?: Json | null;
         };
         Update: {
           aceptados?: number;
           candidatos?: number;
           detalle?: string | null;
+          duracion_ms?: number | null;
           estado?: string;
           id_calculo?: number;
           id_subfactor?: number;
+          iniciado_en?: string | null;
+          registro?: Json | null;
         };
         Relationships: [
           {
@@ -551,6 +653,23 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      borrar_clave_recalculo: { Args: { p_nombre: string }; Returns: undefined };
+      configuracion_recalculo_servicio: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          crossref_mailto: string;
+          gemini_api_key: string;
+          llamadas_por_minuto: number;
+          max_candidatos: number;
+          modelo: string;
+          openai_base_url: string;
+          openai_compat_api_key: string;
+          openai_modelo: string;
+          openalex_api_key: string;
+          proveedor_llm: string;
+          umbral: number;
+        }[];
+      };
       conteo_citas: {
         Args: { p_id_calculo: number };
         Returns: {
@@ -579,11 +698,21 @@ export type Database = {
         Args: { p_id_val_factor: number; p_solo_en_curso: boolean };
         Returns: boolean;
       };
+      estado_claves_recalculo: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          actualizada_en: string;
+          configurada: boolean;
+          nombre: string;
+        }[];
+      };
       exigir_admin: { Args: Record<PropertyKey, never>; Returns: undefined };
+      guardar_clave_recalculo: { Args: { p_nombre: string; p_valor: string }; Returns: undefined };
       guardar_resultado_calculo: {
         Args: { p_filas: Json; p_id_calculo: number };
         Returns: undefined;
       };
+      nombre_secreto_recalculo: { Args: { p_nombre: string }; Returns: string };
       pausar_calculo: { Args: { p_id_calculo: number }; Returns: undefined };
       publicar_calculo: { Args: { p_id_calculo: number }; Returns: undefined };
     };

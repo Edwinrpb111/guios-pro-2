@@ -1,6 +1,6 @@
 /**
  * Acceso a datos de las pantallas P-02..P-06 (BRIEF §11.1): catálogo con la IS vigente,
- * historial, contexto, valoración de factores y subfactores, y finalizar. Es la única capa que habla con Supabase;
+ * historial, contexto, valoración de factores y subfactores, finalizar y eliminar. Es la única capa que habla con Supabase;
  * las pantallas y los componentes reciben el modelo de `tipos.ts`. Toda operación queda
  * limitada por RLS (BRIEF §10.3).
  *
@@ -295,6 +295,25 @@ export function crearRepositorio(cliente: ClienteGuios) {
         .eq('estado', 'en_curso')
         .select('id_evaluacion');
       if (error || data.length !== 1) fallar(mensaje, error);
+    },
+
+    /**
+     * Elimina una evaluación propia en curso (issue #32). Sus valoraciones se borran en cascada.
+     * RLS no devuelve filas si es ajena, ya no existe o está finalizada (BRIEF §10.3):
+     * entonces falla en lugar de fingir que se eliminó.
+     */
+    async eliminarEvaluacion(idEvaluacion: number): Promise<void> {
+      const { data, error } = await cliente
+        .from('evaluacion')
+        .delete()
+        .eq('id_evaluacion', idEvaluacion)
+        .select('id_evaluacion');
+      if (error || data.length !== 1) {
+        fallar(
+          'No se pudo eliminar la evaluación: no existe, ya está finalizada o no es tuya.',
+          error,
+        );
+      }
     },
   };
 }

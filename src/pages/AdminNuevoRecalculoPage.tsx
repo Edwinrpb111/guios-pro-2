@@ -1,13 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useApiAdmin } from '../admin/contexto';
+import { EstadoClasificador } from '../admin/EstadoClasificador';
 import { validarNuevoRecalculo } from '../admin/formulario';
 import { Aviso, MarcoAdmin } from '../admin/MarcoAdmin';
 import { FUENTES, type FuenteBibliografica } from '../admin/tipos';
 
 const ANIO_FIN_POR_DEFECTO = 2025;
 
-/** P-09 (configuración): años y fuentes del recálculo; lo crea con `recalculo-iniciar`. */
+/**
+ * P-09 (configuración): años y fuentes del recálculo; lo crea con `recalculo-iniciar`. Arriba, el
+ * estado del clasificador con un enlace a «Configuración del recálculo» (issue #33).
+ */
 export function AdminNuevoRecalculoPage() {
   const api = useApiAdmin();
   const navegar = useNavigate();
@@ -45,6 +49,7 @@ export function AdminNuevoRecalculoPage() {
       titulo="Nuevo recálculo"
       descripcion="Recalcula la importancia sugerida de los 18 factores con literatura reciente."
     >
+      <EstadoClasificador />
       <form className="admin-tarjeta admin-formulario" onSubmit={(e) => void iniciar(e)} noValidate>
         <div className="admin-formulario__anios">
           <label>

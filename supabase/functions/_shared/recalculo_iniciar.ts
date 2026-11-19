@@ -2,6 +2,7 @@
 // `pendiente` por cada subfactor del catálogo.
 import type { UsuarioVerificado } from './auth.ts';
 import { VERSION_PROMPT } from './clasificador.ts';
+import { modeloDelProveedor } from './configuracion.ts';
 import type { Dependencias } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
 import type { Resultado } from './http.ts';
@@ -71,7 +72,7 @@ export async function iniciar(
 
   // Falla ahora, y no en el primer paso, si falta una clave de las fuentes o del clasificador.
   dependencias.proveedores(fuentes);
-  dependencias.clasificador(configuracion.modelo);
+  dependencias.clasificador(modeloDelProveedor(configuracion));
 
   const catalogo = await repositorio.catalogo();
   if (catalogo.length === 0) {
@@ -87,7 +88,7 @@ export async function iniciar(
     anio_fin: anioFin,
     fuentes,
     umbral: configuracion.umbral,
-    modelo: configuracion.proveedorLlm === 'fake' ? 'fake' : configuracion.modelo,
+    modelo: configuracion.proveedorLlm === 'fake' ? 'fake' : modeloDelProveedor(configuracion),
     proveedor_llm: configuracion.proveedorLlm,
     version_prompt: VERSION_PROMPT,
     max_candidatos: configuracion.maxCandidatos,

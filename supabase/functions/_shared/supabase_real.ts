@@ -2,7 +2,10 @@
 // `service_role` existe únicamente aquí, dentro de las Edge Functions (BRIEF §14).
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import type { UsuarioVerificado, VerificadorAdmin } from './auth.ts';
+import type { ConfiguracionGuardada } from './configuracion.ts';
+import type { InfraestructuraConBase } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
+import type { RegistroPaso } from './registro.ts';
 import type {
   Calculo,
   EstadoCalculo,
@@ -138,6 +141,35 @@ export class RepositorioSupabase implements Repositorio {
       'No se pudo marcar el paso con error',
     );
   }
+
+  async intentosDelPaso(idCalculo: number, idSubfactor: number): Promise<number> {
+    const fila = exigir(
+      await this.#cliente
+        .from('recalculo_paso')
+        .select('registro')
+        .eq('id_calculo', idCalculo)
+        .eq('id_subfactor', idSubfactor)
+        .maybeSingle(),
+      'No se pudo leer el registro del paso',
+    ) as { registro: { intento?: unknown } | null } | null;
+    const intento = fila?.registro?.intento;
+    return typeof intento === 'number' && Number.isInteger(intento) && intento > 0 ? intento : 0;
+  }
+
+  async guardarRegistroPaso(
+    idCalculo: number,
+    idSubfactor: number,
+    datos: { iniciado_en?: string; duracion_ms: number | null; registro: RegistroPaso },
+  ): Promise<void> {
+    exigir(
+      await this.#cliente
+        .from('recalculo_paso')
+        .update(datos)
+        .eq('id_calculo', idCalculo)
+        .eq('id_subfactor', idSubfactor),
+      'No se pudo guardar el registro del paso',
+    );
+  }
 }
 
 /** Valida el JWT con Supabase Auth y consulta el rol en `perfil` (solo `administrador` pasa). */
@@ -160,11 +192,24 @@ export class VerificadorSupabase implements VerificadorAdmin {
   }
 }
 
+/**
+ * Configuración guardada por el administrador (issue #33), con las claves descifradas de Vault.
+ * La función SQL solo la puede ejecutar `service_role`; el valor de las claves nunca sale de aquí.
+ */
+export async function leerConfiguracionGuardada(
+  cliente: SupabaseClient,
+): Promise<ConfiguracionGuardada | null> {
+  const filas = exigir(
+    await cliente.rpc('configuracion_recalculo_servicio'),
+    'No se pudo leer la configuración del recálculo',
+  ) as ConfiguracionGuardada[] | null;
+  return filas?.[0] ?? null;
+}
+
 /** `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` los inyecta la plataforma en las Edge Functions. */
-export function crearInfraestructuraSupabase(leer: (nombre: string) => string | undefined): {
-  repositorio: Repositorio;
-  verificador: VerificadorAdmin;
-} {
+export function crearInfraestructuraSupabase(
+  leer: (nombre: string) => string | undefined,
+): InfraestructuraConBase {
   const url = leer('SUPABASE_URL');
   const clave = leer('SUPABASE_SERVICE_ROLE_KEY');
   if (!url || !clave) {
@@ -180,5 +225,6 @@ export function crearInfraestructuraSupabase(leer: (nombre: string) => string | 
   return {
     repositorio: new RepositorioSupabase(cliente),
     verificador: new VerificadorSupabase(cliente),
+    configuracionGuardada: () => leerConfiguracionGuardada(cliente),
   };
 }

@@ -2,16 +2,22 @@
  * `ApiAdmin` con Supabase (BRIEF §11): lecturas con RLS de administrador, funciones SQL de
  * §11.2 y Edge Functions de §11.3. Valida los dominios cerrados al leer (BRIEF §14).
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { FunctionsRelayError, type SupabaseClient } from '@supabase/supabase-js';
 import { esImportancia, type Importancia } from '../guios-core';
 import type { Database, Json } from '../lib/database.types';
+import { leerRegistro } from './registro';
 import {
+  CLAVES,
   ErrorAdmin,
   type ApiAdmin,
   type CalculoResumen,
+  type ConfiguracionRecalculo,
   type EstadoCalculo,
+  type EstadoPaso,
   type FilaSugerida,
+  type NombreClave,
   type ParametrosCalculo,
+  type PasoRegistro,
 } from './tipos';
 
 export type ClienteAdmin = SupabaseClient<Database>;
@@ -29,11 +35,24 @@ const ESTADOS: readonly EstadoCalculo[] = [
   'fallido',
 ];
 
+const ESTADOS_PASO: readonly EstadoPaso[] = ['pendiente', 'hecho', 'error'];
+
+const COLUMNAS_PASO =
+  'id_subfactor, estado, candidatos, aceptados, detalle, iniciado_en, duracion_ms, registro, ' +
+  'subfactor(enunciado)';
+
 /** PostgREST devuelve como máximo 1000 filas por consulta (`max_rows`). */
 const TAMANO_PAGINA = 1000;
 
 const SIN_CONEXION =
   'No se pudo contactar con el servicio de recálculo. Revisa tu conexión e intenta de nuevo.';
+
+/** Corte de la plataforma (504, 546 WORKER_LIMIT, relay): el paso no alcanzó a terminar. */
+export const PASO_SIN_TIEMPO =
+  'El paso tardó más de lo permitido. Se reintentará; si se repite, sube las llamadas por minuto o inicia un cálculo nuevo con menos candidatos.';
+
+/** Estados con que la plataforma corta una Edge Function por tiempo o por límite de recursos. */
+const ESTADOS_DE_CORTE: readonly number[] = [504, 546];
 
 interface FilaCalculo {
   id_calculo: number;
@@ -89,28 +108,152 @@ function mapearCalculo(fila: FilaCalculo): CalculoResumen {
   };
 }
 
-/** Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español. */
-async function errorDeFuncion(error: unknown): Promise<ErrorAdmin> {
-  const contexto = (error as { context?: unknown } | null)?.context;
-  if (contexto instanceof Response) {
-    try {
-      const cuerpo = (await contexto.json()) as {
-        error?: unknown;
-        codigo?: unknown;
-        estado?: unknown;
-      };
-      if (typeof cuerpo.error === 'string') {
-        return new ErrorAdmin(
-          cuerpo.error,
-          typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
-          typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
+interface FilaPaso {
+  id_subfactor: number;
+  estado: string;
+  candidatos: number;
+  aceptados: number;
+  detalle: string | null;
+  iniciado_en: string | null;
+  duracion_ms: number | null;
+  registro: Json | null;
+  /** PostgREST devuelve el subfactor embebido como objeto (o lista/null si algo cambia). */
+  subfactor: { enunciado?: unknown } | { enunciado?: unknown }[] | null;
+}
+
+function nombreDeSubfactor(subfactor: FilaPaso['subfactor']): string | null {
+  const fila = Array.isArray(subfactor) ? subfactor[0] : subfactor;
+  return typeof fila?.enunciado === 'string' && fila.enunciado !== '' ? fila.enunciado : null;
+}
+
+/**
+ * Pasos con actividad (empezados o ya con resultado), del más reciente al más antiguo. Los
+ * pendientes que nunca empezaron no son registro: son el trabajo que falta.
+ */
+function mapearPasos(filas: FilaPaso[]): PasoRegistro[] {
+  return filas
+    .filter((f) => f.iniciado_en !== null || f.estado !== 'pendiente')
+    .map((f) => {
+      if (!ESTADOS_PASO.includes(f.estado as EstadoPaso)) {
+        throw new ErrorAdmin(
+          `El paso del subfactor ${f.id_subfactor} tiene un estado desconocido.`,
         );
       }
-    } catch {
-      // Cuerpo no JSON: se usa el mensaje genérico.
-    }
+      return {
+        idSubfactor: f.id_subfactor,
+        nombre: nombreDeSubfactor(f.subfactor),
+        estado: f.estado as EstadoPaso,
+        iniciadoEn: f.iniciado_en,
+        duracionMs: f.duracion_ms,
+        candidatos: f.candidatos,
+        aceptados: f.aceptados,
+        detalle: f.detalle,
+        registro: leerRegistro(f.registro),
+      };
+    });
+}
+
+const SOLO_ADMINISTRADOR =
+  'Solo un administrador puede ver o cambiar la configuración del recálculo.';
+
+/** Cambios recientes que muestra la pantalla de configuración. */
+const CAMBIOS_RECIENTES = 10;
+
+/**
+ * Configuración del recálculo (issue #33). Las claves no se leen nunca: de Vault solo llega su
+ * estado (`estado_claves_recalculo`), y la tabla de parámetros no tiene columnas de claves.
+ */
+async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<ConfiguracionRecalculo> {
+  const [fila, estados, cambios] = await Promise.all([
+    cliente
+      .from('configuracion_recalculo')
+      .select(
+        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, llamadas_simultaneas, desactivar_razonamiento, crossref_mailto, openai_base_url, openai_modelo, actualizado_en',
+      )
+      .maybeSingle()
+      .then(exigir),
+    cliente.rpc('estado_claves_recalculo').then(exigir),
+    cliente
+      .from('configuracion_recalculo_cambio')
+      .select('id_cambio, cambio, realizado_por_nombre, realizado_en')
+      .order('realizado_en', { ascending: false })
+      .order('id_cambio', { ascending: false })
+      .limit(CAMBIOS_RECIENTES)
+      .then(exigir),
+  ]);
+  if (fila === null) throw new ErrorAdmin(SOLO_ADMINISTRADOR);
+  if (
+    fila.proveedor_llm !== null &&
+    fila.proveedor_llm !== 'gemini' &&
+    fila.proveedor_llm !== 'openai' &&
+    fila.proveedor_llm !== 'fake'
+  ) {
+    throw new ErrorAdmin('La configuración tiene un proveedor del clasificador desconocido.');
   }
-  return new ErrorAdmin(SIN_CONEXION);
+  const nombres = CLAVES.map((c) => c.nombre as string);
+  return {
+    parametros: {
+      proveedorLlm: fila.proveedor_llm,
+      modelo: fila.modelo,
+      umbral: fila.umbral === null ? null : Number(fila.umbral),
+      maxCandidatos: fila.max_candidatos,
+      llamadasPorMinuto: fila.llamadas_por_minuto,
+      llamadasSimultaneas: fila.llamadas_simultaneas,
+      desactivarRazonamiento: fila.desactivar_razonamiento,
+      crossrefMailto: fila.crossref_mailto,
+      openaiBaseUrl: fila.openai_base_url,
+      openaiModelo: fila.openai_modelo,
+    },
+    actualizadoEn: fila.actualizado_en,
+    claves: (estados ?? []).map((e) => {
+      if (!nombres.includes(e.nombre)) throw new ErrorAdmin(`Clave desconocida: ${e.nombre}.`);
+      return {
+        nombre: e.nombre as NombreClave,
+        configurada: e.configurada,
+        actualizadaEn: e.actualizada_en,
+      };
+    }),
+    cambios: (cambios ?? []).map((c) => ({
+      id: c.id_cambio,
+      cambio: c.cambio,
+      realizadoPor: c.realizado_por_nombre,
+      realizadoEn: c.realizado_en,
+    })),
+  };
+}
+
+/**
+ * Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español y su clase
+ * (`tipo`). Un corte por tiempo (504, 546, relay) no se confunde con una caída de la red.
+ */
+async function errorDeFuncion(error: unknown): Promise<ErrorAdmin> {
+  const contexto = (error as { context?: unknown } | null)?.context;
+  if (!(contexto instanceof Response)) {
+    // Sin respuesta: la petición no llegó al servidor (FunctionsFetchError).
+    return new ErrorAdmin(SIN_CONEXION, null, null, 'red');
+  }
+  if (error instanceof FunctionsRelayError || ESTADOS_DE_CORTE.includes(contexto.status)) {
+    return new ErrorAdmin(PASO_SIN_TIEMPO, null, null, 'tiempo');
+  }
+  try {
+    const cuerpo = (await contexto.json()) as {
+      error?: unknown;
+      codigo?: unknown;
+      estado?: unknown;
+    };
+    if (typeof cuerpo.error === 'string') {
+      return new ErrorAdmin(
+        cuerpo.error,
+        typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
+        typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
+      );
+    }
+  } catch {
+    // Cuerpo no JSON: se usa el mensaje genérico con el estado HTTP.
+  }
+  return new ErrorAdmin(
+    `El servicio de recálculo respondió con un error (HTTP ${contexto.status}). Intenta de nuevo.`,
+  );
 }
 
 async function invocar<T>(cliente: ClienteAdmin, funcion: string, cuerpo: object): Promise<T> {
@@ -232,6 +375,53 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
 
     pasoRecalculo(id) {
       return invocar(cliente, 'recalculo-paso', { id_calculo: id });
+    },
+
+    async registroPasos(id) {
+      const filas = exigir(
+        await cliente
+          .from('recalculo_paso')
+          .select(COLUMNAS_PASO)
+          .eq('id_calculo', id)
+          // Los pasos sin inicio quedan al final; entre iguales, un orden estable.
+          .order('iniciado_en', { ascending: false, nullsFirst: false })
+          .order('id_subfactor'),
+      ) as unknown as FilaPaso[];
+      return mapearPasos(filas);
+    },
+
+    obtenerConfiguracion: () => obtenerConfiguracion(cliente),
+
+    async guardarParametros(p) {
+      // `.select` para saber si la fila se actualizó: con RLS, un no administrador no ve error,
+      // solo cero filas. Quién y cuándo los fija un trigger de la base, no el navegador.
+      const filas = exigir(
+        await cliente
+          .from('configuracion_recalculo')
+          .update({
+            proveedor_llm: p.proveedorLlm,
+            modelo: p.modelo,
+            umbral: p.umbral,
+            max_candidatos: p.maxCandidatos,
+            llamadas_por_minuto: p.llamadasPorMinuto,
+            llamadas_simultaneas: p.llamadasSimultaneas,
+            desactivar_razonamiento: p.desactivarRazonamiento,
+            crossref_mailto: p.crossrefMailto,
+            openai_base_url: p.openaiBaseUrl,
+            openai_modelo: p.openaiModelo,
+          })
+          .eq('id', true)
+          .select('id'),
+      );
+      if ((filas ?? []).length !== 1) throw new ErrorAdmin(SOLO_ADMINISTRADOR);
+    },
+
+    async guardarClave(nombre, valor) {
+      exigir(await cliente.rpc('guardar_clave_recalculo', { p_nombre: nombre, p_valor: valor }));
+    },
+
+    async borrarClave(nombre) {
+      exigir(await cliente.rpc('borrar_clave_recalculo', { p_nombre: nombre }));
     },
 
     pausar: (id) => rpcSinResultado(cliente, 'pausar_calculo', id),

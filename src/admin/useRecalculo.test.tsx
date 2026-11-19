@@ -4,13 +4,28 @@ import { ContextoApiAdmin } from './contexto';
 import { CALCULO_IA, CONTEO_TESIS, FILAS_TESIS, crearApiFalsa, type ApiFalsa } from './pruebas';
 import { filasDesdeConteo } from './resultado';
 import { ErrorAdmin, type ResultadoPaso } from './tipos';
-import { useRecalculo } from './useRecalculo';
+import { useRecalculo, type OpcionesRecalculo } from './useRecalculo';
 
-function montar(api: ApiFalsa, id = 2) {
+function montar(api: ApiFalsa, id = 2, opciones?: OpcionesRecalculo) {
   const envoltorio = ({ children }: { children: ReactNode }) => (
     <ContextoApiAdmin.Provider value={api}>{children}</ContextoApiAdmin.Provider>
   );
-  return renderHook(() => useRecalculo(id), { wrapper: envoltorio });
+  return renderHook(() => useRecalculo(id, opciones), { wrapper: envoltorio });
+}
+
+const CORTE = new ErrorAdmin('El paso tardó más de lo permitido.', null, null, 'tiempo');
+const RED = new ErrorAdmin('Sin conexión', null, null, 'red');
+const PASO_FINAL: ResultadoPaso = { progreso: 18, pendientes: 0, estado: 'en_proceso' };
+
+/** Espera inyectada: no usa el reloj real y deja constancia de cada espera. */
+function esperaFalsa() {
+  return vi.fn<(ms: number) => Promise<void>>().mockResolvedValue(undefined);
+}
+
+function calculoCompletadoAlFinal(api: ApiFalsa) {
+  api.obtenerCalculo
+    .mockResolvedValueOnce(CALCULO_IA)
+    .mockResolvedValue({ ...CALCULO_IA, estado: 'completado', progreso: 18 });
 }
 
 function pasos(...resultados: (ResultadoPaso | Error)[]) {
@@ -212,5 +227,167 @@ describe('useRecalculo (P-09)', () => {
     const llamadas = api.pasoRecalculo.mock.calls.length;
     await new Promise((ok) => setTimeout(ok, 20));
     expect(api.pasoRecalculo.mock.calls.length).toBeLessThanOrEqual(llamadas + 1);
+  });
+});
+
+describe('useRecalculo: reintento automático ante un corte (issue #43)', () => {
+  it('un corte por tiempo se reintenta solo y el paso sale bien al segundo intento', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, PASO_FINAL) });
+    calculoCompletadoAlFinal(api);
+    const { result } = montar(api, 2, { esperar });
+
+    await waitFor(() => expect(result.current.fase).toBe('revision'));
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(2);
+    expect(api.pasoRecalculo).toHaveBeenNthCalledWith(1, 2);
+    expect(api.pasoRecalculo).toHaveBeenNthCalledWith(2, 2);
+    expect(esperar).toHaveBeenCalledTimes(1);
+    expect(esperar.mock.calls[0]?.[0]).toBeGreaterThan(0);
+    expect(result.current.mensaje).toBeNull();
+  });
+
+  it('avisa que reintenta mientras espera, sin pasar a error', async () => {
+    let soltar: () => void = () => undefined;
+    const esperar = vi.fn(() => new Promise<void>((ok) => (soltar = ok)));
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, PASO_FINAL) });
+    calculoCompletadoAlFinal(api);
+    const { result } = montar(api, 2, { esperar });
+
+    await waitFor(() => expect(esperar).toHaveBeenCalled());
+    expect(result.current.fase).toBe('ejecutando');
+    expect(result.current.mensaje).toMatch(/Reintentando \(1 de 2\)/);
+
+    await act(async () => soltar());
+    await waitFor(() => expect(result.current.fase).toBe('revision'));
+  });
+
+  it('se rinde tras 2 reintentos y muestra el error con la causa real', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, CORTE, CORTE, PASO_FINAL) });
+    const { result } = montar(api, 2, { esperar });
+
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(3);
+    expect(esperar).toHaveBeenCalledTimes(2);
+    expect(result.current.mensaje).toMatch(/tardó más de lo permitido/);
+    expect(result.current.mensaje).not.toMatch(/conexión/);
+    expect(api.guardarResultado).not.toHaveBeenCalled();
+  });
+
+  it('un fallo de red se reintenta una sola vez', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({ pasoRecalculo: pasos(RED, RED, PASO_FINAL) });
+    const { result } = montar(api, 2, { esperar });
+
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(2);
+    expect(esperar).toHaveBeenCalledTimes(1);
+    expect(result.current.mensaje).toBe('Sin conexión');
+  });
+
+  it('un fallo de red que se recupera al reintentar sigue adelante', async () => {
+    const api = crearApiFalsa({ pasoRecalculo: pasos(RED, PASO_FINAL) });
+    calculoCompletadoAlFinal(api);
+    const { result } = montar(api, 2, { esperar: esperaFalsa() });
+    await waitFor(() => expect(result.current.fase).toBe('revision'));
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(2);
+  });
+
+  it('una pausa informada por el servidor no se reintenta', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({
+      pasoRecalculo: pasos(new ErrorAdmin('Sin tiempo.', 'paso_sin_tiempo', 'pausado')),
+    });
+    const { result } = montar(api, 2, { esperar });
+    await waitFor(() => expect(result.current.fase).toBe('pausado'));
+    expect(result.current.mensaje).toBe('Sin tiempo.');
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
+    expect(esperar).not.toHaveBeenCalled();
+  });
+
+  it('un cálculo cerrado no se reintenta: se vuelve a abrir', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({
+      pasoRecalculo: pasos(new ErrorAdmin('Cerrado.', 'calculo_cerrado', null)),
+    });
+    api.obtenerCalculo
+      .mockResolvedValueOnce(CALCULO_IA)
+      .mockResolvedValue({ ...CALCULO_IA, estado: 'descartado' });
+    const { result } = montar(api, 2, { esperar });
+    await waitFor(() => expect(result.current.fase).toBe('cerrado'));
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
+    expect(esperar).not.toHaveBeenCalled();
+  });
+
+  it('un error con mensaje del servidor (proveedor_cambiado) no se reintenta', async () => {
+    const esperar = esperaFalsa();
+    const api = crearApiFalsa({
+      pasoRecalculo: pasos(new ErrorAdmin('El proveedor cambió.', 'proveedor_cambiado')),
+    });
+    const { result } = montar(api, 2, { esperar });
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(result.current.mensaje).toBe('El proveedor cambió.');
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
+    expect(esperar).not.toHaveBeenCalled();
+  });
+
+  it('si se pide pausar durante la espera, no se reintenta y se pausa en la base', async () => {
+    let soltar: () => void = () => undefined;
+    const esperar = vi.fn(() => new Promise<void>((ok) => (soltar = ok)));
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, PASO_FINAL) });
+    api.obtenerCalculo
+      .mockResolvedValueOnce(CALCULO_IA)
+      .mockResolvedValue({ ...CALCULO_IA, estado: 'pausado', mensajeError: 'Pausado.' });
+    const { result } = montar(api, 2, { esperar });
+
+    await waitFor(() => expect(esperar).toHaveBeenCalled());
+    act(() => result.current.pausar());
+    await act(async () => soltar());
+
+    await waitFor(() => expect(result.current.fase).toBe('pausado'));
+    expect(api.pausar).toHaveBeenCalledWith(2);
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
+  });
+
+  it('al desmontar durante la espera no vuelve a invocar el paso', async () => {
+    let soltar: () => void = () => undefined;
+    const esperar = vi.fn(() => new Promise<void>((ok) => (soltar = ok)));
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, PASO_FINAL) });
+    const { unmount } = montar(api, 2, { esperar });
+    await waitFor(() => expect(esperar).toHaveBeenCalled());
+    unmount();
+    await act(async () => soltar());
+    expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useRecalculo: refresco del registro (issue #43)', () => {
+  it('avisa tras cada paso terminado para volver a leer recalculo_paso', async () => {
+    const api = crearApiFalsa({
+      pasoRecalculo: pasos(
+        { progreso: 1, pendientes: 2, estado: 'en_proceso' },
+        { progreso: 9, pendientes: 1, estado: 'en_proceso' },
+        PASO_FINAL,
+      ),
+    });
+    calculoCompletadoAlFinal(api);
+    const { result } = montar(api);
+    expect(result.current.registroVersion).toBe(0);
+    await waitFor(() => expect(result.current.fase).toBe('revision'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(3);
+  });
+
+  it('también avisa cuando un paso falla, para ver cómo quedó', async () => {
+    const api = crearApiFalsa({ pasoRecalculo: pasos(new ErrorAdmin('Falló')) });
+    const { result } = montar(api);
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(1);
+  });
+
+  it('avisa tras cada intento de un paso cortado, no solo al final', async () => {
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, CORTE, CORTE) });
+    const { result } = montar(api, 2, { esperar: esperaFalsa() });
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(3);
   });
 });

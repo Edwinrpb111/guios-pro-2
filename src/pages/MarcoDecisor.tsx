@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { NavLink } from 'react-router';
+import { NavLink, Outlet } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { Layout } from '../components/Layout';
 import { useNuevaEvaluacion } from '../evaluacion/consultas';
@@ -8,6 +8,50 @@ import { AyudaMetodo } from './AyudaMetodo';
 import { IconoIA, IconoInicio, IconoNueva, IconoSalir } from './iconos';
 import { ContextoMarco } from './marco';
 
+/** Un enlace de la sección «Administración» del menú (solo para administradores). */
+interface EnlaceAdministracion {
+  ruta: string;
+  icono: ReactNode;
+  texto: string;
+  /** Texto corto de la barra inferior móvil. */
+  textoMovil: string;
+}
+
+/** Engranaje de «Configuración del recálculo»; decorativo, como los de `iconos.tsx`. */
+const IconoAjustes = () => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    aria-hidden
+    focusable={false}
+  >
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1" />
+  </svg>
+);
+
+/**
+ * Pantallas de administración del menú. `NavLink` sin `end`: el ítem queda activo también en
+ * sus subrutas (P-09 en `/admin/sugerida/nuevo` y `/admin/sugerida/:id`). «Configuración del
+ * recálculo» es solo para administradores (issue #33).
+ */
+const ENLACES_ADMINISTRACION: readonly EnlaceAdministracion[] = [
+  {
+    ruta: '/admin/sugerida',
+    icono: <IconoIA />,
+    texto: 'Importancia sugerida',
+    textoMovil: 'IA',
+  },
+  {
+    ruta: '/admin/configuracion',
+    icono: <IconoAjustes />,
+    texto: 'Configuración del recálculo',
+    textoMovil: 'Ajustes',
+  },
+];
+
 export interface MarcoDecisorProps {
   /** Barra inferior de acciones del paso (P-03, P-04). */
   barraInferior?: ReactNode;
@@ -15,7 +59,8 @@ export interface MarcoDecisorProps {
 }
 
 /**
- * Marco común de las pantallas del decisor (P-02..P-06): cabecera con el usuario, navegación
+ * Marco común de la aplicación con sesión: las pantallas del decisor (P-02..P-06) y las de
+ * administración (P-08..P-10). Cabecera con el usuario y la ayuda del método, navegación
  * lateral y móvil, y la acción «Nueva evaluación». Une `Layout` con la sesión y el repositorio.
  */
 export function MarcoDecisor({ barraInferior, children }: MarcoDecisorProps) {
@@ -43,9 +88,11 @@ export function MarcoDecisor({ barraInferior, children }: MarcoDecisorProps) {
           {esAdministrador && (
             <>
               <div className="nav-etiqueta">Administración</div>
-              <NavLink to="/admin/sugerida">
-                <IconoIA /> Importancia sugerida
-              </NavLink>
+              {ENLACES_ADMINISTRACION.map((enlace) => (
+                <NavLink key={enlace.ruta} to={enlace.ruta}>
+                  {enlace.icono} {enlace.texto}
+                </NavLink>
+              ))}
             </>
           )}
           <div className="nav-etiqueta">Cuenta</div>
@@ -64,12 +111,13 @@ export function MarcoDecisor({ barraInferior, children }: MarcoDecisorProps) {
             <IconoNueva />
             Evaluar
           </button>
-          {esAdministrador && (
-            <NavLink to="/admin/sugerida">
-              <IconoIA />
-              IA
-            </NavLink>
-          )}
+          {esAdministrador &&
+            ENLACES_ADMINISTRACION.map((enlace) => (
+              <NavLink key={enlace.ruta} to={enlace.ruta}>
+                {enlace.icono}
+                {enlace.textoMovil}
+              </NavLink>
+            ))}
         </>
       }
       accionesCabecera={<AyudaMetodo />}
@@ -84,5 +132,17 @@ export function MarcoDecisor({ barraInferior, children }: MarcoDecisorProps) {
         {children}
       </ContextoMarco.Provider>
     </Layout>
+  );
+}
+
+/**
+ * El marco como ruta de diseño: las rutas hijas se dibujan en su contenido. Lo usan P-08..P-10
+ * (`/admin/*`), que así comparten la barra lateral con Inicio y la evaluación (issue #31).
+ */
+export function MarcoDeRuta() {
+  return (
+    <MarcoDecisor>
+      <Outlet />
+    </MarcoDecisor>
   );
 }

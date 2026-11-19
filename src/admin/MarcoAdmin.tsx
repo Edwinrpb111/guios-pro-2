@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { AyudaMetodo } from '../pages/AyudaMetodo';
 import '../styles/admin.css';
 
 export interface MarcoAdminProps {
@@ -11,42 +10,45 @@ export interface MarcoAdminProps {
   children: ReactNode;
 }
 
-/** Estructura común de las pantallas de administración (P-08 y P-09). */
+/**
+ * Migas, título y acciones de las pantallas de administración (P-08 y P-09). Solo dibuja el
+ * contenido: la cabecera, la barra lateral y la ayuda del método las pone el marco común
+ * (`MarcoDeRuta` en App), igual que en Inicio y la evaluación (issue #31).
+ */
 export function MarcoAdmin({ titulo, descripcion, acciones, children }: MarcoAdminProps) {
   return (
-    <main className="pagina admin">
-      <nav className="admin__migas" aria-label="Ruta de navegación">
-        <Link to="/">Inicio</Link>
-        <span aria-hidden="true"> / </span>
-        <span>Administración</span>
+    <div className="admin">
+      <nav className="migas" aria-label="Ruta de navegación">
+        <Link to="/">Inicio</Link> › Administración
       </nav>
-      <header className="admin__cabecera">
+      <div className="admin__cabecera">
         <div>
           <h1>{titulo}</h1>
           {descripcion && <p className="admin__descripcion">{descripcion}</p>}
         </div>
-        <div className="admin__acciones">
-          {acciones}
-          <AyudaMetodo />
-        </div>
-      </header>
+        {acciones && <div className="admin__acciones">{acciones}</div>}
+      </div>
       {children}
-    </main>
+    </div>
   );
 }
 
-/** Aviso con rol `alert` (errores) o `status` (información). */
+/** Aviso con rol `alert` (errores) o `status` (información y advertencias). */
 export function Aviso({
   tipo = 'info',
+  etiqueta,
   children,
 }: {
-  tipo?: 'info' | 'error' | 'exito';
+  tipo?: 'info' | 'error' | 'exito' | 'advertencia';
+  /** Nombre accesible del aviso, para distinguirlo de otros. */
+  etiqueta?: string;
   children: ReactNode;
 }) {
   return (
     <div
       className={`admin-aviso admin-aviso--${tipo}`}
       role={tipo === 'error' ? 'alert' : 'status'}
+      aria-label={etiqueta}
     >
       {children}
     </div>

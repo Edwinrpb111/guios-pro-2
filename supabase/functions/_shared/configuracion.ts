@@ -1,29 +1,85 @@
-// Lectura y validación de las variables de entorno de las Edge Functions (BRIEF §13.7).
-// `leerConfiguracion` recibe una función en lugar de leer `Deno.env`, para poder probarla.
+// Lectura y validación de la configuración de las Edge Functions (BRIEF §13.7, issue #33).
+// Manda lo guardado por el administrador en la base (tabla `configuracion_recalculo` y claves en
+// Vault); lo que falta sale de las variables de entorno. `leerConfiguracion` recibe una función en
+// lugar de leer `Deno.env`, para poder probarla.
 import { ErrorApi } from './errores.ts';
+import {
+  LLAMADAS_POR_MINUTO_MAXIMO,
+  LLAMADAS_POR_MINUTO_POR_DEFECTO,
+  LLAMADAS_SIMULTANEAS_MAXIMO,
+  LLAMADAS_SIMULTANEAS_POR_DEFECTO,
+} from './ritmo.ts';
 
-export type ProveedorLlm = 'gemini' | 'fake';
+export type ProveedorLlm = 'gemini' | 'openai' | 'fake';
 
 export interface Configuracion {
   proveedorLlm: ProveedorLlm;
   modelo: string;
   umbral: number;
   maxCandidatos: number;
+  /** Máximo de llamadas por minuto a Gemini (1..1000); el plan gratis ronda 15. */
+  llamadasPorMinuto: number;
+  /** Tandas de un paso que se mandan a la IA a la vez (1..10); 5 por defecto (issue #45). */
+  llamadasSimultaneas: number;
+  /** Pide al modelo que no razone antes de responder, si el proveedor lo permite (issue #45). */
+  desactivarRazonamiento: boolean;
   openalexApiKey: string | undefined;
   crossrefMailto: string | undefined;
   geminiApiKey: string | undefined;
+  /** Dirección base https ya normalizada (sin «/» final) del proveedor compatible con OpenAI. */
+  openaiBaseUrl: string | undefined;
+  /** Modelo del proveedor compatible con OpenAI (va en el cuerpo JSON, no en la URL). */
+  openaiModelo: string | undefined;
+  openaiApiKey: string | undefined;
 }
 
 const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
+const MODELO_VALIDO = /^[A-Za-z0-9._-]{1,100}$/;
+// OpenRouter y otros usan «/» y «:» en el nombre del modelo; va en el cuerpo JSON, no en la URL.
+const MODELO_OPENAI_VALIDO = /^[A-Za-z0-9._:/@-]{1,150}$/;
+const URL_BASE_MAXIMO = 200;
+// https://servidor[:puerto][/ruta]: sin «@» (credenciales), «?», «#», espacios ni «\».
+const URL_BASE_VALIDA = /^https:\/\/[^/?#@\\\s]+(\/[^?#\\\s]*)?$/;
 const UMBRAL_POR_DEFECTO = 0.7;
 const MAX_CANDIDATOS_POR_DEFECTO = 50;
 const MAX_CANDIDATOS_TOPE = 200;
+
+/**
+ * Dirección base del proveedor compatible con OpenAI normalizada (sin espacios ni «/» final), o
+ * `null` si no es una dirección https limpia: sin credenciales, parámetros ni fragmento, de hasta
+ * 200 caracteres. Es la misma regla del `CHECK` de `configuracion_recalculo.openai_base_url`.
+ */
+export function normalizarUrlBase(texto: string): string | null {
+  const limpia = texto.trim();
+  if (limpia.length > URL_BASE_MAXIMO || !URL_BASE_VALIDA.test(limpia)) return null;
+  try {
+    const url = new URL(limpia);
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname === '' ||
+      url.username !== '' ||
+      url.password !== ''
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return limpia.replace(/\/+$/, '');
+}
+
+/** Modelo con el que se clasifica según el proveedor elegido (`''` si falta el del compatible). */
+export function modeloDelProveedor(configuracion: Configuracion): string {
+  return configuracion.proveedorLlm === 'openai'
+    ? (configuracion.openaiModelo ?? '')
+    : configuracion.modelo;
+}
 
 function invalida(variable: string, esperado: string): ErrorApi {
   return new ErrorApi(
     500,
     'configuracion_invalida',
-    `La variable ${variable} no es válida: ${esperado}. Corrígela en los secretos de Supabase.`,
+    `La variable ${variable} no es válida: ${esperado}. Corrígela en «Configuración del recálculo» o en los secretos de Supabase.`,
   );
 }
 
@@ -34,8 +90,8 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
   };
 
   const proveedor = valor('LLM_PROVIDER') ?? 'gemini';
-  if (proveedor !== 'gemini' && proveedor !== 'fake') {
-    throw invalida('LLM_PROVIDER', 'debe ser «gemini» o «fake»');
+  if (proveedor !== 'gemini' && proveedor !== 'openai' && proveedor !== 'fake') {
+    throw invalida('LLM_PROVIDER', 'debe ser «gemini», «openai» o «fake»');
   }
 
   const textoUmbral = valor('LLM_UMBRAL');
@@ -58,14 +114,93 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
+  const textoRitmo = valor('LLM_LLAMADAS_POR_MINUTO');
+  const llamadasPorMinuto =
+    textoRitmo === undefined ? LLAMADAS_POR_MINUTO_POR_DEFECTO : Number(textoRitmo);
+  if (
+    !Number.isInteger(llamadasPorMinuto) ||
+    llamadasPorMinuto < 1 ||
+    llamadasPorMinuto > LLAMADAS_POR_MINUTO_MAXIMO
+  ) {
+    throw invalida(
+      'LLM_LLAMADAS_POR_MINUTO',
+      `debe ser un entero entre 1 y ${LLAMADAS_POR_MINUTO_MAXIMO}`,
+    );
+  }
+
+  const textoSimultaneas = valor('LLM_LLAMADAS_SIMULTANEAS');
+  const llamadasSimultaneas =
+    textoSimultaneas === undefined ? LLAMADAS_SIMULTANEAS_POR_DEFECTO : Number(textoSimultaneas);
+  if (
+    !Number.isInteger(llamadasSimultaneas) ||
+    llamadasSimultaneas < 1 ||
+    llamadasSimultaneas > LLAMADAS_SIMULTANEAS_MAXIMO
+  ) {
+    throw invalida(
+      'LLM_LLAMADAS_SIMULTANEAS',
+      `debe ser un entero entre 1 y ${LLAMADAS_SIMULTANEAS_MAXIMO}`,
+    );
+  }
+
+  const textoRazonamiento = valor('LLM_DESACTIVAR_RAZONAMIENTO')?.toLowerCase();
+  if (
+    textoRazonamiento !== undefined &&
+    textoRazonamiento !== 'true' &&
+    textoRazonamiento !== 'false'
+  ) {
+    throw invalida('LLM_DESACTIVAR_RAZONAMIENTO', 'debe ser «true» o «false»');
+  }
+  const desactivarRazonamiento = textoRazonamiento === 'true';
+
+  // El modelo va en la ruta de la URL de Gemini: solo letras, dígitos, punto, guion y guion bajo.
+  const modelo = valor('LLM_MODEL') ?? MODELO_POR_DEFECTO;
+  if (!MODELO_VALIDO.test(modelo)) {
+    throw invalida(
+      'LLM_MODEL',
+      'solo admite letras, dígitos, punto, guion y guion bajo (hasta 100 caracteres)',
+    );
+  }
+
+  // Los datos del proveedor compatible solo se validan si se va a usar ese proveedor: con Gemini
+  // o el falso nada cambia respecto a antes. Lo que falte se reporta al armar el clasificador.
+  let openaiBaseUrl: string | undefined;
+  let openaiModelo: string | undefined;
+  if (proveedor === 'openai') {
+    const textoUrl = valor('OPENAI_COMPAT_BASE_URL');
+    if (textoUrl !== undefined) {
+      const normalizada = normalizarUrlBase(textoUrl);
+      // No se repite la dirección en el mensaje: podría llevar credenciales.
+      if (normalizada === null) {
+        throw invalida(
+          'OPENAI_COMPAT_BASE_URL',
+          `debe ser una dirección https sin usuario, clave, parámetros ni #fragmento (hasta ${URL_BASE_MAXIMO} caracteres)`,
+        );
+      }
+      openaiBaseUrl = normalizada;
+    }
+    openaiModelo = valor('OPENAI_COMPAT_MODEL');
+    if (openaiModelo !== undefined && !MODELO_OPENAI_VALIDO.test(openaiModelo)) {
+      throw invalida(
+        'OPENAI_COMPAT_MODEL',
+        'solo admite letras, dígitos, punto, guion, guion bajo, «:», «/» y «@» (hasta 150 caracteres)',
+      );
+    }
+  }
+
   return {
     proveedorLlm: proveedor,
-    modelo: valor('LLM_MODEL') ?? MODELO_POR_DEFECTO,
+    modelo,
     umbral,
     maxCandidatos,
+    llamadasPorMinuto,
+    llamadasSimultaneas,
+    desactivarRazonamiento,
     openalexApiKey: valor('OPENALEX_API_KEY'),
     crossrefMailto: valor('CROSSREF_MAILTO'),
     geminiApiKey: valor('GEMINI_API_KEY'),
+    openaiBaseUrl,
+    openaiModelo,
+    openaiApiKey: valor('OPENAI_COMPAT_API_KEY'),
   };
 }
 
@@ -78,4 +213,59 @@ export function leerOrigenes(leer: (nombre: string) => string | undefined): stri
     .map((origen) => origen.trim())
     .filter((origen) => origen !== '');
   return origenes.length > 0 ? origenes : ORIGENES_POR_DEFECTO;
+}
+
+/**
+ * Lo que devuelve la función SQL `configuracion_recalculo_servicio` (solo service_role): los
+ * parámetros guardados desde la app y las claves descifradas de Vault. `null` = sin definir.
+ */
+export interface ConfiguracionGuardada {
+  proveedor_llm?: string | null;
+  modelo?: string | null;
+  umbral?: number | string | null;
+  max_candidatos?: number | string | null;
+  llamadas_por_minuto?: number | string | null;
+  llamadas_simultaneas?: number | string | null;
+  desactivar_razonamiento?: boolean | string | null;
+  crossref_mailto?: string | null;
+  openai_base_url?: string | null;
+  openai_modelo?: string | null;
+  gemini_api_key?: string | null;
+  openai_compat_api_key?: string | null;
+  openalex_api_key?: string | null;
+}
+
+/** Campo guardado de cada variable. ORIGENES_PERMITIDOS no está: nunca sale de la base. */
+const VARIABLE_DE_CAMPO: Record<string, keyof ConfiguracionGuardada> = {
+  LLM_PROVIDER: 'proveedor_llm',
+  LLM_MODEL: 'modelo',
+  LLM_UMBRAL: 'umbral',
+  RECALCULO_MAX_CANDIDATOS: 'max_candidatos',
+  LLM_LLAMADAS_POR_MINUTO: 'llamadas_por_minuto',
+  LLM_LLAMADAS_SIMULTANEAS: 'llamadas_simultaneas',
+  LLM_DESACTIVAR_RAZONAMIENTO: 'desactivar_razonamiento',
+  CROSSREF_MAILTO: 'crossref_mailto',
+  OPENAI_COMPAT_BASE_URL: 'openai_base_url',
+  OPENAI_COMPAT_MODEL: 'openai_modelo',
+  GEMINI_API_KEY: 'gemini_api_key',
+  OPENAI_COMPAT_API_KEY: 'openai_compat_api_key',
+  OPENALEX_API_KEY: 'openalex_api_key',
+};
+
+/**
+ * Lector que da prioridad a la configuración guardada en la base y, si un valor falta (o está
+ * vacío), usa la variable de entorno. Las mismas validaciones de `leerConfiguracion` se aplican
+ * al resultado, venga de donde venga.
+ */
+export function combinarConEntorno(
+  guardada: ConfiguracionGuardada | null,
+  leer: (nombre: string) => string | undefined,
+): (nombre: string) => string | undefined {
+  return (nombre) => {
+    if (nombre === 'ORIGENES_PERMITIDOS') return leer(nombre);
+    const campo = Object.hasOwn(VARIABLE_DE_CAMPO, nombre) ? VARIABLE_DE_CAMPO[nombre] : undefined;
+    const valor = campo === undefined || guardada === null ? undefined : guardada[campo];
+    if (valor === undefined || valor === null || String(valor).trim() === '') return leer(nombre);
+    return String(valor);
+  };
 }

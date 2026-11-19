@@ -51,6 +51,8 @@ describe('MarcoDecisor', () => {
     await screen.findByText('0 evaluaciones');
     expect(lateral().queryByRole('link', { name: /Importancia sugerida/ })).toBeNull();
     expect(movil().queryByRole('link', { name: /IA/ })).toBeNull();
+    expect(lateral().queryByRole('link', { name: /Configuración del recálculo/ })).toBeNull();
+    expect(movil().queryByRole('link', { name: /Ajustes/ })).toBeNull();
     expect(screen.getByText('Decisor', { selector: '.layout__quien span' })).toBeInTheDocument();
   });
 
@@ -62,6 +64,14 @@ describe('MarcoDecisor', () => {
       '/admin/sugerida',
     );
     expect(movil().getByRole('link', { name: /IA/ })).toHaveAttribute('href', '/admin/sugerida');
+    expect(lateral().getByRole('link', { name: /Configuración del recálculo/ })).toHaveAttribute(
+      'href',
+      '/admin/configuracion',
+    );
+    expect(movil().getByRole('link', { name: /Ajustes/ })).toHaveAttribute(
+      'href',
+      '/admin/configuracion',
+    );
     expect(screen.getByText('Administrador', { selector: '.layout__quien span' })).toBeVisible();
   });
 

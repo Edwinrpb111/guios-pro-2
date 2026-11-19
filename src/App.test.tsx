@@ -32,6 +32,27 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'Importancia sugerida' })).toBeInTheDocument();
   });
 
+  it('un administrador abre la configuración del recálculo en /admin/configuracion', () => {
+    renderConAuth(<App />, {
+      auth: crearAuthConSesion('administrador'),
+      ruta: '/admin/configuracion',
+    });
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Configuración del recálculo' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Configuración del recálculo/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
+
+  it('un decisor que entra a /admin/configuracion es redirigido y no ve la configuración', async () => {
+    renderConAuth(<App />, { auth: crearAuthConSesion('decisor'), ruta: '/admin/configuracion' });
+    expect(await screen.findByRole('heading', { name: 'Hola, Ana' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Configuración del recálculo' })).toBeNull();
+    expect(screen.queryByLabelText(/Nueva clave/)).toBeNull();
+  });
+
   it('muestra la página no encontrada en una ruta desconocida (con sesión)', () => {
     renderConAuth(<App />, { auth: crearAuthConSesion('decisor'), ruta: '/no-existe' });
     expect(screen.getByRole('heading', { name: 'Página no encontrada' })).toBeInTheDocument();
