@@ -1,40 +1,61 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Link, useParams } from 'react-router';
 import { useApiAdmin } from '../admin/contexto';
 import { Aviso, MarcoAdmin } from '../admin/MarcoAdmin';
+import { calcularProgreso, type ProgresoSubfactores } from '../admin/progresoRecalculo';
 import { nombreCalculo, rangoCalculo } from '../admin/resultado';
 import { TablaIS } from '../admin/TablaIS';
 import { useCarga } from '../admin/useCarga';
 import { useRecalculo, type EstadoRecalculo } from '../admin/useRecalculo';
+import { formatearRestante } from '../components/formato';
 import { RegistroRecalculo } from '../components/RegistroRecalculo';
 import type { Importancia } from '../guios-core';
 
 const TOTAL_FACTORES = 18;
 
-function Progreso({ progreso, pendientes }: Pick<EstadoRecalculo, 'progreso' | 'pendientes'>) {
+/** Cada cuánto se vuelve a leer el registro mientras el recálculo corre (issue #45, S16e). */
+const INTERVALO_LECTURA_MS = 2000;
+
+interface PropsProgreso extends Pick<EstadoRecalculo, 'progreso'> {
+  resumen: ProgresoSubfactores;
+  corriendo: boolean;
+}
+
+/** Barra por subfactores (issue #45, S16f): cuántos van, cuál es el actual y cuánto falta. */
+function Progreso({ progreso, resumen, corriendo }: PropsProgreso) {
+  const { hechos, total, actual, restanteMs } = resumen;
   return (
     <div className="admin-progreso">
       <p>
         <b>
-          {progreso} de {TOTAL_FACTORES} factores procesados
+          {total === null
+            ? `${hechos} subfactores procesados`
+            : `${hechos} de ${total} subfactores procesados`}
         </b>
-        {pendientes !== null && pendientes > 0 && (
-          <span className="admin-ayuda"> · quedan {pendientes} subfactores</span>
-        )}
+        <span className="admin-ayuda">
+          {' '}
+          · {progreso} de {TOTAL_FACTORES} factores procesados
+        </span>
       </p>
       <div
         className="admin-progreso__barra"
         role="progressbar"
-        aria-label="Factores procesados"
+        aria-label="Subfactores procesados"
         aria-valuemin={0}
-        aria-valuemax={TOTAL_FACTORES}
-        aria-valuenow={progreso}
+        aria-valuemax={total ?? Math.max(hechos, 1)}
+        aria-valuenow={hechos}
       >
         <div
           className="admin-progreso__relleno"
-          style={{ width: `${(progreso / TOTAL_FACTORES) * 100}%` }}
+          style={{ width: total === null || total === 0 ? '0%' : `${(hechos / total) * 100}%` }}
         />
       </div>
+      {corriendo && actual !== null && <p>Ahora: {actual}</p>}
+      {corriendo && (
+        <p className="admin-ayuda">
+          Tiempo restante: {restanteMs === null ? 'calculando…' : formatearRestante(restanteMs)}
+        </p>
+      )}
     </div>
   );
 }
@@ -79,6 +100,25 @@ function VistaRecalculo({ id }: { id: number }) {
   );
   const registro = useCarga(cargarRegistro);
   const corriendo = fase === 'ejecutando' || fase === 'pausando';
+
+  // Consola en vivo (issue #45, S16e): mientras corre un paso se relee el registro cada 2 s.
+  // Se detiene al terminar, pausar o salir de la pantalla (limpieza del efecto).
+  const { recargar } = registro;
+  useEffect(() => {
+    if (!corriendo) return;
+    const temporizador = setInterval(recargar, INTERVALO_LECTURA_MS);
+    return () => clearInterval(temporizador);
+  }, [corriendo, recargar]);
+
+  const totalSubfactores = comparacion.datos
+    ? comparacion.datos.catalogo.reduce((suma, factor) => suma + factor.subfactores.length, 0)
+    : null;
+  const resumen = calcularProgreso({
+    pasos: registro.datos ?? [],
+    totalSubfactores,
+    pendientes: recalculo.pendientes,
+    corriendo,
+  });
   const verRegistro = calculo?.origen === 'ia' && fase !== 'cargando';
 
   const enMarcha = ['ejecutando', 'pausando', 'pausado', 'guardando', 'error'].includes(fase);
@@ -94,7 +134,9 @@ function VistaRecalculo({ id }: { id: number }) {
         {fase === 'cargando' && <p>Cargando el recálculo…</p>}
         {fase === 'no_encontrado' && <p>No existe el cálculo {id}.</p>}
 
-        {enMarcha && calculo && <Progreso {...recalculo} />}
+        {enMarcha && calculo && (
+          <Progreso progreso={recalculo.progreso} resumen={resumen} corriendo={corriendo} />
+        )}
         {fase === 'ejecutando' && (
           <p className="admin-ayuda">
             Buscando y clasificando artículos, un subfactor por vez. Si cierras esta pestaña, el
@@ -184,7 +226,8 @@ function VistaRecalculo({ id }: { id: number }) {
           enMarcha={corriendo}
           abiertoInicial={corriendo || fase === 'pausado' || fase === 'error'}
           error={registro.error}
-          onActualizar={registro.recargar}
+          // En vivo no hay botón: la lectura es automática (S16e).
+          {...(corriendo ? {} : { onActualizar: registro.recargar })}
         />
       )}
     </MarcoAdmin>

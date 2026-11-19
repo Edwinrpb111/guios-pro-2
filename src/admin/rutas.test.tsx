@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import {
   CALCULO_IA,
   CALCULO_TESIS,
+  CATALOGO,
   FILAS_TESIS,
   crearApiFalsa,
   definido,
@@ -96,10 +97,13 @@ describe('P-09: progreso y revisión (/admin/sugerida/:id)', () => {
     terminar();
 
     expect(await screen.findByRole('button', { name: 'Reanudar' })).toBeInTheDocument();
-    const barra = screen.getByRole('progressbar', { name: 'Factores procesados' });
-    expect(barra).toHaveAttribute('aria-valuenow', '4');
-    expect(barra).toHaveAttribute('aria-valuemax', '18');
-    expect(screen.getByText('4 de 18 factores procesados')).toBeInTheDocument();
+    // S16f (issue #45): la barra va por subfactores; los factores quedan como dato secundario.
+    // Faltan 30 de los subfactores del catálogo.
+    const total = CATALOGO.reduce((suma, f) => suma + f.subfactores.length, 0);
+    const barra = await screen.findByRole('progressbar', { name: 'Subfactores procesados' });
+    await waitFor(() => expect(barra).toHaveAttribute('aria-valuenow', String(total - 30)));
+    expect(barra).toHaveAttribute('aria-valuemax', String(total));
+    expect(screen.getByText(/4 de 18 factores procesados/)).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Pausado por el administrador.');
 
     await usuario.click(screen.getByRole('button', { name: 'Reanudar' }));

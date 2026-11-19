@@ -254,3 +254,100 @@ describe('RegistroRecalculo', () => {
     expect(screen.queryByRole('button', { name: /actualizar/i })).toBeNull();
   });
 });
+
+describe('RegistroRecalculo en vivo (issue #45)', () => {
+  const PROVISIONAL =
+    'El paso no terminó: la plataforma lo cortó o la función falló antes de guardar su resultado.';
+
+  /** El paso en curso tal como lo deja el servidor: registro provisional con `resultado: error`. */
+  const enCurso = (registro: Partial<RegistroPaso> = {}): PasoRegistro => ({
+    ...PASO_CORRIENDO,
+    registro: {
+      ...REGISTRO_VACIO,
+      intento: 1,
+      proveedor: 'gemini',
+      resultado: 'error',
+      mensaje: PROVISIONAL,
+      ...registro,
+    },
+  });
+
+  it('el paso en curso no muestra el mensaje provisional ni nada en rojo', () => {
+    const { container } = mostrar([enCurso({ etapa: 'clasificando', lotesTotal: 3 })], {
+      enMarcha: true,
+    });
+    expect(screen.queryByText(/El paso no terminó/)).toBeNull();
+    expect(container.querySelector('[data-resultado="error"]')).toBeNull();
+  });
+
+  it('el mismo mensaje sí se muestra si el paso quedó cortado (el recálculo no corre)', () => {
+    mostrar([enCurso()], { enMarcha: false });
+    expect(tarjeta('Soporte comercial').getByText(PROVISIONAL)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['buscando', null, 0, /Buscando candidatos/],
+    ['clasificando', 5, 2, /Clasificando con la IA: 2 de 5 tandas terminadas/],
+    ['clasificando', null, 0, /Clasificando con la IA…/],
+    ['guardando', 5, 5, /Guardando las referencias aceptadas/],
+  ] as const)(
+    'la etapa «%s» se muestra en el paso en curso',
+    (etapa, lotesTotal, hechos, texto) => {
+      const lotes = Array.from({ length: hechos }, (_, i) => ({
+        ...(REGISTRO_OK.lotes[0] as LoteRegistro),
+        n: i + 1,
+      }));
+      mostrar([enCurso({ etapa, lotesTotal, lotes })], { enMarcha: true });
+      expect(tarjeta('Soporte comercial').getByText(texto)).toBeInTheDocument();
+    },
+  );
+
+  it('muestra las tandas que ya terminaron mientras el paso sigue en curso', () => {
+    const lote = { ...(REGISTRO_OK.lotes[0] as LoteRegistro), n: 3, aceptados: 4 };
+    mostrar([enCurso({ etapa: 'clasificando', lotesTotal: 5, lotes: [lote] })], {
+      enMarcha: true,
+    });
+    expect(
+      tarjeta('Soporte comercial').getByText(/Lote 3 \(10\): .* · 4 aceptados/),
+    ).toBeInTheDocument();
+  });
+
+  it('un paso recién iniciado sin registro dice que está empezando, no que falta el registro', () => {
+    mostrar([PASO_CORRIENDO], { enMarcha: true });
+    const paso = tarjeta('Soporte comercial');
+    expect(paso.getByText(/Iniciando el paso/)).toBeInTheDocument();
+    expect(paso.queryByText(/no tiene registro detallado/i)).toBeNull();
+  });
+
+  it('cada lote muestra sus tokens de entrada, salida y razonamiento', () => {
+    const lote = crearLoteConTokens({
+      tokensEntrada: 1234,
+      tokensSalida: 567,
+      tokensRazonamiento: 4000,
+    });
+    mostrar([{ ...PASO_BASE, registro: { ...REGISTRO_OK, lotes: [lote] } }]);
+    expect(
+      tarjeta('Costo de licencias').getByText(
+        /tokens: 1\.234 de entrada, 567 de salida, 4\.000 de razonamiento/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('un token que el proveedor no informa se omite; sin ninguno no aparece «tokens»', () => {
+    const parcial = crearLoteConTokens({ tokensEntrada: 80, tokensSalida: 20 });
+    mostrar([
+      {
+        ...PASO_BASE,
+        registro: { ...REGISTRO_OK, lotes: [parcial, REGISTRO_OK.lotes[1] as LoteRegistro] },
+      },
+    ]);
+    const paso = tarjeta('Costo de licencias');
+    expect(paso.getByText(/tokens: 80 de entrada, 20 de salida$/)).toBeInTheDocument();
+    expect(paso.queryByText(/razonamiento/)).toBeNull();
+    expect(paso.getAllByText(/tokens/)).toHaveLength(1);
+  });
+});
+
+function crearLoteConTokens(tokens: Partial<LoteRegistro>): LoteRegistro {
+  return { ...(REGISTRO_OK.lotes[0] as LoteRegistro), ...SIN_TOKENS, ...tokens };
+}
