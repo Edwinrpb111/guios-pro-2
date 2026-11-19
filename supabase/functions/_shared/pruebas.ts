@@ -148,3 +148,21 @@ export const verificadorFalso: VerificadorAdmin = {
     return Promise.resolve(null);
   },
 };
+
+/**
+ * Reloj falso: `esperar` solo avanza la hora simulada (nunca duerme de verdad) y deja el rastro
+ * de cada espera pedida; `ahora` devuelve la hora simulada en milisegundos.
+ */
+export function crearRelojFalso(inicio = 1_000_000) {
+  let hora = inicio;
+  const esperas: number[] = [];
+  return {
+    esperas,
+    ahora: () => hora,
+    esperar(ms: number): Promise<void> {
+      esperas.push(ms);
+      hora += ms;
+      return Promise.resolve();
+    },
+  };
+}

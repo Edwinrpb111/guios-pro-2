@@ -116,6 +116,8 @@ export interface ParametrosRecalculo {
   modelo: string | null;
   umbral: number | null;
   maxCandidatos: number | null;
+  /** Llamadas por minuto a Gemini (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
+  llamadasPorMinuto: number | null;
   crossrefMailto: string | null;
 }
 

@@ -19,6 +19,7 @@ describe('P-09: recuadro de estado del clasificador (issue #33)', () => {
     expect(await caja.findByText(/Gemini · modelo gemini-3\.1-flash-lite/)).toBeInTheDocument();
     expect(caja.getByText(/umbral 0,7/)).toBeInTheDocument();
     expect(caja.getByText(/máx\. 50 candidatos \(por defecto\)/)).toBeInTheDocument();
+    expect(caja.getByText(/15 llamadas por minuto \(por defecto\)/)).toBeInTheDocument();
     expect(caja.getByText(/clave guardada en la app/)).toBeInTheDocument();
     expect(caja.getByRole('link', { name: 'Configuración del recálculo' })).toHaveAttribute(
       'href',

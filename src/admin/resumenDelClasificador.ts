@@ -9,6 +9,7 @@ import type { ConfiguracionRecalculo } from './tipos';
 export const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
 export const UMBRAL_POR_DEFECTO = 0.7;
 export const MAX_CANDIDATOS_POR_DEFECTO = 50;
+export const LLAMADAS_POR_MINUTO_POR_DEFECTO = 15;
 
 export interface ResumenClasificador {
   /** `secreto`: el proveedor lo decide LLM_PROVIDER, que la app no puede ver. */
@@ -24,7 +25,7 @@ export interface ResumenClasificador {
 const formatoDecimal = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 3 });
 
 const NOTA_POR_DEFECTO =
-  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_MODEL, LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS).';
+  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_MODEL, LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS, LLM_LLAMADAS_POR_MINUTO).';
 
 export function resumirClasificador({
   parametros,
@@ -43,11 +44,14 @@ export function resumirClasificador({
     parametros.modelo === null,
     parametros.umbral === null,
     parametros.maxCandidatos === null,
+    parametros.llamadasPorMinuto === null,
   ];
+  const llamadas = parametros.llamadasPorMinuto ?? LLAMADAS_POR_MINUTO_POR_DEFECTO;
   const detalles = [
     `modelo ${parametros.modelo ?? MODELO_POR_DEFECTO}${parametros.modelo === null ? ' (por defecto)' : ''}`,
     `umbral ${formatoDecimal.format(parametros.umbral ?? UMBRAL_POR_DEFECTO)}${parametros.umbral === null ? ' (por defecto)' : ''}`,
     `máx. ${parametros.maxCandidatos ?? MAX_CANDIDATOS_POR_DEFECTO} candidatos${parametros.maxCandidatos === null ? ' (por defecto)' : ''}`,
+    `${llamadas} ${llamadas === 1 ? 'llamada' : 'llamadas'} por minuto${parametros.llamadasPorMinuto === null ? ' (por defecto)' : ''}`,
   ];
   const avisos = usaDefecto.some(Boolean) ? [NOTA_POR_DEFECTO] : [];
 

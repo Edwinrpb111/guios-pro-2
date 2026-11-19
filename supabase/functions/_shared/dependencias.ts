@@ -13,6 +13,7 @@ import { CrossrefProveedor } from './crossref.ts';
 import { ErrorApi } from './errores.ts';
 import { ClasificadorFalso, ProveedorFalso } from './falsos.ts';
 import { OpenAlexProveedor } from './openalex.ts';
+import { RELOJ_REAL, RitmoDeLlamadas } from './ritmo.ts';
 import type { Repositorio } from './repositorio.ts';
 import type { Clasificador, NombreBase, ProveedorBusqueda } from './tipos.ts';
 
@@ -23,7 +24,19 @@ export interface Dependencias {
   configuracion: Configuracion;
   /** Un proveedor por fuente pedida, en el mismo orden. */
   proveedores(fuentes: NombreBase[]): ProveedorBusqueda[];
+  /** Hora en milisegundos; inyectable para probar el ritmo con un reloj falso. */
+  ahora(): number;
+  /** Espera `ms` milisegundos; inyectable para que las pruebas no duerman de verdad. */
+  esperar(ms: number): Promise<void>;
+  /** Un clasificador por paso: lleva la cuenta de las llamadas y la espera de ese paso. */
   clasificador(modelo: string): Clasificador;
+}
+
+/** Lo que se puede reemplazar en las pruebas: reloj y `fetch` de Gemini. */
+export interface OpcionesDependencias {
+  ahora?: () => number;
+  esperar?: (ms: number) => Promise<void>;
+  fetch?: typeof fetch;
 }
 
 function faltaSecreto(variable: string): ErrorApi {
@@ -41,13 +54,18 @@ function faltaSecreto(variable: string): ErrorApi {
 export function crearDependencias(
   leer: (nombre: string) => string | undefined,
   infraestructura: { repositorio: Repositorio; verificador: VerificadorAdmin },
+  opciones: OpcionesDependencias = {},
 ): Dependencias {
   const configuracion = leerConfiguracion(leer);
+  const ahora = opciones.ahora ?? RELOJ_REAL.ahora;
+  const esperar = opciones.esperar ?? RELOJ_REAL.esperar;
   return {
     repositorio: infraestructura.repositorio,
     verificador: infraestructura.verificador,
     contexto: contextoSubfactores(),
     configuracion,
+    ahora,
+    esperar,
     proveedores(fuentes) {
       return fuentes.map((fuente) => {
         if (configuracion.proveedorLlm === 'fake') return new ProveedorFalso(fuente);
@@ -65,7 +83,13 @@ export function crearDependencias(
     clasificador(modelo) {
       if (configuracion.proveedorLlm === 'fake') return new ClasificadorFalso();
       if (configuracion.geminiApiKey === undefined) throw faltaSecreto('GEMINI_API_KEY');
-      return new GeminiClasificador({ apiKey: configuracion.geminiApiKey, modelo });
+      // El clasificador falso (arriba) no espera: solo Gemini tiene ritmo y reintentos.
+      return new GeminiClasificador({
+        apiKey: configuracion.geminiApiKey,
+        modelo,
+        ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
+        ritmo: new RitmoDeLlamadas({ ahora, esperar }, configuracion.llamadasPorMinuto),
+      });
     },
   };
 }
@@ -86,7 +110,8 @@ export interface InfraestructuraConBase {
 export async function crearDependenciasConBase(
   leer: (nombre: string) => string | undefined,
   infraestructura: InfraestructuraConBase,
+  opciones: OpcionesDependencias = {},
 ): Promise<Dependencias> {
   const guardada = await infraestructura.configuracionGuardada();
-  return crearDependencias(combinarConEntorno(guardada, leer), infraestructura);
+  return crearDependencias(combinarConEntorno(guardada, leer), infraestructura, opciones);
 }

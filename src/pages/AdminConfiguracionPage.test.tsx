@@ -47,6 +47,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     expect(screen.getByLabelText('Modelo')).toHaveValue('gemini-3.1-flash-lite');
     expect(screen.getByLabelText(/Umbral de confianza/)).toHaveValue('0.7');
     expect(screen.getByLabelText(/Máximo de candidatos/)).toHaveValue('');
+    expect(screen.getByLabelText('Llamadas a Gemini por minuto')).toHaveValue('');
     expect(screen.getByLabelText('Correo para Crossref')).toHaveValue('equipo@unemi.edu.ec');
 
     expect(claveGemini().getByText(/Configurada · actualizada el 18\/11\/2026/)).toBeVisible();
@@ -75,6 +76,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     await userEvent.clear(screen.getByLabelText(/Umbral de confianza/));
     await userEvent.type(screen.getByLabelText(/Umbral de confianza/), '0,8');
     await userEvent.type(maximo, '15');
+    await userEvent.type(screen.getByLabelText('Llamadas a Gemini por minuto'), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
     await waitFor(() =>
@@ -83,6 +85,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         modelo: 'gemini-3.1-flash-lite',
         umbral: 0.8,
         maxCandidatos: 15,
+        llamadasPorMinuto: 30,
         crossrefMailto: 'equipo@unemi.edu.ec',
       }),
     );
@@ -101,6 +104,25 @@ describe('AdminConfiguracionPage (issue #33)', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/umbral/i);
     expect(api.guardarParametros).not.toHaveBeenCalled();
+  });
+
+  it('no guarda un ritmo fuera de 1 a 1000 y lo anuncia con role="alert"', async () => {
+    const api = crearApiFalsa();
+    renderizar(api);
+    await abrirAvanzadas();
+    await userEvent.type(await screen.findByLabelText('Llamadas a Gemini por minuto'), '1001');
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/llamadas por minuto/i);
+    expect(api.guardarParametros).not.toHaveBeenCalled();
+  });
+
+  it('explica el ritmo: plan gratis cerca de 15 y que con facturación se puede subir', async () => {
+    renderizar();
+    await abrirAvanzadas();
+    const campo = await screen.findByLabelText('Llamadas a Gemini por minuto');
+    expect(campo).toHaveAccessibleDescription(/plan gratis.*15.*facturación.*subir/i);
+    expect(campo).toHaveAttribute('placeholder', '15');
   });
 
   it('un error en las opciones avanzadas las abre aunque estuvieran plegadas', async () => {
@@ -194,6 +216,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         modelo: null,
         umbral: null,
         maxCandidatos: null,
+        llamadasPorMinuto: null,
         crossrefMailto: null,
       },
       cambios: [],
@@ -219,6 +242,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
           modelo: 'gemini-x',
           umbral: 0.9,
           maxCandidatos: 30,
+          llamadasPorMinuto: 20,
         });
         renderizar(api);
         const aviso = within(await screen.findByRole('status', { name: 'Clave sin usar' }));
@@ -232,6 +256,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
             modelo: 'gemini-x',
             umbral: 0.9,
             maxCandidatos: 30,
+            llamadasPorMinuto: 20,
             crossrefMailto: 'equipo@unemi.edu.ec',
           }),
         );
@@ -320,6 +345,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       expect(screen.getByLabelText('Modelo')).not.toBeVisible();
       expect(screen.getByLabelText(/Umbral de confianza/)).not.toBeVisible();
       expect(screen.getByLabelText(/Máximo de candidatos/)).not.toBeVisible();
+      expect(screen.getByLabelText('Llamadas a Gemini por minuto')).not.toBeVisible();
       expect(screen.getByLabelText('Correo para Crossref')).not.toBeVisible();
       expect(screen.getByRole('radio', { name: /Usar el secreto de Supabase/ })).not.toBeVisible();
 
@@ -362,7 +388,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       const caja = await resumen();
       expect(
         caja.getByText(
-          'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 · máx. 50 candidatos (por defecto) · clave guardada en la app',
+          'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
         ),
       ).toBeInTheDocument();
       expect(caja.getByText(/Un valor «por defecto» puede cambiarse con un secreto/)).toBeVisible();
@@ -370,11 +396,13 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     });
 
     it('Gemini con todo definido no muestra «por defecto»', async () => {
-      renderizar(apiCon({ modelo: 'gemini-x', umbral: 0.5, maxCandidatos: 20 }));
+      renderizar(
+        apiCon({ modelo: 'gemini-x', umbral: 0.5, maxCandidatos: 20, llamadasPorMinuto: 60 }),
+      );
       const caja = await resumen();
       expect(
         caja.getByText(
-          'Gemini · modelo gemini-x · umbral 0,5 · máx. 20 candidatos · clave guardada en la app',
+          'Gemini · modelo gemini-x · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · clave guardada en la app',
         ),
       ).toBeInTheDocument();
       expect(caja.queryByText(/por defecto/)).toBeNull();

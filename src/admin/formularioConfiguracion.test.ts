@@ -10,6 +10,7 @@ const VACIO: FormularioConfiguracion = {
   modelo: '',
   umbral: '',
   maxCandidatos: '',
+  llamadasPorMinuto: '',
   crossrefMailto: '',
 };
 
@@ -21,6 +22,7 @@ describe('validarConfiguracion (issue #33)', () => {
         modelo: null,
         umbral: null,
         maxCandidatos: null,
+        llamadasPorMinuto: null,
         crossrefMailto: null,
       },
     });
@@ -33,6 +35,7 @@ describe('validarConfiguracion (issue #33)', () => {
         modelo: '  gemini-3.1-flash-lite ',
         umbral: '0,75',
         maxCandidatos: ' 15 ',
+        llamadasPorMinuto: ' 30 ',
         crossrefMailto: ' equipo@unemi.edu.ec ',
       }),
     ).toEqual({
@@ -41,8 +44,15 @@ describe('validarConfiguracion (issue #33)', () => {
         modelo: 'gemini-3.1-flash-lite',
         umbral: 0.75,
         maxCandidatos: 15,
+        llamadasPorMinuto: 30,
         crossrefMailto: 'equipo@unemi.edu.ec',
       },
+    });
+    expect(validarConfiguracion({ ...VACIO, llamadasPorMinuto: '1' })).toMatchObject({
+      parametros: { llamadasPorMinuto: 1 },
+    });
+    expect(validarConfiguracion({ ...VACIO, llamadasPorMinuto: '1000' })).toMatchObject({
+      parametros: { llamadasPorMinuto: 1000 },
     });
     expect(validarConfiguracion({ ...VACIO, umbral: '0', maxCandidatos: '200' })).toMatchObject({
       parametros: { umbral: 0, maxCandidatos: 200 },
@@ -59,6 +69,11 @@ describe('validarConfiguracion (issue #33)', () => {
     [{ maxCandidatos: '0' }, /candidatos/i],
     [{ maxCandidatos: '201' }, /candidatos/i],
     [{ maxCandidatos: '2.5' }, /candidatos/i],
+    [{ llamadasPorMinuto: '0' }, /llamadas por minuto/i],
+    [{ llamadasPorMinuto: '1001' }, /llamadas por minuto/i],
+    [{ llamadasPorMinuto: '2.5' }, /llamadas por minuto/i],
+    [{ llamadasPorMinuto: '-3' }, /llamadas por minuto/i],
+    [{ llamadasPorMinuto: 'muchas' }, /llamadas por minuto/i],
     [{ crossrefMailto: 'sin-arroba' }, /correo/i],
     [{ modelo: 'x'.repeat(101) }, /modelo/i],
     [{ modelo: '../otro:generateContent' }, /modelo/i],
@@ -78,6 +93,7 @@ describe('formularioDesdeParametros', () => {
         modelo: null,
         umbral: 0.7,
         maxCandidatos: null,
+        llamadasPorMinuto: 15,
         crossrefMailto: 'a@b.ec',
       }),
     ).toEqual({
@@ -85,6 +101,7 @@ describe('formularioDesdeParametros', () => {
       modelo: '',
       umbral: '0.7',
       maxCandidatos: '',
+      llamadasPorMinuto: '15',
       crossrefMailto: 'a@b.ec',
     });
   });

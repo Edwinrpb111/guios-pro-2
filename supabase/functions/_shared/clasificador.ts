@@ -1,6 +1,7 @@
 // Clasificador con IA (BRIEF §13.3). La IA no busca: solo decide si un candidato que ya trajo
 // una API bibliográfica trata el subfactor. Así no se inventan referencias (§13.5).
 import { ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
+import { leerEsperaSugerida, type RitmoDeLlamadas } from './ritmo.ts';
 import type { Candidato, Clasificador, Veredicto } from './tipos.ts';
 
 /** Se guarda en `calculo_sugerida.parametros` (RNF-09); súbela si cambia el texto del prompt. */
@@ -109,11 +110,22 @@ export class GeminiClasificador implements Clasificador {
   readonly #apiKey: string;
   readonly #modelo: string;
   readonly #fetch: typeof fetch;
+  readonly #ritmo: RitmoDeLlamadas | undefined;
 
-  constructor(opciones: { apiKey: string; modelo: string; fetch?: typeof fetch }) {
+  /**
+   * Con `ritmo` el clasificador espera antes de cada llamada para respetar el límite por minuto
+   * y reintenta un 429/503 unas veces (issue #39). Sin `ritmo` no espera ni reintenta.
+   */
+  constructor(opciones: {
+    apiKey: string;
+    modelo: string;
+    fetch?: typeof fetch;
+    ritmo?: RitmoDeLlamadas;
+  }) {
     this.#apiKey = opciones.apiKey;
     this.#modelo = opciones.modelo;
     this.#fetch = opciones.fetch ?? fetch;
+    this.#ritmo = opciones.ritmo;
   }
 
   async clasificar(
@@ -122,35 +134,52 @@ export class GeminiClasificador implements Clasificador {
     contexto: string,
     candidatos: Candidato[],
   ): Promise<Veredicto[]> {
-    let respuesta: Response;
-    try {
-      respuesta = await this.#fetch(`${URL_BASE}/${this.#modelo}:generateContent`, {
-        method: 'POST',
-        // La clave va en cabecera, no en la dirección, para que no aparezca en registros.
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': this.#apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: INSTRUCCION_SISTEMA }] },
-          contents: [
-            {
-              role: 'user',
-              parts: [{ text: armarPrompt(factor, subfactor, contexto, candidatos) }],
-            },
-          ],
-          generationConfig: {
-            temperature: 0,
-            responseMimeType: 'application/json',
-            responseSchema: ESQUEMA_RESPUESTA,
-          },
-        }),
-        signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
-      });
-    } catch {
-      throw new ErrorProveedorNoDisponible(
-        'No se pudo conectar con Gemini. Revisa la conexión y reanuda el cálculo.',
-      );
-    }
+    const cuerpoPeticion = JSON.stringify({
+      systemInstruction: { parts: [{ text: INSTRUCCION_SISTEMA }] },
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: armarPrompt(factor, subfactor, contexto, candidatos) }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: 'application/json',
+        responseSchema: ESQUEMA_RESPUESTA,
+      },
+    });
 
-    const cuerpo: unknown = await respuesta.json().catch(() => null);
+    let respuesta: Response;
+    let cuerpo: unknown;
+    for (let intento = 0; ; intento++) {
+      // Cada llamada, también un reintento, respeta el ritmo configurado.
+      await this.#ritmo?.esperarTurno();
+      try {
+        respuesta = await this.#fetch(`${URL_BASE}/${this.#modelo}:generateContent`, {
+          method: 'POST',
+          // La clave va en cabecera, no en la dirección, para que no aparezca en registros.
+          headers: { 'content-type': 'application/json', 'x-goog-api-key': this.#apiKey },
+          body: cuerpoPeticion,
+          signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
+        });
+      } catch {
+        throw new ErrorProveedorNoDisponible(
+          'No se pudo conectar con Gemini. Revisa la conexión y reanuda el cálculo.',
+        );
+      }
+      cuerpo = await respuesta.json().catch(() => null);
+
+      // Solo el límite por minuto (429) y la saturación (503) se reintentan; si se agotan los
+      // reintentos o el tiempo del paso, sigue el camino de siempre: pausar el cálculo.
+      const reintentable = respuesta.status === 429 || respuesta.status === 503;
+      if (
+        !reintentable ||
+        this.#ritmo === undefined ||
+        !(await this.#ritmo.esperarReintento(intento, leerEsperaSugerida(cuerpo)))
+      ) {
+        break;
+      }
+    }
 
     if (respuesta.status === 429 || respuesta.status >= 500) {
       throw new ErrorProveedorNoDisponible(
