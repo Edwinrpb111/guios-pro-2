@@ -15,6 +15,7 @@ export function apiDiferida(cargar: () => Promise<ApiAdmin>): ApiAdmin {
     filasSugeridas: (id) => api().then((a) => a.filasSugeridas(id)),
     catalogo: () => api().then((a) => a.catalogo()),
     referencias: (id) => api().then((a) => a.referencias(id)),
+    rechazadas: (id) => api().then((a) => a.rechazadas(id)),
     iniciarRecalculo: (entrada) => api().then((a) => a.iniciarRecalculo(entrada)),
     pasoRecalculo: (id) => api().then((a) => a.pasoRecalculo(id)),
     registroPasos: (id) => api().then((a) => a.registroPasos(id)),

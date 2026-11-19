@@ -7,6 +7,7 @@ import type {
   EstadoCalculo,
   EstadoPaso,
   NuevaReferencia,
+  NuevaReferenciaRechazada,
   NuevoCalculo,
   Paso,
   Repositorio,
@@ -51,6 +52,8 @@ export class RepositorioMemoria implements Repositorio {
   readonly calculos = new Map<number, CalculoGuardado>();
   readonly pasos = new Map<number, Map<number, PasoGuardado>>();
   readonly referencias: ReferenciaGuardada[] = [];
+  /** Filas de `referencia_rechazada` (issue #46). */
+  readonly rechazadas: ReferenciaGuardada[] = [];
   /** Simula una caída de la base al crear el cálculo con sus pasos (no deja nada creado). */
   fallarAlCrear = false;
   #siguiente = 1;
@@ -115,14 +118,26 @@ export class RepositorioMemoria implements Repositorio {
     idCalculo: number,
     idSubfactor: number,
     referencias: NuevaReferencia[],
+    rechazadas: NuevaReferenciaRechazada[],
     candidatos: number,
   ): Promise<void> {
+    // Como el upsert real: la referencia ya guardada actualiza todo, sin duplicar el DOI.
     for (const r of referencias) {
-      const repetida = this.referencias.some(
+      const fila = { ...r, id_calculo: idCalculo, id_subfactor: idSubfactor };
+      const existente = this.referencias.findIndex(
         (x) => x.id_calculo === idCalculo && x.id_subfactor === idSubfactor && x.doi === r.doi,
       );
-      if (!repetida)
-        this.referencias.push({ ...r, id_calculo: idCalculo, id_subfactor: idSubfactor });
+      if (existente === -1) this.referencias.push(fila);
+      else this.referencias[existente] = fila;
+    }
+    // Los rechazados del subfactor se reemplazan: delete + insert.
+    for (let i = this.rechazadas.length - 1; i >= 0; i--) {
+      const x = this.rechazadas[i]!;
+      if (x.id_calculo === idCalculo && x.id_subfactor === idSubfactor)
+        this.rechazadas.splice(i, 1);
+    }
+    for (const r of rechazadas) {
+      this.rechazadas.push({ ...r, id_calculo: idCalculo, id_subfactor: idSubfactor });
     }
     const anterior = this.pasos.get(idCalculo)?.get(idSubfactor);
     this.pasos.get(idCalculo)?.set(idSubfactor, {
@@ -158,6 +173,13 @@ export class RepositorioMemoria implements Repositorio {
     fila.duracion_ms = datos.duracion_ms;
     fila.registro = datos.registro;
     return Promise.resolve();
+  }
+
+  /** Rechazados de un subfactor, para las aserciones. */
+  rechazadasDe(idCalculo: number, idSubfactor: number): ReferenciaGuardada[] {
+    return this.rechazadas.filter(
+      (r) => r.id_calculo === idCalculo && r.id_subfactor === idSubfactor,
+    );
   }
 
   /** Referencias de un subfactor, para las aserciones. */

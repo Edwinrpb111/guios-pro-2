@@ -167,6 +167,7 @@ docs/
 | [007](docs/decisiones/ADR-007-autenticacion-y-roles.md)                 | Autenticación, rol y guardas de rutas                       |
 | [008](docs/decisiones/ADR-008-evaluacion-autoguardado-y-fotografia.md)  | Autoguardado, derivados guardados y fotografía al finalizar |
 | [009](docs/decisiones/ADR-009-capas-del-frontend-y-ayuda-del-metodo.md) | Capas del frontend y ayuda del método como modal global     |
+| [015](docs/decisiones/ADR-015-trazabilidad-de-referencias.md)           | Trazabilidad: confianza, evidencia y candidatos rechazados  |
 
 ## Despliegue
 

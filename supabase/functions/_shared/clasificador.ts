@@ -35,6 +35,87 @@ const ESQUEMA_RESPUESTA = {
   },
 };
 
+/** Largo máximo de la evidencia: columna `evidencia varchar(500)` (issue #46). */
+export const EVIDENCIA_MAXIMA = 500;
+
+// Caracteres de control (C0, DEL y C1): Postgres no admite U+0000 en texto y el resto no aporta.
+const CARACTERES_DE_CONTROL = /[\u0000-\u001f\u007f-\u009f]/g;
+
+// Sustituto alto o bajo sin su pareja: Postgres lo rechaza (también dentro de un `jsonb`).
+const SUSTITUTO_SUELTO = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/g;
+
+/**
+ * Deja un texto externo listo para una columna `varchar(maximo)`: reemplaza los caracteres de
+ * control por `reemplazo`, quita los sustitutos sueltos, recorta y lo limita a `maximo` caracteres
+ * sin partir un par sustituto (emoji). Puede devolver una cadena vacía.
+ */
+export function limpiarTexto(texto: string, maximo: number, reemplazo = ' '): string {
+  const limpio = texto
+    .replace(CARACTERES_DE_CONTROL, reemplazo)
+    .replace(SUSTITUTO_SUELTO, '')
+    .trim();
+  let corto = limpio.slice(0, maximo);
+  // Un corte en medio de un par sustituto (emoji) deja una mitad inválida: se descarta.
+  if (corto.length < limpio.length && /[\ud800-\udbff]$/.test(corto)) corto = corto.slice(0, -1);
+  return corto.trimEnd();
+}
+
+/**
+ * Deja la evidencia lista para guardar. Es texto de la IA sobre títulos y resúmenes ajenos, o sea
+ * NO confiable (issue #46): se trata solo como texto plano (nunca se interpreta), se le quitan los
+ * caracteres de control y los sustitutos sueltos, se recorta y se limita a 500 caracteres sin
+ * partir un par sustituto. Vacía o no textual queda en `null`. Nunca se escribe en los registros.
+ */
+export function limpiarEvidencia(evidencia: unknown): string | null {
+  if (typeof evidencia !== 'string') return null;
+  const corta = limpiarTexto(evidencia, EVIDENCIA_MAXIMA);
+  return corta === '' ? null : corta;
+}
+
+/** La columna `confianza` es 0..1: acota lo que devuelva la IA; si no es un número, `null`. */
+function acotarConfianza(confianza: number): number | null {
+  return Number.isFinite(confianza) ? Math.min(1, Math.max(0, confianza)) : null;
+}
+
+/** Un candidato que la IA clasificó, con su veredicto ya saneado (issue #46). */
+export interface Clasificado {
+  candidato: Candidato;
+  confianza: number | null;
+  evidencia: string | null;
+}
+
+/**
+ * Reparte los candidatos que la IA clasificó (issue #46):
+ * - aceptados: `trata_subfactor` y `confianza >= umbral`;
+ * - rechazados: la IA los clasificó pero `trata_subfactor` es falso o la confianza no llega al
+ *   umbral (o no es un número).
+ * Todo `indice` que no exista en la lista (1..n) se descarta (ni aceptado ni rechazado), y un
+ * candidato cuenta una sola vez: manda el primer veredicto. Un candidato sin veredicto no se
+ * clasificó, así que tampoco es rechazado. El orden es el de los veredictos.
+ */
+export function repartirVeredictos(
+  candidatos: Candidato[],
+  veredictos: Veredicto[],
+  umbral: number,
+): { aceptados: Clasificado[]; rechazados: Clasificado[] } {
+  const vistos = new Set<number>();
+  const aceptados: Clasificado[] = [];
+  const rechazados: Clasificado[] = [];
+  for (const v of veredictos) {
+    const candidato = Number.isInteger(v.indice) ? candidatos[v.indice - 1] : undefined;
+    if (candidato === undefined || vistos.has(v.indice)) continue;
+    vistos.add(v.indice);
+    const clasificado: Clasificado = {
+      candidato,
+      confianza: acotarConfianza(v.confianza),
+      evidencia: limpiarEvidencia(v.evidencia),
+    };
+    const acepta = v.trata_subfactor && Number.isFinite(v.confianza) && v.confianza >= umbral;
+    (acepta ? aceptados : rechazados).push(clasificado);
+  }
+  return { aceptados, rechazados };
+}
+
 /**
  * Candidatos que se aceptan: `trata_subfactor` y `confianza >= umbral`. Todo `indice` que no
  * exista en la lista (1..n) se descarta, y un candidato no se acepta dos veces.
@@ -44,17 +125,7 @@ export function aceptarVeredictos(
   veredictos: Veredicto[],
   umbral: number,
 ): Candidato[] {
-  const vistos = new Set<number>();
-  const aceptados: Candidato[] = [];
-  for (const v of veredictos) {
-    const candidato = Number.isInteger(v.indice) ? candidatos[v.indice - 1] : undefined;
-    if (candidato === undefined || vistos.has(v.indice)) continue;
-    vistos.add(v.indice);
-    if (v.trata_subfactor && Number.isFinite(v.confianza) && v.confianza >= umbral) {
-      aceptados.push(candidato);
-    }
-  }
-  return aceptados;
+  return repartirVeredictos(candidatos, veredictos, umbral).aceptados.map((a) => a.candidato);
 }
 
 export class GeminiClasificador implements Clasificador {

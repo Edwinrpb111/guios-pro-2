@@ -81,10 +81,10 @@ Para verlos: panel de Supabase → **Edge Functions** → **recalculo-paso** →
 2. Busca en OpenAlex y Crossref (en serie) con filtro de años y tipo artículo.
 3. Normaliza el DOI (minúsculas, sin `https://doi.org/`), **descarta lo que no tiene DOI válido, año o está fuera del rango** y deduplica por DOI.
 4. Recorta a `RECALCULO_MAX_CANDIDATOS` repartiendo entre fuentes y clasifica en **lotes de 10**.
-5. Acepta si `trata_subfactor` y `confianza ≥ umbral` (`LLM_UMBRAL`, 0,7 por defecto); **todo `indice` inexistente se descarta**.
-6. Guarda los aceptados en `referencia` y marca el paso `hecho`.
+5. Acepta si `trata_subfactor` y `confianza ≥ umbral` (`LLM_UMBRAL`, 0,7 por defecto); **todo `indice` inexistente se descarta**. Lo que la IA clasificó y no aceptó (no trata el subfactor o confianza bajo el umbral) queda como rechazado (issue #46).
+6. Guarda los aceptados en `referencia` con su `confianza` y `evidencia`, **reemplaza** los rechazados del subfactor en `referencia_rechazada` y marca el paso `hecho`. Al repetir el paso, el `upsert` de `referencia` actualiza confianza y evidencia. Detalle en [ADR-015](decisiones/ADR-015-trazabilidad-de-referencias.md).
 
-La IA no busca: solo clasifica candidatos que ya trajo una API bibliográfica, así que toda referencia guardada tiene un DOI real. A Gemini solo se le envían títulos y resúmenes públicos; el texto de los candidatos se trata como dato no confiable en el prompt.
+La IA no busca: solo clasifica candidatos que ya trajo una API bibliográfica, así que toda referencia guardada tiene un DOI real. La `evidencia` que devuelve la IA es texto no confiable: se guarda como texto plano (sin caracteres de control, máx. 500 caracteres), la pantalla la muestra como texto y **nunca se escribe en los registros** (ni en el `console.log` ni en `recalculo_paso.registro`). A Gemini solo se le envían títulos y resúmenes públicos; el texto de los candidatos se trata como dato no confiable en el prompt.
 
 ## Interfaces y falsos (RNF-07)
 

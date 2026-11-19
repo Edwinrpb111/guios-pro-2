@@ -345,7 +345,9 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
           exigir(
             await cliente
               .from('referencia')
-              .select('id_referencia, id_subfactor, titulo, anio, doi, base_datos')
+              .select(
+                'id_referencia, id_subfactor, titulo, anio, doi, base_datos, confianza, evidencia',
+              )
               .eq('id_calculo', id)
               .order('id_referencia')
               .range(desde, desde + TAMANO_PAGINA - 1),
@@ -358,6 +360,38 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
             anio: r.anio,
             doi: r.doi,
             base: r.base_datos,
+            confianza: r.confianza,
+            evidencia: r.evidencia,
+          });
+        }
+        if (filas.length < TAMANO_PAGINA) return todas;
+      }
+    },
+
+    async rechazadas(id) {
+      const todas: Awaited<ReturnType<ApiAdmin['rechazadas']>> = [];
+      for (let desde = 0; ; desde += TAMANO_PAGINA) {
+        const filas =
+          exigir(
+            await cliente
+              .from('referencia_rechazada')
+              .select(
+                'id_referencia_rechazada, id_subfactor, titulo, anio, doi, base_datos, confianza, evidencia',
+              )
+              .eq('id_calculo', id)
+              .order('id_referencia_rechazada')
+              .range(desde, desde + TAMANO_PAGINA - 1),
+          ) ?? [];
+        for (const r of filas) {
+          todas.push({
+            id: r.id_referencia_rechazada,
+            idSubfactor: r.id_subfactor,
+            titulo: r.titulo,
+            anio: r.anio,
+            doi: r.doi,
+            base: r.base_datos,
+            confianza: r.confianza,
+            evidencia: r.evidencia,
           });
         }
         if (filas.length < TAMANO_PAGINA) return todas;

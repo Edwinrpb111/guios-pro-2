@@ -58,3 +58,4 @@ El esquema vive en tres migraciones de `supabase/migrations/`:
   - `valoracion_subfactor.id_subfactor` no se valida contra el factor de su `valoracion_factor`.
   - Un decisor lee todos los `calculo_sugerida`, incluidos `descartado` y `fallido`, como permite BRIEF §10.3.
 - Las Edge Functions (issue #10) escriben `referencia` y `recalculo_paso` con `service_role`, que omite RLS.
+- Issue #46: `referencia` gana `confianza` y `evidencia` y la tabla `referencia_rechazada` guarda los candidatos que la IA clasificó y no aceptó (lectura solo del administrador, escritura solo `service_role`, cascada con el cálculo). Ver [ADR-015](ADR-015-trazabilidad-de-referencias.md).

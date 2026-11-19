@@ -74,6 +74,22 @@ export interface ReferenciaCalculo {
   anio: number;
   doi: string;
   base: string | null;
+  /** Confianza de la IA (0..1). Nula en los cálculos previos a la trazabilidad (issue #46). */
+  confianza: number | null;
+  /** Evidencia de la IA, texto plano recortado a 500 caracteres. Nula si no se guardó. */
+  evidencia: string | null;
+}
+
+/** Candidato que la IA clasificó y no aceptó (`referencia_rechazada`, solo lectura admin). */
+export interface ReferenciaRechazada {
+  id: number;
+  idSubfactor: number;
+  titulo: string;
+  anio: number;
+  doi: string;
+  base: string | null;
+  confianza: number | null;
+  evidencia: string | null;
 }
 
 /** Resultado de `conteo_citas`: c_i = suma de las citas de los subfactores del factor. */
@@ -250,6 +266,8 @@ export interface ApiAdmin {
   filasSugeridas(id: number): Promise<FilaSugerida[]>;
   catalogo(): Promise<FactorCatalogo[]>;
   referencias(id: number): Promise<ReferenciaCalculo[]>;
+  /** Candidatos rechazados por la IA en el cálculo (trazabilidad, issue #46). */
+  rechazadas(id: number): Promise<ReferenciaRechazada[]>;
   iniciarRecalculo(entrada: EntradaRecalculo): Promise<number>;
   pasoRecalculo(id: number): Promise<ResultadoPaso>;
   /** Pasos con actividad del cálculo, del más reciente al más antiguo (registro del recálculo). */

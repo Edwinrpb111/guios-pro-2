@@ -223,6 +223,7 @@ export async function paso(
       idCalculo,
       siguiente.id_subfactor,
       resultado.referencias,
+      resultado.rechazadas,
       resultado.candidatos,
     );
     await terminar('hecho', null, resultado.referencias.length);

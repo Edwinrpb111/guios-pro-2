@@ -173,6 +173,8 @@ describe('crearApiAdmin (Supabase)', () => {
         anio: 2022,
         doi: `10.1/${desde + i}`,
         base_datos: 'openalex',
+        confianza: 0.85,
+        evidencia: `Evidencia ${desde + i}`,
       }));
     const { cliente, llamadas } = clienteSimulado({
       tablas: {
@@ -191,7 +193,76 @@ describe('crearApiAdmin (Supabase)', () => {
       anio: 2022,
       doi: '10.1/1004',
       base: 'openalex',
+      confianza: 0.85,
+      evidencia: 'Evidencia 1004',
     });
+    expect(llamadas.map((l) => l.pasos.find(([m]) => m === 'range')?.[1])).toEqual([
+      [0, 999],
+      [1000, 1999],
+    ]);
+  });
+
+  it('las referencias antiguas sin clasificación llegan con confianza y evidencia nulas', async () => {
+    const { cliente, llamadas } = clienteSimulado({
+      tablas: {
+        referencia: {
+          data: [
+            {
+              id_referencia: 1,
+              id_subfactor: 4,
+              titulo: 'Antigua',
+              anio: 2020,
+              doi: '10.1/x',
+              base_datos: null,
+              confianza: null,
+              evidencia: null,
+            },
+          ],
+          error: null,
+        },
+      },
+    });
+    const [ref] = await crearApiAdmin(cliente).referencias(7);
+    expect(ref).toMatchObject({ confianza: null, evidencia: null, base: null });
+    const seleccion = llamadas[0]?.pasos.find(([m]) => m === 'select')?.[1][0] as string;
+    expect(seleccion).toContain('confianza');
+    expect(seleccion).toContain('evidencia');
+  });
+
+  it('lee todos los candidatos rechazados por páginas de 1000 (solo lectura)', async () => {
+    const pagina = (desde: number, n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id_referencia_rechazada: desde + i,
+        id_subfactor: 2,
+        titulo: `R${desde + i}`,
+        anio: 2021,
+        doi: `10.2/${desde + i}`,
+        base_datos: 'crossref',
+        confianza: 0.2,
+        evidencia: 'No trata el subfactor',
+      }));
+    const { cliente, llamadas } = clienteSimulado({
+      tablas: {
+        referencia_rechazada: (llamada) => {
+          const [, [desde]] = llamada.pasos.find(([m]) => m === 'range') as [string, [number]];
+          return { data: desde === 0 ? pagina(0, 1000) : pagina(1000, 3), error: null };
+        },
+      },
+    });
+    const rechazadas = await crearApiAdmin(cliente).rechazadas(9);
+    expect(rechazadas).toHaveLength(1003);
+    expect(rechazadas[1002]).toEqual({
+      id: 1002,
+      idSubfactor: 2,
+      titulo: 'R1002',
+      anio: 2021,
+      doi: '10.2/1002',
+      base: 'crossref',
+      confianza: 0.2,
+      evidencia: 'No trata el subfactor',
+    });
+    expect(llamadas.every((l) => l.tabla === 'referencia_rechazada')).toBe(true);
+    expect(llamadas[0]?.pasos).toContainEqual(['eq', ['id_calculo', 9]]);
     expect(llamadas.map((l) => l.pasos.find(([m]) => m === 'range')?.[1])).toEqual([
       [0, 999],
       [1000, 1999],
