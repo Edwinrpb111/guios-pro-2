@@ -48,6 +48,13 @@ export function rutaDeContinuacion(evaluacion: ResumenEvaluacion, totalFactores:
   return rutaDeEvaluacion(evaluacion.id, 'subfactores');
 }
 
+/**
+ * ¿Ofrece «Eliminar» en el historial? Solo las evaluaciones en curso: una finalizada no se
+ * modifica ni se borra (BRIEF §10.3). La política de RLS es la que lo garantiza.
+ */
+export const sePuedeEliminar = (evaluacion: ResumenEvaluacion): boolean =>
+  evaluacion.estado === 'en_curso';
+
 const formatoFecha = new Intl.DateTimeFormat('es-EC', {
   day: '2-digit',
   month: '2-digit',

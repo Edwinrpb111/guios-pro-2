@@ -10,6 +10,8 @@ export interface FilaHistorial {
   /** Avance 0..100; se muestra solo en las que están en curso. */
   avance: number;
   recomendacion: 'A' | 'B' | 'C' | null;
+  /** Si se ofrece «Eliminar» en la fila (solo cuando hay `onEliminar`). */
+  eliminable?: boolean;
 }
 
 export interface HistorialTablaProps {
@@ -17,6 +19,8 @@ export interface HistorialTablaProps {
   textoVacio?: string;
   /** Se emite al pulsar «Continuar» o «Ver resultados». */
   onAbrir: (id: number) => void;
+  /** Se emite al pulsar «Eliminar»; la confirmación la pide quien usa la tabla. */
+  onEliminar?: (id: number) => void;
 }
 
 /** Tabla del historial de evaluaciones (P-02); en móvil cada fila pasa a tarjeta. */
@@ -24,6 +28,7 @@ export function HistorialTabla({
   filas,
   textoVacio = 'No hay evaluaciones para mostrar.',
   onAbrir,
+  onEliminar,
 }: HistorialTablaProps) {
   if (filas.length === 0) return <p className="historial__vacio">{textoVacio}</p>;
   return (
@@ -81,6 +86,19 @@ export function HistorialTabla({
                 >
                   {finalizada ? 'Ver resultados' : 'Continuar'}
                 </button>
+                {onEliminar && fila.eliminable && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="boton boton--fantasma boton--chico"
+                      aria-label={`Eliminar «${titulo}»`}
+                      onClick={() => onEliminar(fila.id)}
+                    >
+                      Eliminar
+                    </button>
+                  </>
+                )}
               </td>
             </tr>
           );

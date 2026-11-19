@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../auth/useAuth';
 import { HistorialTabla, type FilaHistorial } from '../components/HistorialTabla';
+import { VentanaModal } from '../components/VentanaModal';
 import type { ResumenEvaluacion } from '../datos/tipos';
 import { useCalculoVigente, useCatalogo, useHistorial } from '../evaluacion/consultas';
 import {
@@ -9,11 +10,17 @@ import {
   formatearFecha,
   porcentajeAvance,
   rutaDeContinuacion,
+  sePuedeEliminar,
   type FiltroHistorial,
 } from '../evaluacion/historial';
+import { useEliminarEvaluacion } from '../evaluacion/useEliminarEvaluacion';
 import { nombreDeUsuario, primerNombre } from '../evaluacion/usuario';
 import { MarcoDecisor } from './MarcoDecisor';
 import { useMarco } from './marco';
+
+/** Título como lo muestra el historial: sin título, «Evaluación sin título». */
+const tituloVisible = (titulo: string): string =>
+  titulo.trim() === '' ? 'Evaluación sin título' : titulo;
 
 /** P-02: inicio e historial de evaluaciones (HU-02). */
 export function InicioPage() {
@@ -32,6 +39,8 @@ function ContenidoInicio() {
   const catalogo = useCatalogo();
   const vigente = useCalculoVigente();
   const [filtro, setFiltro] = useState<FiltroHistorial>({ estado: 'todas', texto: '' });
+  const eliminacion = useEliminarEvaluacion();
+  const [porEliminar, setPorEliminar] = useState<ResumenEvaluacion | null>(null);
 
   const evaluaciones: readonly ResumenEvaluacion[] = useMemo(
     () => historial.data ?? [],
@@ -57,6 +66,7 @@ function ContenidoInicio() {
         estado: e.estado,
         avance: catalogo.data ? porcentajeAvance(e, catalogo.data) : 0,
         recomendacion: e.estado === 'finalizada' ? e.codigo : null,
+        eliminable: sePuedeEliminar(e),
       })),
     [visibles, catalogo.data],
   );
@@ -68,6 +78,21 @@ function ContenidoInicio() {
   const abrir = (id: number) => {
     const evaluacion = evaluaciones.find((e) => e.id === id);
     if (evaluacion) void navegar(rutaDeContinuacion(evaluacion, totalFactores));
+  };
+
+  const pedirEliminar = (id: number) => {
+    eliminacion.reiniciar();
+    setPorEliminar(evaluaciones.find((e) => e.id === id) ?? null);
+  };
+  const cerrarEliminar = () => {
+    if (eliminacion.eliminando) return;
+    eliminacion.reiniciar();
+    setPorEliminar(null);
+  };
+  const confirmarEliminar = async () => {
+    if (!porEliminar) return;
+    // Si falla, la confirmación sigue abierta con el motivo y la fila sigue en el historial.
+    if (await eliminacion.eliminar(porEliminar.id)) setPorEliminar(null);
   };
 
   return (
@@ -168,9 +193,44 @@ function ContenidoInicio() {
             filas={filas}
             textoVacio="Ninguna evaluación coincide con el filtro."
             onAbrir={abrir}
+            onEliminar={pedirEliminar}
           />
         )}
       </section>
+
+      <VentanaModal
+        abierta={porEliminar !== null}
+        titulo="Eliminar evaluación"
+        onCerrar={cerrarEliminar}
+      >
+        <p>
+          Se eliminará «{tituloVisible(porEliminar?.titulo ?? '')}» con todas sus valoraciones. Esta
+          acción no se puede deshacer.
+        </p>
+        {eliminacion.error && (
+          <div role="alert" className="alerta alerta--error">
+            {eliminacion.error}
+          </div>
+        )}
+        <div className="alerta__acciones">
+          <button
+            type="button"
+            className="boton boton--primario"
+            disabled={eliminacion.eliminando}
+            onClick={() => void confirmarEliminar()}
+          >
+            {eliminacion.eliminando ? 'Eliminando…' : 'Sí, eliminar'}
+          </button>
+          <button
+            type="button"
+            className="boton"
+            disabled={eliminacion.eliminando}
+            onClick={cerrarEliminar}
+          >
+            Cancelar
+          </button>
+        </div>
+      </VentanaModal>
     </>
   );
 }
