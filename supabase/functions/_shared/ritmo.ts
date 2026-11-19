@@ -95,6 +95,15 @@ export class RitmoDeLlamadas {
 }
 
 /**
+ * Cabecera `Retry-After` (en segundos) de un 429/503 de un proveedor compatible con OpenAI, en
+ * milisegundos; `null` si falta o no es un número de segundos (no se interpretan fechas).
+ */
+export function leerRetryAfter(valor: string | null): number | null {
+  const coincide = /^(\d+(?:\.\d+)?)$/.exec(valor?.trim() ?? '');
+  return coincide?.[1] === undefined ? null : Math.ceil(Number(coincide[1]) * 1000);
+}
+
+/**
  * `retryDelay` de un error de Gemini (`google.rpc.RetryInfo`, p. ej. `"17s"` o `"0.5s"`) en
  * milisegundos, o `null` si el cuerpo no lo trae o no se entiende.
  */

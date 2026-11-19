@@ -5,7 +5,7 @@
 import { ErrorApi } from './errores.ts';
 import { LLAMADAS_POR_MINUTO_MAXIMO, LLAMADAS_POR_MINUTO_POR_DEFECTO } from './ritmo.ts';
 
-export type ProveedorLlm = 'gemini' | 'fake';
+export type ProveedorLlm = 'gemini' | 'openai' | 'fake';
 
 export interface Configuracion {
   proveedorLlm: ProveedorLlm;
@@ -17,13 +17,54 @@ export interface Configuracion {
   openalexApiKey: string | undefined;
   crossrefMailto: string | undefined;
   geminiApiKey: string | undefined;
+  /** Dirección base https ya normalizada (sin «/» final) del proveedor compatible con OpenAI. */
+  openaiBaseUrl: string | undefined;
+  /** Modelo del proveedor compatible con OpenAI (va en el cuerpo JSON, no en la URL). */
+  openaiModelo: string | undefined;
+  openaiApiKey: string | undefined;
 }
 
 const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
 const MODELO_VALIDO = /^[A-Za-z0-9._-]{1,100}$/;
+// OpenRouter y otros usan «/» y «:» en el nombre del modelo; va en el cuerpo JSON, no en la URL.
+const MODELO_OPENAI_VALIDO = /^[A-Za-z0-9._:/@-]{1,150}$/;
+const URL_BASE_MAXIMO = 200;
+// https://servidor[:puerto][/ruta]: sin «@» (credenciales), «?», «#», espacios ni «\».
+const URL_BASE_VALIDA = /^https:\/\/[^/?#@\\\s]+(\/[^?#\\\s]*)?$/;
 const UMBRAL_POR_DEFECTO = 0.7;
 const MAX_CANDIDATOS_POR_DEFECTO = 50;
 const MAX_CANDIDATOS_TOPE = 200;
+
+/**
+ * Dirección base del proveedor compatible con OpenAI normalizada (sin espacios ni «/» final), o
+ * `null` si no es una dirección https limpia: sin credenciales, parámetros ni fragmento, de hasta
+ * 200 caracteres. Es la misma regla del `CHECK` de `configuracion_recalculo.openai_base_url`.
+ */
+export function normalizarUrlBase(texto: string): string | null {
+  const limpia = texto.trim();
+  if (limpia.length > URL_BASE_MAXIMO || !URL_BASE_VALIDA.test(limpia)) return null;
+  try {
+    const url = new URL(limpia);
+    if (
+      url.protocol !== 'https:' ||
+      url.hostname === '' ||
+      url.username !== '' ||
+      url.password !== ''
+    ) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  return limpia.replace(/\/+$/, '');
+}
+
+/** Modelo con el que se clasifica según el proveedor elegido (`''` si falta el del compatible). */
+export function modeloDelProveedor(configuracion: Configuracion): string {
+  return configuracion.proveedorLlm === 'openai'
+    ? (configuracion.openaiModelo ?? '')
+    : configuracion.modelo;
+}
 
 function invalida(variable: string, esperado: string): ErrorApi {
   return new ErrorApi(
@@ -40,8 +81,8 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
   };
 
   const proveedor = valor('LLM_PROVIDER') ?? 'gemini';
-  if (proveedor !== 'gemini' && proveedor !== 'fake') {
-    throw invalida('LLM_PROVIDER', 'debe ser «gemini» o «fake»');
+  if (proveedor !== 'gemini' && proveedor !== 'openai' && proveedor !== 'fake') {
+    throw invalida('LLM_PROVIDER', 'debe ser «gemini», «openai» o «fake»');
   }
 
   const textoUmbral = valor('LLM_UMBRAL');
@@ -87,6 +128,32 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
+  // Los datos del proveedor compatible solo se validan si se va a usar ese proveedor: con Gemini
+  // o el falso nada cambia respecto a antes. Lo que falte se reporta al armar el clasificador.
+  let openaiBaseUrl: string | undefined;
+  let openaiModelo: string | undefined;
+  if (proveedor === 'openai') {
+    const textoUrl = valor('OPENAI_COMPAT_BASE_URL');
+    if (textoUrl !== undefined) {
+      const normalizada = normalizarUrlBase(textoUrl);
+      // No se repite la dirección en el mensaje: podría llevar credenciales.
+      if (normalizada === null) {
+        throw invalida(
+          'OPENAI_COMPAT_BASE_URL',
+          `debe ser una dirección https sin usuario, clave, parámetros ni #fragmento (hasta ${URL_BASE_MAXIMO} caracteres)`,
+        );
+      }
+      openaiBaseUrl = normalizada;
+    }
+    openaiModelo = valor('OPENAI_COMPAT_MODEL');
+    if (openaiModelo !== undefined && !MODELO_OPENAI_VALIDO.test(openaiModelo)) {
+      throw invalida(
+        'OPENAI_COMPAT_MODEL',
+        'solo admite letras, dígitos, punto, guion, guion bajo, «:», «/» y «@» (hasta 150 caracteres)',
+      );
+    }
+  }
+
   return {
     proveedorLlm: proveedor,
     modelo,
@@ -96,6 +163,9 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     openalexApiKey: valor('OPENALEX_API_KEY'),
     crossrefMailto: valor('CROSSREF_MAILTO'),
     geminiApiKey: valor('GEMINI_API_KEY'),
+    openaiBaseUrl,
+    openaiModelo,
+    openaiApiKey: valor('OPENAI_COMPAT_API_KEY'),
   };
 }
 
@@ -121,7 +191,10 @@ export interface ConfiguracionGuardada {
   max_candidatos?: number | string | null;
   llamadas_por_minuto?: number | string | null;
   crossref_mailto?: string | null;
+  openai_base_url?: string | null;
+  openai_modelo?: string | null;
   gemini_api_key?: string | null;
+  openai_compat_api_key?: string | null;
   openalex_api_key?: string | null;
 }
 
@@ -133,7 +206,10 @@ const VARIABLE_DE_CAMPO: Record<string, keyof ConfiguracionGuardada> = {
   RECALCULO_MAX_CANDIDATOS: 'max_candidatos',
   LLM_LLAMADAS_POR_MINUTO: 'llamadas_por_minuto',
   CROSSREF_MAILTO: 'crossref_mailto',
+  OPENAI_COMPAT_BASE_URL: 'openai_base_url',
+  OPENAI_COMPAT_MODEL: 'openai_modelo',
   GEMINI_API_KEY: 'gemini_api_key',
+  OPENAI_COMPAT_API_KEY: 'openai_compat_api_key',
   OPENALEX_API_KEY: 'openalex_api_key',
 };
 

@@ -3,6 +3,7 @@
 // no es una función larga: la pantalla P-09 la invoca hasta que no queden pendientes.
 import type { UsuarioVerificado } from './auth.ts';
 import { buscarYClasificar } from './busqueda.ts';
+import { modeloDelProveedor } from './configuracion.ts';
 import type { Dependencias } from './dependencias.ts';
 import { ErrorApi, ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
 import type { Resultado } from './http.ts';
@@ -99,7 +100,9 @@ export async function paso(
   // Se arman antes de tocar el estado: si falta una clave, el cálculo no cambia.
   const fuentes = fuentesDe(calculo);
   const proveedores = dependencias.proveedores(fuentes);
-  const clasificador = dependencias.clasificador(parametros?.modelo ?? configuracion.modelo);
+  const clasificador = dependencias.clasificador(
+    parametros?.modelo ?? modeloDelProveedor(configuracion),
+  );
 
   // Una invocación sobre un cálculo pausado lo reanuda (BRIEF §13.5).
   if (calculo.estado === 'pausado') {

@@ -2,6 +2,7 @@
 // reemplazarlo por falsos en las pruebas.
 import type { VerificadorAdmin } from './auth.ts';
 import { GeminiClasificador } from './clasificador.ts';
+import { ClasificadorCompatibleOpenAI } from './clasificador_openai.ts';
 import {
   combinarConEntorno,
   type Configuracion,
@@ -32,7 +33,7 @@ export interface Dependencias {
   clasificador(modelo: string): Clasificador;
 }
 
-/** Lo que se puede reemplazar en las pruebas: reloj y `fetch` de Gemini. */
+/** Lo que se puede reemplazar en las pruebas: reloj y `fetch` del clasificador. */
 export interface OpcionesDependencias {
   ahora?: () => number;
   esperar?: (ms: number) => Promise<void>;
@@ -49,7 +50,7 @@ function faltaSecreto(variable: string): ErrorApi {
 
 /**
  * Elige las implementaciones según `LLM_PROVIDER` (BRIEF §13.4, §13.6): con `fake` no hay red ni
- * claves; con `gemini` se usan OpenAlex, Crossref y Gemini.
+ * claves; con `gemini` u `openai` se usan OpenAlex, Crossref y Gemini o el proveedor compatible.
  */
 export function crearDependencias(
   leer: (nombre: string) => string | undefined,
@@ -82,8 +83,21 @@ export function crearDependencias(
     },
     clasificador(modelo) {
       if (configuracion.proveedorLlm === 'fake') return new ClasificadorFalso();
+      if (configuracion.proveedorLlm === 'openai') {
+        if (configuracion.openaiBaseUrl === undefined) throw faltaSecreto('OPENAI_COMPAT_BASE_URL');
+        if (modelo === '') throw faltaSecreto('OPENAI_COMPAT_MODEL');
+        if (configuracion.openaiApiKey === undefined) throw faltaSecreto('OPENAI_COMPAT_API_KEY');
+        // Mismo ritmo por minuto y mismos reintentos que Gemini (issue #39).
+        return new ClasificadorCompatibleOpenAI({
+          apiKey: configuracion.openaiApiKey,
+          urlBase: configuracion.openaiBaseUrl,
+          modelo,
+          ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
+          ritmo: new RitmoDeLlamadas({ ahora, esperar }, configuracion.llamadasPorMinuto),
+        });
+      }
       if (configuracion.geminiApiKey === undefined) throw faltaSecreto('GEMINI_API_KEY');
-      // El clasificador falso (arriba) no espera: solo Gemini tiene ritmo y reintentos.
+      // El clasificador falso (arriba) no espera: solo los clasificadores con IA tienen ritmo.
       return new GeminiClasificador({
         apiKey: configuracion.geminiApiKey,
         modelo,

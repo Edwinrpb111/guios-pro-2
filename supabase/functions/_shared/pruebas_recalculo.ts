@@ -138,6 +138,9 @@ export const CONFIGURACION_PRUEBA: Configuracion = {
   openalexApiKey: undefined,
   crossrefMailto: undefined,
   geminiApiKey: undefined,
+  openaiBaseUrl: undefined,
+  openaiModelo: undefined,
+  openaiApiKey: undefined,
 };
 
 /** Cada subfactor trae 3 candidatos con DOI propios de la consulta (se aceptan todos por defecto). */
