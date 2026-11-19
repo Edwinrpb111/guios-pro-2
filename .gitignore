@@ -26,3 +26,6 @@ Thumbs.db
 
 # Seguimiento local del agente
 odd/
+
+# Enlace local de la CLI de Vercel
+.vercel
