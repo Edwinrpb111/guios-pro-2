@@ -1,6 +1,12 @@
 import { useState } from 'react';
-import type { BusquedaRegistro, LoteRegistro, PasoRegistro, RegistroPaso } from '../admin/tipos';
-import { formatearDuracion, formatearHora } from './formato';
+import type {
+  BusquedaRegistro,
+  EtapaPaso,
+  LoteRegistro,
+  PasoRegistro,
+  RegistroPaso,
+} from '../admin/tipos';
+import { formatearDuracion, formatearEntero, formatearHora } from './formato';
 
 export interface RegistroRecalculoProps {
   /** Pasos con actividad, del más reciente al más antiguo. */
@@ -61,6 +67,18 @@ function lineaBusqueda(b: BusquedaRegistro): string {
   return `${fuente}: ${detalle} · ${formatearDuracion(b.ms)}`;
 }
 
+/** «tokens: 1.234 de entrada, 567 de salida, 4.000 de razonamiento»; `null` si no se informó ninguno. */
+function textoTokens(l: LoteRegistro): string | null {
+  const partes = [
+    l.tokensEntrada === null ? null : `${formatearEntero(l.tokensEntrada)} de entrada`,
+    l.tokensSalida === null ? null : `${formatearEntero(l.tokensSalida)} de salida`,
+    l.tokensRazonamiento === null
+      ? null
+      : `${formatearEntero(l.tokensRazonamiento)} de razonamiento`,
+  ].filter((parte) => parte !== null);
+  return partes.length === 0 ? null : `tokens: ${partes.join(', ')}`;
+}
+
 function lineaLote(l: LoteRegistro): string {
   const cabecera = `Lote ${numero(l.n)}${l.tamano === null ? '' : ` (${l.tamano})`}`;
   const resultado = l.resultado === null ? '—' : (RESULTADOS_LOTE[l.resultado] ?? l.resultado);
@@ -69,10 +87,40 @@ function lineaLote(l: LoteRegistro): string {
     plural(l.reintentos, 'reintento', 'reintentos'),
     resultado,
     plural(l.aceptados, 'aceptado', 'aceptados'),
-  ].join(' · ');
+    textoTokens(l),
+  ]
+    .filter((parte) => parte !== null)
+    .join(' · ');
 }
 
-function Cuerpo({ paso, registro }: { paso: PasoRegistro; registro: RegistroPaso | null }) {
+/** Qué está haciendo el paso en curso, según la etapa y las tandas que ya terminaron. */
+function textoEtapa(etapa: EtapaPaso | null, registro: RegistroPaso | null): string {
+  switch (etapa) {
+    case 'buscando':
+      return 'Buscando candidatos en OpenAlex y Crossref…';
+    case 'clasificando': {
+      const terminadas = registro?.lotes.length ?? 0;
+      const total = registro?.lotesTotal ?? null;
+      return total === null
+        ? 'Clasificando con la IA…'
+        : `Clasificando con la IA: ${terminadas} de ${total} ${total === 1 ? 'tanda terminada' : 'tandas terminadas'}`;
+    }
+    case 'guardando':
+      return 'Guardando las referencias aceptadas…';
+    default:
+      return 'Iniciando el paso…';
+  }
+}
+
+function Cuerpo({
+  paso,
+  registro,
+  enCurso,
+}: {
+  paso: PasoRegistro;
+  registro: RegistroPaso | null;
+  enCurso: boolean;
+}) {
   const aceptados = registro?.aceptados ?? paso.aceptados;
   const mensaje = registro?.mensaje ?? paso.detalle;
   const meta = [
@@ -100,12 +148,21 @@ function Cuerpo({ paso, registro }: { paso: PasoRegistro; registro: RegistroPaso
       <p>
         Aceptados: {aceptados} de {plural(paso.candidatos, 'candidato', 'candidatos')}
       </p>
-      {mensaje !== null && (
+      {/* Mientras el paso corre, el mensaje guardado es el provisional («El paso no terminó…»):
+          no es un error, así que se muestra la etapa en su lugar (issue #45). */}
+      {enCurso && (
+        <p className="admin-ayuda" role="status">
+          {textoEtapa(registro?.etapa ?? null, registro)}
+        </p>
+      )}
+      {!enCurso && mensaje !== null && (
         <p className="admin-registro__mensaje" data-resultado={registro?.resultado ?? paso.estado}>
           {mensaje}
         </p>
       )}
-      {registro === null && <p className="admin-ayuda">Este paso no tiene registro detallado.</p>}
+      {!enCurso && registro === null && (
+        <p className="admin-ayuda">Este paso no tiene registro detallado.</p>
+      )}
     </div>
   );
 }
@@ -171,7 +228,11 @@ export function RegistroRecalculo({
                         </span>
                       )}
                     </summary>
-                    <Cuerpo paso={paso} registro={paso.registro} />
+                    <Cuerpo
+                      paso={paso}
+                      registro={paso.registro}
+                      enCurso={etiqueta === 'en curso…'}
+                    />
                   </details>
                 </li>
               );

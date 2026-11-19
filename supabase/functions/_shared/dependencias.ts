@@ -102,6 +102,7 @@ export function crearDependencias(
           apiKey: configuracion.openaiApiKey,
           urlBase: configuracion.openaiBaseUrl,
           modelo,
+          desactivarRazonamiento: configuracion.desactivarRazonamiento,
           ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
           ...(presupuesto === undefined ? {} : { presupuesto }),
           ritmo: new RitmoDeLlamadas(
@@ -117,6 +118,7 @@ export function crearDependencias(
       return new GeminiClasificador({
         apiKey: configuracion.geminiApiKey,
         modelo,
+        desactivarRazonamiento: configuracion.desactivarRazonamiento,
         ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
         ...(presupuesto === undefined ? {} : { presupuesto }),
         ritmo: new RitmoDeLlamadas(

@@ -121,7 +121,21 @@ Deno.test(
         { fuente: 'openalex', ms: 1234, candidatos: 3, error: null },
         { fuente: 'crossref', ms: 1234, candidatos: 3, error: null },
       ],
-      lotes: [{ n: 1, tamano: 6, ms: 2345, reintentos: 0, resultado: 'ok', aceptados: 4 }],
+      lotes: [
+        {
+          n: 1,
+          tamano: 6,
+          ms: 2345,
+          reintentos: 0,
+          resultado: 'ok',
+          aceptados: 4,
+          tokens_entrada: null,
+          tokens_salida: null,
+          tokens_razonamiento: null,
+        },
+      ],
+      etapa: null,
+      lotes_total: 1,
       aceptados: 4,
       resultado: 'hecho',
       mensaje: null,
@@ -177,6 +191,8 @@ Deno.test('registro: una fuente caída queda anotada con su error y sin lotes', 
       { fuente: 'openalex', ms: 0, candidatos: 0, error: 'OpenAlex alcanzó su límite de uso.' },
     ],
     lotes: [],
+    etapa: null,
+    lotes_total: null,
     aceptados: 0,
     resultado: 'pausado',
     mensaje: 'OpenAlex alcanzó su límite de uso.',
@@ -198,7 +214,17 @@ Deno.test('registro: un lote que falla queda como pausado con el motivo del lote
   assertEquals(registro.mensaje, 'Sin cuota.');
   assertEquals(registro.aceptados, 0, 'no se guardó nada: no hay aceptados');
   assertEquals(registro.lotes, [
-    { n: 1, tamano: 6, ms: 0, reintentos: 0, resultado: 'reintento_agotado', aceptados: 0 },
+    {
+      n: 1,
+      tamano: 6,
+      ms: 0,
+      reintentos: 0,
+      resultado: 'reintento_agotado',
+      aceptados: 0,
+      tokens_entrada: null,
+      tokens_salida: null,
+      tokens_razonamiento: null,
+    },
   ]);
   assertEquals(registroDe(deps, id).estado, 'pendiente');
 });

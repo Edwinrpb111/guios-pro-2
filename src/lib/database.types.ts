@@ -77,8 +77,10 @@ export type Database = {
           actualizado_en: string;
           actualizado_por: string | null;
           crossref_mailto: string | null;
+          desactivar_razonamiento: boolean | null;
           id: boolean;
           llamadas_por_minuto: number | null;
+          llamadas_simultaneas: number | null;
           max_candidatos: number | null;
           modelo: string | null;
           openai_base_url: string | null;
@@ -91,8 +93,10 @@ export type Database = {
           actualizado_en?: string;
           actualizado_por?: string | null;
           crossref_mailto?: string | null;
+          desactivar_razonamiento?: boolean | null;
           id?: boolean;
           llamadas_por_minuto?: number | null;
+          llamadas_simultaneas?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
           openai_base_url?: string | null;
@@ -104,8 +108,10 @@ export type Database = {
           actualizado_en?: string;
           actualizado_por?: string | null;
           crossref_mailto?: string | null;
+          desactivar_razonamiento?: boolean | null;
           id?: boolean;
           llamadas_por_minuto?: number | null;
+          llamadas_simultaneas?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
           openai_base_url?: string | null;

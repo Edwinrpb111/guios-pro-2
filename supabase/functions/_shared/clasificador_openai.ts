@@ -5,20 +5,43 @@
 import {
   ErrorPasoSinTiempo,
   ErrorProveedorNoDisponible,
+  MENSAJE_IA_TARDO,
   ErrorRespuestaInvalida,
 } from './errores.ts';
 import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import { armarPrompt, INSTRUCCION_SISTEMA, leerVeredictos } from './prompt.ts';
 import { leerRetryAfter, type RitmoDeLlamadas } from './ritmo.ts';
-import type { Candidato, Clasificador, Veredicto } from './tipos.ts';
+import type { Candidato, Clasificador, MedicionLlamada, Veredicto } from './tipos.ts';
+import { leerUsoOpenAI } from './uso_tokens.ts';
 
-/** Tiempo propio de cada llamada; el paso entero tiene además su tope de 110 s (issue #43). */
-const TIEMPO_MAXIMO_MS = 30_000;
+/**
+ * Tiempo propio de cada llamada a la IA (issue #45); el paso entero tiene además su tope de 110 s
+ * (issue #43). Pasado ese tiempo la llamada se corta y el paso se pausa con un mensaje claro.
+ */
+const TIEMPO_MAXIMO_MS = 45_000;
 
 // Mensajes neutrales: el proveedor lo elige el administrador, no se nombra uno en particular y
 // nunca se incluye la clave ni la dirección (podría llevar datos del servicio).
 const MENSAJE_NO_DISPONIBLE =
   'El proveedor de IA no está disponible o alcanzó su cuota. Reanuda el cálculo más tarde.';
+
+/**
+ * Parámetros que desactivan el razonamiento en los proveedores que se conocen (issue #45). Cada
+ * uno usa el suyo; con un host desconocido no se manda NADA (un parámetro de más puede hacer que
+ * el proveedor rechace la petición). El host se compara completo: `openrouter.ai.otro.example`
+ * no es OpenRouter.
+ */
+export function parametrosSinRazonamiento(urlBase: string): Record<string, unknown> {
+  let host: string;
+  try {
+    host = new URL(urlBase).hostname.toLowerCase();
+  } catch {
+    return {};
+  }
+  if (host === 'openrouter.ai') return { reasoning: { enabled: false } };
+  if (host === 'api.deepseek.com') return { thinking: { type: 'disabled' } };
+  return {};
+}
 
 /**
  * Los modelos suelen envolver el JSON en un bloque de código o en texto, y con
@@ -82,12 +105,14 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
   readonly #fetch: typeof fetch;
   readonly #ritmo: RitmoDeLlamadas | undefined;
   readonly #presupuesto: PresupuestoPaso | undefined;
+  readonly #desactivarRazonamiento: boolean;
 
   /**
    * `urlBase` es la dirección https ya validada (ver `normalizarUrlBase`), p. ej.
    * `https://openrouter.ai/api/v1`. Con `ritmo` espera antes de cada llamada y reintenta un
    * 429/503 unas veces, igual que Gemini (issue #39); sin `ritmo` no espera ni reintenta. Con
-   * `presupuesto`, cada llamada dura como máximo lo que queda del paso (issue #43).
+   * `presupuesto`, cada llamada dura como máximo lo que queda del paso (issue #43). Con
+   * `desactivarRazonamiento` manda el parámetro propio del proveedor, si se conoce (issue #45).
    */
   constructor(opciones: {
     apiKey: string;
@@ -96,6 +121,7 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     fetch?: typeof fetch;
     ritmo?: RitmoDeLlamadas;
     presupuesto?: PresupuestoPaso;
+    desactivarRazonamiento?: boolean;
   }) {
     this.#apiKey = opciones.apiKey;
     this.#urlBase = opciones.urlBase.replace(/\/+$/, '');
@@ -103,6 +129,7 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     this.#fetch = opciones.fetch ?? fetch;
     this.#ritmo = opciones.ritmo;
     this.#presupuesto = opciones.presupuesto;
+    this.#desactivarRazonamiento = opciones.desactivarRazonamiento ?? false;
   }
 
   /** Reintentos acumulados en este paso, para que el registro los reparta por lote. */
@@ -115,12 +142,14 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     subfactor: string,
     contexto: string,
     candidatos: Candidato[],
+    medicion?: MedicionLlamada,
   ): Promise<Veredicto[]> {
     // El modelo va en el cuerpo (puede llevar «/» y «:»), nunca en la dirección.
     const cuerpoPeticion = JSON.stringify({
       model: this.#modelo,
       temperature: 0,
       response_format: { type: 'json_object' },
+      ...(this.#desactivarRazonamiento ? parametrosSinRazonamiento(this.#urlBase) : {}),
       messages: [
         { role: 'system', content: INSTRUCCION_SISTEMA },
         { role: 'user', content: armarPrompt(factor, subfactor, contexto, candidatos) },
@@ -130,6 +159,7 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     let respuesta: Response;
     let cuerpo: unknown;
     for (let intento = 0; ; intento++) {
+      if (medicion !== undefined) medicion.reintentos = intento;
       // Cada llamada, también un reintento, respeta el ritmo configurado.
       await this.#ritmo?.esperarTurno();
       const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
@@ -149,12 +179,15 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
       } catch (error) {
         // Si la señal la acotó el tope del paso, no es un fallo de red: se pausa por tiempo.
         if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
+        // Pasaron los 45 s propios de la llamada: no es un problema de conexión.
+        if (esErrorDeTiempo(error)) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
         throw new ErrorProveedorNoDisponible(
           'No se pudo conectar con el proveedor de IA. Revisa la dirección base y la conexión, y reanuda el cálculo.',
         );
       }
       cuerpo = await respuesta.json().catch(() => null);
       if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
+      if (signal.aborted) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
 
       // Solo el límite por minuto (429) y la saturación (503) se reintentan, esperando lo que
       // pida `Retry-After` (en segundos); si se agotan los reintentos o el tiempo del paso, el
@@ -190,6 +223,7 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
         'sin_saldo',
       );
     }
+    if (medicion !== undefined && respuesta.ok) Object.assign(medicion, leerUsoOpenAI(cuerpo));
     if (!respuesta.ok) {
       throw new ErrorRespuestaInvalida(
         `El proveedor de IA rechazó la petición (HTTP ${respuesta.status}). Revisa la dirección base y el modelo.`,

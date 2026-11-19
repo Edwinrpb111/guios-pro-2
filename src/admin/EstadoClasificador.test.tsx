@@ -8,6 +8,8 @@ const VACIOS = {
   umbral: null,
   maxCandidatos: null,
   llamadasPorMinuto: null,
+  llamadasSimultaneas: null,
+  desactivarRazonamiento: null,
   crossrefMailto: null,
   openaiBaseUrl: null,
   openaiModelo: null,
@@ -25,7 +27,7 @@ describe('EstadoClasificador (P-09, issue #37)', () => {
     const caja = within(await screen.findByRole('region', { name: 'Estado del clasificador' }));
     expect(
       await caja.findByText(
-        'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 (por defecto) · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
+        'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 (por defecto) · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · 5 llamadas simultáneas (por defecto) · clave guardada en la app',
       ),
     ).toBeInTheDocument();
     expect(caja.getByText(/Un valor «por defecto» puede cambiarse con un secreto/)).toBeVisible();
@@ -71,7 +73,7 @@ describe('EstadoClasificador (P-09, issue #37)', () => {
     const caja = within(await screen.findByRole('region', { name: 'Estado del clasificador' }));
     expect(
       await caja.findByText(
-        'Compatible con OpenAI · deepseek-chat · api.deepseek.com · umbral 0,7 (por defecto) · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
+        'Compatible con OpenAI · deepseek-chat · api.deepseek.com · umbral 0,7 (por defecto) · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · 5 llamadas simultáneas (por defecto) · clave guardada en la app',
       ),
     ).toBeInTheDocument();
     expect(caja.getByText(/Un valor «por defecto» puede cambiarse con un secreto/)).toBeVisible();

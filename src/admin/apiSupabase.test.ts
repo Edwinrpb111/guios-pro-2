@@ -511,6 +511,8 @@ describe('crearApiAdmin (Supabase)', () => {
       umbral: 0.7,
       max_candidatos: null,
       llamadas_por_minuto: 12,
+      llamadas_simultaneas: 3,
+      desactivar_razonamiento: true,
       crossref_mailto: 'equipo@unemi.edu.ec',
       openai_base_url: 'https://openrouter.ai/api/v1',
       openai_modelo: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -549,6 +551,8 @@ describe('crearApiAdmin (Supabase)', () => {
           umbral: 0.7,
           maxCandidatos: null,
           llamadasPorMinuto: 12,
+          llamadasSimultaneas: 3,
+          desactivarRazonamiento: true,
           crossrefMailto: 'equipo@unemi.edu.ec',
           openaiBaseUrl: 'https://openrouter.ai/api/v1',
           openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -576,11 +580,29 @@ describe('crearApiAdmin (Supabase)', () => {
       const pasos = llamadas.find((l) => l.tabla === 'configuracion_recalculo')?.pasos ?? [];
       // Nunca se piden columnas de claves: solo existen en Vault.
       expect(JSON.stringify(pasos)).not.toMatch(/api_key/);
+      // Y las dos columnas de #45: llamadas simultáneas y razonamiento.
+      expect(JSON.stringify(pasos)).toMatch(/llamadas_simultaneas, desactivar_razonamiento/);
       // Sí se piden la dirección base y el modelo del proveedor compatible (no son secretos).
       expect(JSON.stringify(pasos)).toMatch(/openai_base_url, openai_modelo/);
       expect(
         llamadas.find((l) => l.tabla === 'configuracion_recalculo_cambio')?.pasos,
       ).toContainEqual(['limit', [10]]);
+    });
+
+    it('las columnas nuevas sin definir llegan como null', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: {
+          configuracion_recalculo: {
+            data: { ...FILA, llamadas_simultaneas: null, desactivar_razonamiento: null },
+            error: null,
+          },
+        },
+        rpc: { estado_claves_recalculo: { data: ESTADO, error: null } },
+      });
+      expect((await crearApiAdmin(cliente).obtenerConfiguracion()).parametros).toMatchObject({
+        llamadasSimultaneas: null,
+        desactivarRazonamiento: null,
+      });
     });
 
     it('acepta el proveedor «openai» y rechaza uno desconocido', async () => {
@@ -636,6 +658,8 @@ describe('crearApiAdmin (Supabase)', () => {
         umbral: 0.8,
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
+        llamadasSimultaneas: 8,
+        desactivarRazonamiento: true,
         crossrefMailto: null,
         openaiBaseUrl: 'https://api.groq.com/openai/v1',
         openaiModelo: 'llama-3.3-70b-versatile',
@@ -650,6 +674,8 @@ describe('crearApiAdmin (Supabase)', () => {
               umbral: 0.8,
               max_candidatos: 15,
               llamadas_por_minuto: 30,
+              llamadas_simultaneas: 8,
+              desactivar_razonamiento: true,
               crossref_mailto: null,
               openai_base_url: 'https://api.groq.com/openai/v1',
               openai_modelo: 'llama-3.3-70b-versatile',
@@ -672,6 +698,8 @@ describe('crearApiAdmin (Supabase)', () => {
           umbral: null,
           maxCandidatos: null,
           llamadasPorMinuto: null,
+          llamadasSimultaneas: null,
+          desactivarRazonamiento: null,
           crossrefMailto: null,
           openaiBaseUrl: null,
           openaiModelo: null,

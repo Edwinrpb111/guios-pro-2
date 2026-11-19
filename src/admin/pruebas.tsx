@@ -11,6 +11,8 @@ import type {
   ConfiguracionRecalculo,
   FactorCatalogo,
   FilaSugerida,
+  LoteRegistro,
+  RegistroPaso,
 } from './tipos';
 
 export const CALCULO_TESIS: CalculoResumen = {
@@ -89,6 +91,8 @@ export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
     umbral: 0.7,
     maxCandidatos: null,
     llamadasPorMinuto: null,
+    llamadasSimultaneas: null,
+    desactivarRazonamiento: null,
     crossrefMailto: 'equipo@unemi.edu.ec',
     openaiBaseUrl: null,
     openaiModelo: null,
@@ -109,6 +113,38 @@ export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
     { id: 1, cambio: 'parametros', realizadoPor: null, realizadoEn: '2026-11-18T14:00:00Z' },
   ],
 };
+
+export const SIN_TOKENS = { tokensEntrada: null, tokensSalida: null, tokensRazonamiento: null };
+
+/** Una tanda del registro con valores razonables; `parcial` pisa lo que haga falta. */
+export function crearLote(parcial: Partial<LoteRegistro> = {}): LoteRegistro {
+  return {
+    n: 1,
+    tamano: 10,
+    ms: 1000,
+    reintentos: 0,
+    resultado: 'ok',
+    aceptados: 0,
+    ...SIN_TOKENS,
+    ...parcial,
+  };
+}
+
+/** Un registro de paso vacío; `parcial` pisa lo que haga falta. */
+export function crearRegistro(parcial: Partial<RegistroPaso> = {}): RegistroPaso {
+  return {
+    intento: 1,
+    proveedor: 'gemini',
+    busqueda: [],
+    lotes: [],
+    etapa: null,
+    lotesTotal: null,
+    aceptados: null,
+    resultado: null,
+    mensaje: null,
+    ...parcial,
+  };
+}
 
 /** Valor que la prueba sabe que existe (evita aserciones no nulas). */
 export function definido<T>(valor: T | undefined): T {

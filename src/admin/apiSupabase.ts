@@ -168,7 +168,7 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
     cliente
       .from('configuracion_recalculo')
       .select(
-        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, crossref_mailto, openai_base_url, openai_modelo, actualizado_en',
+        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, llamadas_simultaneas, desactivar_razonamiento, crossref_mailto, openai_base_url, openai_modelo, actualizado_en',
       )
       .maybeSingle()
       .then(exigir),
@@ -198,6 +198,8 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
       umbral: fila.umbral === null ? null : Number(fila.umbral),
       maxCandidatos: fila.max_candidatos,
       llamadasPorMinuto: fila.llamadas_por_minuto,
+      llamadasSimultaneas: fila.llamadas_simultaneas,
+      desactivarRazonamiento: fila.desactivar_razonamiento,
       crossrefMailto: fila.crossref_mailto,
       openaiBaseUrl: fila.openai_base_url,
       openaiModelo: fila.openai_modelo,
@@ -402,6 +404,8 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
             umbral: p.umbral,
             max_candidatos: p.maxCandidatos,
             llamadas_por_minuto: p.llamadasPorMinuto,
+            llamadas_simultaneas: p.llamadasSimultaneas,
+            desactivar_razonamiento: p.desactivarRazonamiento,
             crossref_mailto: p.crossrefMailto,
             openai_base_url: p.openaiBaseUrl,
             openai_modelo: p.openaiModelo,

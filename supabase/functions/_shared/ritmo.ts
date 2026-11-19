@@ -20,6 +20,10 @@ export const RELOJ_REAL: Reloj = {
 export const LLAMADAS_POR_MINUTO_POR_DEFECTO = 15;
 export const LLAMADAS_POR_MINUTO_MAXIMO = 1000;
 
+/** Tandas de un paso que se mandan a la IA a la vez (issue #45, S16a, ADR-014). */
+export const LLAMADAS_SIMULTANEAS_POR_DEFECTO = 5;
+export const LLAMADAS_SIMULTANEAS_MAXIMO = 10;
+
 /** Reintentos tras un 429/503 antes de pausar el cálculo. */
 export const REINTENTOS_MAXIMOS = 3;
 /** Cada espera de reintento se limita a esto, aunque Gemini pida más. */
@@ -43,7 +47,12 @@ export class RitmoDeLlamadas {
   readonly #presupuestoMs: number;
   readonly #paso: PresupuestoPaso | undefined;
   #ultimaLlamada: number | undefined;
+  /** Tiempo de pared esperado en este paso (las esperas simultáneas se cuentan una sola vez). */
   #esperado = 0;
+  /** Hora hasta la que ya hay una espera contada: lo que se solape no se vuelve a sumar. */
+  #hastaEsperado = 0;
+  /** Cola de turnos: con tandas en paralelo, los turnos se reparten de uno en uno. */
+  #cola: Promise<void> = Promise.resolve();
   #reintentos = 0;
 
   /** `paso`, si se da, limita además cada espera al tiempo que queda del paso (110 s). */
@@ -74,25 +83,43 @@ export class RitmoDeLlamadas {
     }
   }
 
+  /** Tiempo de pared nuevo que sumaría una espera de `ms` que empieza ahora. */
+  #incremento(ms: number): number {
+    const ahora = this.#reloj.ahora();
+    return Math.max(0, ahora + ms - Math.max(ahora, this.#hastaEsperado));
+  }
+
   async #esperar(ms: number): Promise<void> {
     if (ms <= 0) return;
-    this.#esperado += ms;
+    const ahora = this.#reloj.ahora();
+    this.#esperado += this.#incremento(ms);
+    this.#hastaEsperado = Math.max(this.#hastaEsperado, ahora + ms);
     await this.#reloj.esperar(ms);
   }
 
   /**
    * Espera lo necesario antes de CADA llamada a Gemini. Como no se sabe cuándo fue la última
    * llamada del paso anterior, la primera de un paso espera el intervalo completo; las
-   * siguientes solo lo que falte desde la anterior.
+   * siguientes solo lo que falte desde la anterior. Con varias tandas a la vez (issue #45) los
+   * turnos se atienden de uno en uno, así el ritmo por minuto se respeta entre todas.
    */
-  async esperarTurno(): Promise<void> {
+  esperarTurno(): Promise<void> {
+    const turno = this.#cola.then(() => this.#esperarTurno());
+    this.#cola = turno.then(
+      () => undefined,
+      () => undefined,
+    );
+    return turno;
+  }
+
+  async #esperarTurno(): Promise<void> {
     const falta =
       this.#ultimaLlamada === undefined
         ? this.#intervaloMs
         : this.#ultimaLlamada + this.#intervaloMs - this.#reloj.ahora();
     // El ritmo también cuenta para el tope del paso: si no cabe, se pausa (y se reanuda luego)
     // en lugar de agotar el tiempo de la Edge Function.
-    if (falta > 0 && this.#esperado + falta > this.#presupuestoMs) {
+    if (falta > 0 && this.#esperado + this.#incremento(falta) > this.#presupuestoMs) {
       throw new ErrorProveedorNoDisponible(
         'Las llamadas por minuto configuradas son muy pocas para completar este paso a tiempo. Sube las llamadas por minuto y reanuda el cálculo, o inicia uno nuevo con menos candidatos.',
       );
@@ -111,7 +138,7 @@ export class RitmoDeLlamadas {
     if (intento >= REINTENTOS_MAXIMOS) return false;
     const pedida = sugeridaMs ?? ESPERA_BASE_REINTENTO_MS * 2 ** intento;
     const espera = Math.min(pedida, ESPERA_MAXIMA_REINTENTO_MS);
-    if (this.#esperado + espera > this.#presupuestoMs) return false;
+    if (this.#esperado + this.#incremento(espera) > this.#presupuestoMs) return false;
     // Si esperar deja sin tiempo para la siguiente llamada, el que manda es el tope del paso.
     this.#exigirTiempo(espera);
     await this.#esperar(espera);

@@ -10,6 +10,7 @@ export const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
 export const UMBRAL_POR_DEFECTO = 0.7;
 export const MAX_CANDIDATOS_POR_DEFECTO = 50;
 export const LLAMADAS_POR_MINUTO_POR_DEFECTO = 15;
+export const LLAMADAS_SIMULTANEAS_POR_DEFECTO = 5;
 
 export interface ResumenClasificador {
   /** `secreto`: el proveedor lo decide LLM_PROVIDER, que la app no puede ver. */
@@ -25,10 +26,10 @@ export interface ResumenClasificador {
 const formatoDecimal = new Intl.NumberFormat('es-EC', { maximumFractionDigits: 3 });
 
 const NOTA_POR_DEFECTO =
-  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_MODEL, LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS, LLM_LLAMADAS_POR_MINUTO).';
+  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_MODEL, LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS, LLM_LLAMADAS_POR_MINUTO, LLM_LLAMADAS_SIMULTANEAS).';
 // Con el proveedor compatible el modelo no tiene valor por defecto (es OPENAI_COMPAT_MODEL).
 const NOTA_POR_DEFECTO_OPENAI =
-  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS, LLM_LLAMADAS_POR_MINUTO).';
+  'Un valor «por defecto» puede cambiarse con un secreto de Supabase (LLM_UMBRAL, RECALCULO_MAX_CANDIDATOS, LLM_LLAMADAS_POR_MINUTO, LLM_LLAMADAS_SIMULTANEAS).';
 
 /** Servidor de una dirección base guardada; si no se puede leer, se muestra tal cual. */
 function servidorDe(direccion: string): string {
@@ -59,16 +60,28 @@ export function resumirClasificador({
   const detalleUmbral = `umbral ${formatoDecimal.format(parametros.umbral ?? UMBRAL_POR_DEFECTO)}${parametros.umbral === null ? ' (por defecto)' : ''}`;
   const detalleMaximo = `máx. ${parametros.maxCandidatos ?? MAX_CANDIDATOS_POR_DEFECTO} candidatos${parametros.maxCandidatos === null ? ' (por defecto)' : ''}`;
   const detalleRitmo = `${llamadas} ${llamadas === 1 ? 'llamada' : 'llamadas'} por minuto${parametros.llamadasPorMinuto === null ? ' (por defecto)' : ''}`;
+  const simultaneas = parametros.llamadasSimultaneas ?? LLAMADAS_SIMULTANEAS_POR_DEFECTO;
+  const detalleSimultaneas = `${simultaneas} ${simultaneas === 1 ? 'llamada simultánea' : 'llamadas simultáneas'}${parametros.llamadasSimultaneas === null ? ' (por defecto)' : ''}`;
+  // Solo se nombra cuando está activado: sin marcar no se envía nada especial al proveedor.
+  const detalleRazonamiento =
+    parametros.desactivarRazonamiento === true ? ['razonamiento desactivado'] : [];
 
   if (parametros.proveedorLlm === 'openai') {
     return resumirCompatible({
       parametros,
       claves,
-      detalles: [detalleUmbral, detalleMaximo, detalleRitmo],
+      detalles: [
+        detalleUmbral,
+        detalleMaximo,
+        detalleRitmo,
+        detalleSimultaneas,
+        ...detalleRazonamiento,
+      ],
       usaDefecto: [
         parametros.umbral === null,
         parametros.maxCandidatos === null,
         parametros.llamadasPorMinuto === null,
+        parametros.llamadasSimultaneas === null,
       ].some(Boolean),
     });
   }
@@ -78,12 +91,15 @@ export function resumirClasificador({
     parametros.umbral === null,
     parametros.maxCandidatos === null,
     parametros.llamadasPorMinuto === null,
+    parametros.llamadasSimultaneas === null,
   ];
   const detalles = [
     `modelo ${parametros.modelo ?? MODELO_POR_DEFECTO}${parametros.modelo === null ? ' (por defecto)' : ''}`,
     detalleUmbral,
     detalleMaximo,
     detalleRitmo,
+    detalleSimultaneas,
+    ...detalleRazonamiento,
   ];
   const avisos = usaDefecto.some(Boolean) ? [NOTA_POR_DEFECTO] : [];
 

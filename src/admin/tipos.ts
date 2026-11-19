@@ -94,7 +94,10 @@ export interface BusquedaRegistro {
   error: string | null;
 }
 
-/** Un lote enviado a la IA. */
+/** Etapa de un paso en curso (`registro.etapa`, issue #45); `null` = el paso terminó. */
+export type EtapaPaso = 'buscando' | 'clasificando' | 'guardando';
+
+/** Una tanda (lote) enviada a la IA. */
 export interface LoteRegistro {
   n: number | null;
   tamano: number | null;
@@ -102,6 +105,10 @@ export interface LoteRegistro {
   reintentos: number | null;
   resultado: string | null;
   aceptados: number | null;
+  /** Tokens que gastó la tanda (si el proveedor los informa): entrada, salida y razonamiento. */
+  tokensEntrada: number | null;
+  tokensSalida: number | null;
+  tokensRazonamiento: number | null;
 }
 
 /** Registro del último intento de un paso (`recalculo_paso.registro`), ya validado. */
@@ -109,7 +116,12 @@ export interface RegistroPaso {
   intento: number | null;
   proveedor: string | null;
   busqueda: BusquedaRegistro[];
+  /** Tandas ya terminadas, en el orden en que terminaron. */
   lotes: LoteRegistro[];
+  /** Etapa del paso mientras corre; `null` si terminó o el registro no la trae. */
+  etapa: EtapaPaso | null;
+  /** Tandas planificadas para el paso; `null` hasta que termina la búsqueda. */
+  lotesTotal: number | null;
   aceptados: number | null;
   resultado: string | null;
   mensaje: string | null;
@@ -169,6 +181,10 @@ export interface ParametrosRecalculo {
   maxCandidatos: number | null;
   /** Llamadas por minuto a la IA (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
   llamadasPorMinuto: number | null;
+  /** Tandas de un paso mandadas a la IA a la vez (1..10); `null` = LLM_LLAMADAS_SIMULTANEAS o 5. */
+  llamadasSimultaneas: number | null;
+  /** Pide al modelo que no razone antes de responder; `null` = LLM_DESACTIVAR_RAZONAMIENTO o false. */
+  desactivarRazonamiento: boolean | null;
   crossrefMailto: string | null;
   /** Dirección base https del proveedor compatible con OpenAI (issue #40); `null` = OPENAI_COMPAT_BASE_URL. */
   openaiBaseUrl: string | null;
