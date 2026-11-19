@@ -77,6 +77,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     await userEvent.type(screen.getByLabelText(/Umbral de confianza/), '0,8');
     await userEvent.type(maximo, '15');
     await userEvent.type(screen.getByLabelText('Llamadas a la IA por minuto'), '30');
+    await userEvent.type(screen.getByLabelText('Llamadas simultáneas a la IA (1 a 10)'), '4');
+    await userEvent.click(screen.getByLabelText('Desactivar razonamiento del modelo'));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
     await waitFor(() =>
@@ -86,6 +88,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         umbral: 0.8,
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
+        llamadasSimultaneas: 4,
+        desactivarRazonamiento: true,
         crossrefMailto: 'equipo@unemi.edu.ec',
         openaiBaseUrl: null,
         openaiModelo: null,
@@ -117,6 +121,56 @@ describe('AdminConfiguracionPage (issue #33)', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/llamadas por minuto/i);
     expect(api.guardarParametros).not.toHaveBeenCalled();
+  });
+
+  it('muestra «Llamadas simultáneas» y «Desactivar razonamiento» con lo guardado (issue #45)', async () => {
+    renderizar(apiCon({ llamadasSimultaneas: 3, desactivarRazonamiento: true }));
+    await abrirAvanzadas();
+    expect(await screen.findByLabelText('Llamadas simultáneas a la IA (1 a 10)')).toHaveValue('3');
+    expect(screen.getByLabelText('Desactivar razonamiento del modelo')).toBeChecked();
+  });
+
+  it('sin valores, llamadas simultáneas vacío con «5» de ejemplo y razonamiento sin marcar', async () => {
+    renderizar();
+    await abrirAvanzadas();
+    const campo = await screen.findByLabelText('Llamadas simultáneas a la IA (1 a 10)');
+    expect(campo).toHaveValue('');
+    expect(campo).toHaveAttribute('placeholder', '5');
+    expect(campo).toHaveAccessibleDescription(/vacío.*5/i);
+    expect(screen.getByLabelText('Desactivar razonamiento del modelo')).not.toBeChecked();
+  });
+
+  it('el razonamiento explica para qué servicios vale y que con otros no se envía nada', async () => {
+    renderizar();
+    await abrirAvanzadas();
+    const casilla = await screen.findByLabelText('Desactivar razonamiento del modelo');
+    expect(casilla).toHaveAccessibleDescription(/DeepSeek, OpenRouter y Gemini/);
+    expect(casilla).toHaveAccessibleDescription(/otros servicios no se envía nada/);
+  });
+
+  it.each(['0', '11', '2,5', 'todas'])(
+    'no guarda %s llamadas simultáneas y lo anuncia con role="alert"',
+    async (valor) => {
+      const api = crearApiFalsa();
+      renderizar(api);
+      await abrirAvanzadas();
+      await userEvent.type(
+        await screen.findByLabelText('Llamadas simultáneas a la IA (1 a 10)'),
+        valor,
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(/llamadas simultáneas.*1 y 10/i);
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    },
+  );
+
+  it('el resumen incluye las llamadas simultáneas y avisa si el razonamiento está desactivado', async () => {
+    renderizar(apiCon({ llamadasSimultaneas: 1, desactivarRazonamiento: true }));
+    const caja = await resumen();
+    expect(
+      caja.getByText(/1 llamada simultánea · razonamiento desactivado · clave guardada/),
+    ).toBeInTheDocument();
+    expect(caja.getByText(/LLM_LLAMADAS_SIMULTANEAS/)).toBeInTheDocument();
   });
 
   it('explica el ritmo: plan gratis cerca de 15 y que con facturación se puede subir', async () => {
@@ -219,6 +273,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         umbral: null,
         maxCandidatos: null,
         llamadasPorMinuto: null,
+        llamadasSimultaneas: null,
+        desactivarRazonamiento: null,
         crossrefMailto: null,
         openaiBaseUrl: null,
         openaiModelo: null,
@@ -261,6 +317,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
             umbral: 0.9,
             maxCandidatos: 30,
             llamadasPorMinuto: 20,
+            llamadasSimultaneas: null,
+            desactivarRazonamiento: null,
             crossrefMailto: 'equipo@unemi.edu.ec',
             openaiBaseUrl: null,
             openaiModelo: null,
@@ -394,7 +452,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       const caja = await resumen();
       expect(
         caja.getByText(
-          'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
+          'Gemini · modelo gemini-3.1-flash-lite (por defecto) · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · 5 llamadas simultáneas (por defecto) · clave guardada en la app',
         ),
       ).toBeInTheDocument();
       expect(caja.getByText(/Un valor «por defecto» puede cambiarse con un secreto/)).toBeVisible();
@@ -403,12 +461,18 @@ describe('AdminConfiguracionPage (issue #33)', () => {
 
     it('Gemini con todo definido no muestra «por defecto»', async () => {
       renderizar(
-        apiCon({ modelo: 'gemini-x', umbral: 0.5, maxCandidatos: 20, llamadasPorMinuto: 60 }),
+        apiCon({
+          modelo: 'gemini-x',
+          umbral: 0.5,
+          maxCandidatos: 20,
+          llamadasPorMinuto: 60,
+          llamadasSimultaneas: 4,
+        }),
       );
       const caja = await resumen();
       expect(
         caja.getByText(
-          'Gemini · modelo gemini-x · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · clave guardada en la app',
+          'Gemini · modelo gemini-x · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · 4 llamadas simultáneas · clave guardada en la app',
         ),
       ).toBeInTheDocument();
       expect(caja.queryByText(/por defecto/)).toBeNull();
@@ -672,7 +736,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         const caja = await resumen();
         expect(
           caja.getByText(
-            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
+            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · 5 llamadas simultáneas (por defecto) · clave guardada en la app',
           ),
         ).toBeInTheDocument();
         expect(caja.queryByText(/el recálculo fallará/)).toBeNull();
@@ -716,14 +780,20 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       it('con todo definido no muestra «por defecto»', async () => {
         renderizar(
           apiConClaves(
-            { ...GROQ, umbral: 0.5, maxCandidatos: 20, llamadasPorMinuto: 60 },
+            {
+              ...GROQ,
+              umbral: 0.5,
+              maxCandidatos: 20,
+              llamadasPorMinuto: 60,
+              llamadasSimultaneas: 4,
+            },
             SOLO_COMPAT,
           ),
         );
         const caja = await resumen();
         expect(
           caja.getByText(
-            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · clave guardada en la app',
+            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · 4 llamadas simultáneas · clave guardada en la app',
           ),
         ).toBeInTheDocument();
         expect(caja.queryByText(/por defecto/)).toBeNull();

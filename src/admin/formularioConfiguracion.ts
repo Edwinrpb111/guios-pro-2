@@ -2,7 +2,7 @@
  * Validación del formulario «Configuración del recálculo» (issue #33). Son las mismas reglas que
  * imponen la base (CHECK de `configuracion_recalculo`) y la Edge Function (`configuracion.ts`):
  * umbral entre 0 y 1, máximo de candidatos entero entre 1 y 200, llamadas por minuto a la IA
- * entero entre 1 y 1000 y, para el proveedor compatible con OpenAI (issue #40), una dirección base
+ * entero entre 1 y 1000, llamadas simultáneas a la IA entero entre 1 y 10 (issue #45) y, para el proveedor compatible con OpenAI (issue #40), una dirección base
  * https limpia y un modelo de hasta 150 caracteres. Un campo vacío = `null`, es decir, «usar el
  * secreto de Supabase o el valor por defecto».
  */
@@ -10,6 +10,8 @@ import type { ParametrosRecalculo, ProveedorLlm } from './tipos';
 
 export const MAX_CANDIDATOS_TOPE = 200;
 export const LLAMADAS_POR_MINUTO_TOPE = 1000;
+/** Tandas de un paso que se mandan a la IA a la vez (issue #45); CHECK 1..10 en la base. */
+export const LLAMADAS_SIMULTANEAS_TOPE = 10;
 export const LARGO_MAXIMO_MODELO = 100;
 /** El modelo va en la URL de Gemini: mismo patrón que el CHECK de la base. */
 const MODELO_VALIDO = /^[A-Za-z0-9._-]+$/;
@@ -27,6 +29,9 @@ export interface FormularioConfiguracion {
   umbral: string;
   maxCandidatos: string;
   llamadasPorMinuto: string;
+  llamadasSimultaneas: string;
+  /** Casilla «Desactivar razonamiento del modelo» (issue #45). */
+  desactivarRazonamiento: boolean;
   crossrefMailto: string;
   openaiBaseUrl: string;
   openaiModelo: string;
@@ -44,6 +49,8 @@ export function formularioDesdeParametros(p: ParametrosRecalculo): FormularioCon
     umbral: p.umbral === null ? '' : String(p.umbral),
     maxCandidatos: p.maxCandidatos === null ? '' : String(p.maxCandidatos),
     llamadasPorMinuto: p.llamadasPorMinuto === null ? '' : String(p.llamadasPorMinuto),
+    llamadasSimultaneas: p.llamadasSimultaneas === null ? '' : String(p.llamadasSimultaneas),
+    desactivarRazonamiento: p.desactivarRazonamiento === true,
     crossrefMailto: p.crossrefMailto ?? '',
     openaiBaseUrl: p.openaiBaseUrl ?? '',
     openaiModelo: p.openaiModelo ?? '',
@@ -147,6 +154,17 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
     };
   }
 
+  const textoSimultaneas = f.llamadasSimultaneas.trim();
+  const simultaneas = textoSimultaneas === '' ? null : Number(textoSimultaneas);
+  if (
+    simultaneas !== null &&
+    (!/^\d+$/.test(textoSimultaneas) || simultaneas < 1 || simultaneas > LLAMADAS_SIMULTANEAS_TOPE)
+  ) {
+    return {
+      error: `Las llamadas simultáneas a la IA deben ser un entero entre 1 y ${LLAMADAS_SIMULTANEAS_TOPE}.`,
+    };
+  }
+
   const textoUrl = f.openaiBaseUrl.trim();
   let openaiBaseUrl: string | null = null;
   if (textoUrl !== '') {
@@ -180,6 +198,9 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
       umbral,
       maxCandidatos: maximo,
       llamadasPorMinuto: ritmo,
+      llamadasSimultaneas: simultaneas,
+      // Sin marcar = «no definido»: se usa LLM_DESACTIVAR_RAZONAMIENTO o, si no existe, false.
+      desactivarRazonamiento: f.desactivarRazonamiento ? true : null,
       crossrefMailto: correo === '' ? null : correo,
       openaiBaseUrl,
       openaiModelo: openaiModelo === '' ? null : openaiModelo,

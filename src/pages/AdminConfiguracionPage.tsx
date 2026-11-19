@@ -142,7 +142,8 @@ function ConfiguracionClasificador({
   const [avanzadasAbiertas, setAvanzadasAbiertas] = useState(false);
 
   const campo =
-    (nombre: keyof FormularioConfiguracion) => (evento: { target: { value: string } }) =>
+    (nombre: Exclude<keyof FormularioConfiguracion, 'desactivarRazonamiento'>) =>
+    (evento: { target: { value: string } }) =>
       setFormulario((actual) => ({ ...actual, [nombre]: evento.target.value }));
   const elegirProveedor = (proveedorLlm: ValorProveedor) =>
     setFormulario((actual) => ({ ...actual, proveedorLlm }));
@@ -426,6 +427,40 @@ function ConfiguracionClasificador({
             pausar. El plan gratis de Gemini permite cerca de 15 por minuto; con facturación
             activada se puede subir. Con menos de 4, un subfactor con muchos candidatos puede tardar
             demasiado en un solo paso. Vacío: LLM_LLAMADAS_POR_MINUTO o 15.
+          </span>
+          <label className="admin-campo">
+            Llamadas simultáneas a la IA (1 a 10)
+            <input
+              inputMode="numeric"
+              value={formulario.llamadasSimultaneas}
+              onChange={campo('llamadasSimultaneas')}
+              placeholder="5"
+              aria-describedby={`${id}-simultaneas`}
+            />
+          </label>
+          <span id={`${id}-simultaneas`} className="admin-ayuda admin-campo__ayuda">
+            Cuántas tandas de un mismo subfactor se mandan a la IA a la vez para que el paso termine
+            antes. Respeta las llamadas por minuto: subir este número no supera ese ritmo. Vacío:
+            LLM_LLAMADAS_SIMULTANEAS o 5.
+          </span>
+          <label className="admin-campo admin-campo--casilla">
+            <input
+              type="checkbox"
+              checked={formulario.desactivarRazonamiento}
+              onChange={(evento) =>
+                setFormulario((actual) => ({
+                  ...actual,
+                  desactivarRazonamiento: evento.target.checked,
+                }))
+              }
+              aria-describedby={`${id}-razonamiento`}
+            />
+            Desactivar razonamiento del modelo
+          </label>
+          <span id={`${id}-razonamiento`} className="admin-ayuda admin-campo__ayuda">
+            Pide al modelo que responda sin «pensar» antes: tarda menos y gasta menos. Sirve con
+            DeepSeek, OpenRouter y Gemini; con otros servicios no se envía nada. Sin marcar:
+            LLM_DESACTIVAR_RAZONAMIENTO o falso.
           </span>
           <label className="admin-campo">
             Correo para Crossref

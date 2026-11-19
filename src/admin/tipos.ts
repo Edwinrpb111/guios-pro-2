@@ -181,6 +181,10 @@ export interface ParametrosRecalculo {
   maxCandidatos: number | null;
   /** Llamadas por minuto a la IA (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
   llamadasPorMinuto: number | null;
+  /** Tandas de un paso mandadas a la IA a la vez (1..10); `null` = LLM_LLAMADAS_SIMULTANEAS o 5. */
+  llamadasSimultaneas: number | null;
+  /** Pide al modelo que no razone antes de responder; `null` = LLM_DESACTIVAR_RAZONAMIENTO o false. */
+  desactivarRazonamiento: boolean | null;
   crossrefMailto: string | null;
   /** Dirección base https del proveedor compatible con OpenAI (issue #40); `null` = OPENAI_COMPAT_BASE_URL. */
   openaiBaseUrl: string | null;

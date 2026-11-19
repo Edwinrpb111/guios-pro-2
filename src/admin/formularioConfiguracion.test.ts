@@ -11,6 +11,8 @@ const VACIO: FormularioConfiguracion = {
   umbral: '',
   maxCandidatos: '',
   llamadasPorMinuto: '',
+  llamadasSimultaneas: '',
+  desactivarRazonamiento: false,
   crossrefMailto: '',
   openaiBaseUrl: '',
   openaiModelo: '',
@@ -25,6 +27,8 @@ describe('validarConfiguracion (issue #33)', () => {
         umbral: null,
         maxCandidatos: null,
         llamadasPorMinuto: null,
+        llamadasSimultaneas: null,
+        desactivarRazonamiento: null,
         crossrefMailto: null,
         openaiBaseUrl: null,
         openaiModelo: null,
@@ -40,6 +44,8 @@ describe('validarConfiguracion (issue #33)', () => {
         umbral: '0,75',
         maxCandidatos: ' 15 ',
         llamadasPorMinuto: ' 30 ',
+        llamadasSimultaneas: ' 4 ',
+        desactivarRazonamiento: true,
         crossrefMailto: ' equipo@unemi.edu.ec ',
         openaiBaseUrl: '',
         openaiModelo: '',
@@ -51,6 +57,8 @@ describe('validarConfiguracion (issue #33)', () => {
         umbral: 0.75,
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
+        llamadasSimultaneas: 4,
+        desactivarRazonamiento: true,
         crossrefMailto: 'equipo@unemi.edu.ec',
         openaiBaseUrl: null,
         openaiModelo: null,
@@ -82,6 +90,11 @@ describe('validarConfiguracion (issue #33)', () => {
     [{ llamadasPorMinuto: '2.5' }, /llamadas por minuto/i],
     [{ llamadasPorMinuto: '-3' }, /llamadas por minuto/i],
     [{ llamadasPorMinuto: 'muchas' }, /llamadas por minuto/i],
+    [{ llamadasSimultaneas: '0' }, /llamadas simultáneas/i],
+    [{ llamadasSimultaneas: '11' }, /llamadas simultáneas/i],
+    [{ llamadasSimultaneas: '2.5' }, /llamadas simultáneas/i],
+    [{ llamadasSimultaneas: '-1' }, /llamadas simultáneas/i],
+    [{ llamadasSimultaneas: 'todas' }, /llamadas simultáneas/i],
     [{ crossrefMailto: 'sin-arroba' }, /correo/i],
     [{ modelo: 'x'.repeat(101) }, /modelo/i],
     [{ modelo: '../otro:generateContent' }, /modelo/i],
@@ -91,6 +104,39 @@ describe('validarConfiguracion (issue #33)', () => {
   ])('rechaza %o con un mensaje claro', (cambio, mensaje) => {
     const resultado = validarConfiguracion({ ...VACIO, ...cambio } as FormularioConfiguracion);
     expect(resultado.error).toMatch(mensaje);
+  });
+});
+
+describe('validarConfiguracion: llamadas simultáneas y razonamiento (issue #45)', () => {
+  it.each([
+    ['1', 1],
+    ['5', 5],
+    [' 10 ', 10],
+  ])('las llamadas simultáneas «%s» se guardan como %i', (texto, esperado) => {
+    expect(validarConfiguracion({ ...VACIO, llamadasSimultaneas: texto })).toMatchObject({
+      parametros: { llamadasSimultaneas: esperado },
+    });
+  });
+
+  it('vacío significa «usar el valor por defecto»: null', () => {
+    expect(validarConfiguracion({ ...VACIO, llamadasSimultaneas: '  ' })).toMatchObject({
+      parametros: { llamadasSimultaneas: null },
+    });
+  });
+
+  it('el mensaje de rechazo dice el rango de 1 a 10', () => {
+    expect(validarConfiguracion({ ...VACIO, llamadasSimultaneas: '11' }).error).toMatch(
+      /entero entre 1 y 10/,
+    );
+  });
+
+  it('marcado guarda true; sin marcar deja null (se usa el secreto o el valor por defecto)', () => {
+    expect(validarConfiguracion({ ...VACIO, desactivarRazonamiento: true })).toMatchObject({
+      parametros: { desactivarRazonamiento: true },
+    });
+    expect(validarConfiguracion({ ...VACIO, desactivarRazonamiento: false })).toMatchObject({
+      parametros: { desactivarRazonamiento: null },
+    });
   });
 });
 
@@ -110,6 +156,8 @@ describe('validarConfiguracion: proveedor compatible con OpenAI (issue #40)', ()
         umbral: null,
         maxCandidatos: null,
         llamadasPorMinuto: null,
+        llamadasSimultaneas: null,
+        desactivarRazonamiento: null,
         crossrefMailto: null,
         openaiBaseUrl: 'https://openrouter.ai/api/v1',
         openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
@@ -181,6 +229,8 @@ describe('formularioDesdeParametros', () => {
         umbral: 0.7,
         maxCandidatos: null,
         llamadasPorMinuto: 15,
+        llamadasSimultaneas: 3,
+        desactivarRazonamiento: true,
         crossrefMailto: 'a@b.ec',
         openaiBaseUrl: 'https://api.groq.com/openai/v1',
         openaiModelo: null,
@@ -191,9 +241,35 @@ describe('formularioDesdeParametros', () => {
       umbral: '0.7',
       maxCandidatos: '',
       llamadasPorMinuto: '15',
+      llamadasSimultaneas: '3',
+      desactivarRazonamiento: true,
       crossrefMailto: 'a@b.ec',
       openaiBaseUrl: 'https://api.groq.com/openai/v1',
       openaiModelo: '',
+    });
+  });
+});
+
+describe('formularioDesdeParametros: valores sin definir (issue #45)', () => {
+  it('llamadas simultáneas vacías y razonamiento sin marcar si están en null o en false', () => {
+    const base = {
+      proveedorLlm: null,
+      modelo: null,
+      umbral: null,
+      maxCandidatos: null,
+      llamadasPorMinuto: null,
+      llamadasSimultaneas: null,
+      desactivarRazonamiento: null,
+      crossrefMailto: null,
+      openaiBaseUrl: null,
+      openaiModelo: null,
+    } as const;
+    expect(formularioDesdeParametros(base)).toMatchObject({
+      llamadasSimultaneas: '',
+      desactivarRazonamiento: false,
+    });
+    expect(formularioDesdeParametros({ ...base, desactivarRazonamiento: false })).toMatchObject({
+      desactivarRazonamiento: false,
     });
   });
 });

@@ -91,6 +91,8 @@ export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
     umbral: 0.7,
     maxCandidatos: null,
     llamadasPorMinuto: null,
+    llamadasSimultaneas: null,
+    desactivarRazonamiento: null,
     crossrefMailto: 'equipo@unemi.edu.ec',
     openaiBaseUrl: null,
     openaiModelo: null,
