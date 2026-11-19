@@ -1,12 +1,16 @@
 // Un paso del recálculo (BRIEF §13.2, pasos 3a–3d): arma la consulta, busca en las fuentes,
-// normaliza y deduplica por DOI, recorta, clasifica en lotes y devuelve lo aceptado.
-import { aceptarVeredictos } from './clasificador.ts';
+// normaliza y deduplica por DOI, recorta, clasifica en lotes y devuelve lo aceptado y lo rechazado.
+import { type Clasificado, repartirVeredictos } from './clasificador.ts';
 import { type ContextoSubfactores, contextoDe } from './contexto.ts';
 import { normalizarDoi } from './doi.ts';
 import { ErrorPasoSinTiempo } from './errores.ts';
 import type { PresupuestoPaso } from './presupuesto.ts';
 import { type EntradaLote, mensajeSeguro, motivoDe, type RegistradorPaso } from './registro.ts';
-import type { NuevaReferencia, SubfactorCatalogo } from './repositorio.ts';
+import type {
+  NuevaReferencia,
+  NuevaReferenciaRechazada,
+  SubfactorCatalogo,
+} from './repositorio.ts';
 import type { Candidato, Clasificador, MedicionLlamada, ProveedorBusqueda } from './tipos.ts';
 
 export const TAMANO_LOTE = 10;
@@ -70,6 +74,23 @@ export interface ResultadoBusqueda {
   candidatos: number;
   /** Los aceptados, listos para guardar en `referencia`. */
   referencias: NuevaReferencia[];
+  /**
+   * Los que la IA clasificó y no aceptó, listos para `referencia_rechazada` (issue #46). No
+   * incluye lo descartado antes de clasificar (sin DOI o fuera de rango) ni índices inválidos.
+   */
+  rechazadas: NuevaReferenciaRechazada[];
+}
+
+/** Fila lista para guardar: título a la columna (500) y año/DOI ya validados por `depurar`. */
+function aFila({ candidato, confianza, evidencia }: Clasificado): NuevaReferencia {
+  return {
+    titulo: candidato.titulo.slice(0, TITULO_MAXIMO),
+    anio: candidato.anio as number,
+    doi: candidato.doi as string,
+    base_datos: candidato.base,
+    confianza,
+    evidencia,
+  };
 }
 
 export async function buscarYClasificar(entrada: {
@@ -140,7 +161,8 @@ export async function buscarYClasificar(entrada: {
     lotes.push(candidatos.slice(i, i + TAMANO_LOTE));
   }
   await registro?.clasificando(lotes.length);
-  const aceptadosPorLote: Candidato[][] = lotes.map(() => []);
+  const aceptadosPorLote: Clasificado[][] = lotes.map(() => []);
+  const rechazadosPorLote: Clasificado[][] = lotes.map(() => []);
   let siguiente = 0;
   let fallo: { error: unknown } | undefined;
 
@@ -180,9 +202,10 @@ export async function buscarYClasificar(entrada: {
         lote,
         medicion,
       );
-      const delLote = aceptarVeredictos(lote, veredictos, umbral);
-      aceptadosPorLote[indice] = delLote;
-      anotar('ok', delLote.length);
+      const delLote = repartirVeredictos(lote, veredictos, umbral);
+      aceptadosPorLote[indice] = delLote.aceptados;
+      rechazadosPorLote[indice] = delLote.rechazados;
+      anotar('ok', delLote.aceptados.length);
     } catch (error) {
       anotar(motivoDe(error), 0);
       throw error;
@@ -204,15 +227,10 @@ export async function buscarYClasificar(entrada: {
   await Promise.all(Array.from({ length: trabajadores }, trabajador));
   if (fallo !== undefined) throw fallo.error;
   await registro?.guardando();
-  const aceptados = aceptadosPorLote.flat();
 
   return {
     candidatos: candidatos.length,
-    referencias: aceptados.map((c) => ({
-      titulo: c.titulo.slice(0, TITULO_MAXIMO),
-      anio: c.anio as number,
-      doi: c.doi as string,
-      base_datos: c.base,
-    })),
+    referencias: aceptadosPorLote.flat().map(aFila),
+    rechazadas: rechazadosPorLote.flat().map(aFila),
   };
 }

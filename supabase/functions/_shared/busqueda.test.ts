@@ -123,8 +123,103 @@ Deno.test(
 
     assertEquals(resultado.candidatos, 3);
     assertEquals(resultado.referencias, [
-      { titulo: 'Artículo 1', anio: 2022, doi: '10.1000/art.1', base_datos: 'openalex' },
+      {
+        titulo: 'Artículo 1',
+        anio: 2022,
+        doi: '10.1000/art.1',
+        base_datos: 'openalex',
+        confianza: 0.9,
+        evidencia: 'ok',
+      },
     ]);
+    // El 2 lo clasificó la IA y no llegó al umbral: es rechazado. El 3 no recibió veredicto y el
+    // índice 9 no existe: ninguno de los dos se guarda como rechazado.
+    assertEquals(resultado.rechazadas, [
+      {
+        titulo: 'Artículo 2',
+        anio: 2022,
+        doi: '10.1000/art.2',
+        base_datos: 'openalex',
+        confianza: 0.4,
+        evidencia: 'dudoso',
+      },
+    ]);
+  },
+);
+
+Deno.test(
+  'trazabilidad: rechaza lo que la IA clasificó (no trata o bajo el umbral) con su confianza y evidencia',
+  async () => {
+    const proveedor = proveedorFijo('crossref', [candidato(1), candidato(2), candidato(3)]);
+    const clasificador = clasificadorGuionado(() => [
+      { indice: 1, trata_subfactor: false, confianza: 0.95, evidencia: '  No es del tema.  ' },
+      { indice: 2, trata_subfactor: true, confianza: 0.55, evidencia: 'x'.repeat(900) },
+      { indice: 3, trata_subfactor: true, confianza: 0.8, evidencia: 'Sí lo trata.' },
+    ]);
+
+    const resultado = await ejecutar([proveedor], clasificador);
+
+    assertEquals(
+      resultado.rechazadas.map((r) => [r.doi, r.base_datos, r.confianza, r.evidencia?.length]),
+      [
+        ['10.1000/art.1', 'crossref', 0.95, 'No es del tema.'.length],
+        ['10.1000/art.2', 'crossref', 0.55, 500],
+      ],
+    );
+    assertEquals(resultado.rechazadas[0]?.evidencia, 'No es del tema.');
+    assertEquals(
+      resultado.referencias.map((r) => [r.doi, r.confianza, r.evidencia]),
+      [['10.1000/art.3', 0.8, 'Sí lo trata.']],
+    );
+  },
+);
+
+Deno.test('trazabilidad: la evidencia de una referencia aceptada se recorta a 500', async () => {
+  const proveedor = proveedorFijo('openalex', [candidato(1), candidato(2)]);
+  const clasificador = clasificadorGuionado(() => [
+    { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: `  ${'e'.repeat(700)}  ` },
+    { indice: 2, trata_subfactor: true, confianza: 0.9, evidencia: '   ' },
+  ]);
+
+  const { referencias } = await ejecutar([proveedor], clasificador);
+
+  assertEquals(referencias[0]?.evidencia, 'e'.repeat(500));
+  assertEquals(referencias[1]?.evidencia, null, 'una evidencia vacía queda en null');
+});
+
+Deno.test(
+  'trazabilidad: lo descartado antes de clasificar y los índices inválidos no son rechazados',
+  async () => {
+    const proveedor = proveedorFijo('openalex', [
+      candidato(1),
+      candidato(2, { doi: null }),
+      candidato(3, { anio: 2019 }),
+      candidato(4, { doi: 'no-es-un-doi' }),
+    ]);
+    const clasificador = clasificadorGuionado(() => [
+      { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: 'ok' },
+      { indice: 0, trata_subfactor: false, confianza: 0.1, evidencia: 'inválido' },
+      { indice: 7, trata_subfactor: false, confianza: 0.1, evidencia: 'inválido' },
+    ]);
+
+    const resultado = await ejecutar([proveedor], clasificador);
+
+    assertEquals(resultado.rechazadas, []);
+    assertEquals(resultado.referencias.length, 1);
+  },
+);
+
+Deno.test(
+  'trazabilidad: el título de un rechazado también se recorta a la columna (500)',
+  async () => {
+    const proveedor = proveedorFijo('openalex', [candidato(1, { titulo: 'T'.repeat(600) })]);
+    const clasificador = clasificadorGuionado(() => [
+      { indice: 1, trata_subfactor: false, confianza: 0.2, evidencia: 'no' },
+    ]);
+
+    const { rechazadas } = await ejecutar([proveedor], clasificador);
+
+    assertEquals(rechazadas[0]?.titulo.length, 500);
   },
 );
 
@@ -159,7 +254,7 @@ Deno.test('recorta el título a la columna (500) y no clasifica si no hay candid
 
   const clasificador = clasificadorGuionado();
   const vacio = await ejecutar([proveedorFijo('openalex', [])], clasificador);
-  assertEquals(vacio, { candidatos: 0, referencias: [] });
+  assertEquals(vacio, { candidatos: 0, referencias: [], rechazadas: [] });
   assertEquals(clasificador.lotes.length, 0);
 });
 

@@ -26,6 +26,8 @@ interface Guion {
   rpc?: { data: unknown; error: { message: string } | null };
   /** Resultado de las consultas a `recalculo_paso`. */
   paso?: { data: unknown; error: { message: string } | null };
+  /** Resultado de las consultas a `referencia_rechazada`. */
+  rechazadas?: { data: unknown; error: { message: string } | null };
 }
 
 /** Cliente simulado: registra cada operación encadenada y responde según el guion. */
@@ -40,6 +42,9 @@ function crearClienteSimulado(guion: Guion = {}) {
       const resultado = () => {
         if (tabla === 'perfil') return guion.perfil ?? { data: null, error: null };
         if (tabla === 'recalculo_paso') return guion.paso ?? { data: null, error: null };
+        if (tabla === 'referencia_rechazada') {
+          return guion.rechazadas ?? { data: null, error: null };
+        }
         return { data: null, error: null };
       };
       const cadena = {
@@ -58,6 +63,7 @@ function crearClienteSimulado(guion: Guion = {}) {
       select: (...argumentos: unknown[]) => nueva('select', argumentos),
       insert: (...argumentos: unknown[]) => nueva('insert', argumentos),
       update: (...argumentos: unknown[]) => nueva('update', argumentos),
+      delete: (...argumentos: unknown[]) => nueva('delete', argumentos),
       upsert: (...argumentos: unknown[]) => nueva('upsert', argumentos),
     };
   };
@@ -170,17 +176,43 @@ Deno.test('VerificadorSupabase: si falla la lectura del perfil no concede acceso
   assert(!(error instanceof ErrorApi), 'es un error interno (500), no una respuesta de acceso');
 });
 
+const REFERENCIAS = [
+  {
+    titulo: 'Uno',
+    anio: 2022,
+    doi: '10.1/uno',
+    base_datos: 'openalex',
+    confianza: 0.9,
+    evidencia: 'Trata el subfactor.',
+  },
+  {
+    titulo: 'Dos',
+    anio: 2023,
+    doi: '10.1/dos',
+    base_datos: 'crossref',
+    confianza: null,
+    evidencia: null,
+  },
+];
+const RECHAZADAS = [
+  {
+    titulo: 'Tres',
+    anio: 2021,
+    doi: '10.1/tres',
+    base_datos: 'openalex',
+    confianza: 0.3,
+    evidencia: 'Otro tema.',
+  },
+];
+
 Deno.test(
-  'RepositorioSupabase.completarPaso: guarda con upsert idempotente por (cálculo, subfactor, doi)',
+  'RepositorioSupabase.completarPaso: upsert idempotente por (cálculo, subfactor, doi) que actualiza confianza y evidencia',
   async () => {
     const { cliente, llamadas } = crearClienteSimulado();
     const repositorio = new RepositorioSupabase(cliente);
-    const referencias = [
-      { titulo: 'Uno', anio: 2022, doi: '10.1/uno', base_datos: 'openalex' },
-      { titulo: 'Dos', anio: 2023, doi: '10.1/dos', base_datos: 'crossref' },
-    ];
+    const referencias = REFERENCIAS;
 
-    await repositorio.completarPaso(7, 11, referencias, 5);
+    await repositorio.completarPaso(7, 11, referencias, [], 5);
 
     const upsert = llamadas.find((l) => l.operacion === 'upsert');
     assertEquals(upsert?.tabla, 'referencia');
@@ -188,9 +220,10 @@ Deno.test(
       { ...referencias[0], id_calculo: 7, id_subfactor: 11 },
       { ...referencias[1], id_calculo: 7, id_subfactor: 11 },
     ]);
+    // Al repetir el paso, la referencia ya guardada actualiza su confianza y evidencia.
     assertEquals(upsert?.argumentos[1], {
       onConflict: 'id_calculo,id_subfactor,doi',
-      ignoreDuplicates: true,
+      ignoreDuplicates: false,
     });
 
     const marca = llamadas.find((l) => l.tabla === 'recalculo_paso' && l.operacion === 'update');
@@ -204,6 +237,61 @@ Deno.test(
       ['id_calculo', 7],
       ['id_subfactor', 11],
     ]);
+  },
+);
+
+Deno.test(
+  'RepositorioSupabase.completarPaso: reemplaza los rechazados del subfactor (borra y luego inserta)',
+  async () => {
+    const { cliente, llamadas } = crearClienteSimulado();
+
+    await new RepositorioSupabase(cliente).completarPaso(7, 11, REFERENCIAS, RECHAZADAS, 5);
+
+    const operaciones = llamadas
+      .filter((l) => l.tabla === 'referencia_rechazada')
+      .map((l) => l.operacion);
+    assertEquals(operaciones, ['delete', 'insert']);
+    const borrado = llamadas.find((l) => l.operacion === 'delete');
+    assertEquals(borrado?.filtros, [
+      ['id_calculo', 7],
+      ['id_subfactor', 11],
+    ]);
+    const insercion = llamadas.find((l) => l.operacion === 'insert');
+    assertEquals(insercion?.argumentos[0], [{ ...RECHAZADAS[0], id_calculo: 7, id_subfactor: 11 }]);
+    // Los rechazados se reemplazan antes de marcar el paso como hecho.
+    const posicion = (l: Llamada | undefined) => llamadas.indexOf(l!);
+    const marca = llamadas.find((l) => l.tabla === 'recalculo_paso' && l.operacion === 'update');
+    assert(posicion(insercion) < posicion(marca));
+  },
+);
+
+Deno.test(
+  'RepositorioSupabase.completarPaso: sin rechazados borra los del intento anterior y no inserta',
+  async () => {
+    const { cliente, llamadas } = crearClienteSimulado();
+
+    await new RepositorioSupabase(cliente).completarPaso(7, 11, REFERENCIAS, [], 5);
+
+    const rechazadas = llamadas.filter((l) => l.tabla === 'referencia_rechazada');
+    assertEquals(
+      rechazadas.map((l) => l.operacion),
+      ['delete'],
+    );
+  },
+);
+
+Deno.test(
+  'RepositorioSupabase.completarPaso: si falla la base al guardar los rechazados el error sube',
+  async () => {
+    const { cliente } = crearClienteSimulado({
+      rechazadas: { data: null, error: { message: 'violación de restricción' } },
+    });
+
+    await assertRejects(
+      () => new RepositorioSupabase(cliente).completarPaso(7, 11, [], RECHAZADAS, 5),
+      Error,
+      'candidatos rechazados',
+    );
   },
 );
 
@@ -269,9 +357,10 @@ Deno.test(
   'RepositorioSupabase.completarPaso: sin referencias no hace upsert pero marca el paso',
   async () => {
     const { cliente, llamadas } = crearClienteSimulado();
-    await new RepositorioSupabase(cliente).completarPaso(7, 11, [], 3);
+    await new RepositorioSupabase(cliente).completarPaso(7, 11, [], [], 3);
 
     assertEquals(llamadas.filter((l) => l.operacion === 'upsert').length, 0);
+    assertEquals(llamadas.filter((l) => l.operacion === 'insert').length, 0);
     assertEquals(llamadas.filter((l) => l.operacion === 'update').length, 1);
   },
 );
