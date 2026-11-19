@@ -7,8 +7,9 @@ import {
   rangoCalculo,
   textoEstado,
 } from './resultado';
+import { ReferenciasFactor } from './ReferenciasFactor';
 import { TablaIS } from './TablaIS';
-import type { CalculoResumen, FactorCatalogo, ReferenciaCalculo } from './tipos';
+import type { CalculoResumen, ReferenciaCalculo, ReferenciaRechazada } from './tipos';
 import { useCarga } from './useCarga';
 
 export interface DetalleCalculoPanelProps {
@@ -43,52 +44,6 @@ function Parametros({ calculo }: { calculo: CalculoResumen }) {
   );
 }
 
-function Referencias({
-  factor,
-  referencias,
-}: {
-  factor: FactorCatalogo;
-  referencias: readonly ReferenciaCalculo[];
-}) {
-  return (
-    <section aria-label={`Referencias de ${factor.nombre}`} className="admin-referencias">
-      <h3>Referencias de {factor.nombre}</h3>
-      {factor.subfactores.map((sub, k) => {
-        const propias = referencias.filter((r) => r.idSubfactor === sub.id);
-        return (
-          <div key={sub.id} className="admin-referencias__subfactor">
-            <p>
-              <b>Subfactor {k + 1}:</b> {sub.enunciado} ({propias.length})
-            </p>
-            {propias.length === 0 ? (
-              <p className="admin-ayuda">Sin artículos aceptados para este subfactor.</p>
-            ) : (
-              <ul>
-                {propias.map((r) => (
-                  <li key={r.id}>
-                    <b>{r.titulo}</b>
-                    <span className="admin-ayuda">
-                      {' '}
-                      {r.anio} · {r.base ?? 'sin base'} ·{' '}
-                      <a
-                        href={`https://doi.org/${r.doi}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        DOI {r.doi}
-                      </a>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        );
-      })}
-    </section>
-  );
-}
-
 /** P-10: detalle de un cálculo de IS en un panel lateral sobre P-08 (RF-12, HU-10). */
 export function DetalleCalculoPanel({ id, onCerrar }: DetalleCalculoPanelProps) {
   const api = useApiAdmin();
@@ -104,7 +59,10 @@ export function DetalleCalculoPanel({ id, onCerrar }: DetalleCalculoPanelProps) 
   const { datos, error, cargando } = useCarga(cargar);
 
   const [idFactor, setIdFactor] = useState<number | null>(null);
-  const [referencias, setReferencias] = useState<ReferenciaCalculo[] | null>(null);
+  const [trazabilidad, setTrazabilidad] = useState<{
+    referencias: ReferenciaCalculo[];
+    rechazadas: ReferenciaRechazada[];
+  } | null>(null);
   const [errorReferencias, setErrorReferencias] = useState<string | null>(null);
 
   useEffect(() => {
@@ -117,14 +75,14 @@ export function DetalleCalculoPanel({ id, onCerrar }: DetalleCalculoPanelProps) 
 
   const verReferencias = (factor: number) => {
     setIdFactor(factor);
-    if (referencias !== null) return;
-    api
-      .referencias(id)
-      .then(setReferencias, (e: unknown) =>
+    if (trazabilidad !== null) return;
+    Promise.all([api.referencias(id), api.rechazadas(id)]).then(
+      ([referencias, rechazadas]) => setTrazabilidad({ referencias, rechazadas }),
+      (e: unknown) =>
         setErrorReferencias(
           e instanceof Error ? e.message : 'No se pudieron leer las referencias.',
         ),
-      );
+    );
   };
 
   const calculo = datos?.calculo ?? null;
@@ -181,10 +139,14 @@ export function DetalleCalculoPanel({ id, onCerrar }: DetalleCalculoPanelProps) 
               )
             ) : errorReferencias ? (
               <p role="alert">{errorReferencias}</p>
-            ) : referencias === null ? (
+            ) : trazabilidad === null ? (
               <p>Cargando las referencias…</p>
             ) : (
-              <Referencias factor={factor} referencias={referencias} />
+              <ReferenciasFactor
+                factor={factor}
+                referencias={trazabilidad.referencias}
+                rechazadas={trazabilidad.rechazadas}
+              />
             )}
           </>
         )}

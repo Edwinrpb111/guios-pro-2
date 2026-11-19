@@ -396,7 +396,9 @@ export type Database = {
         Row: {
           anio: number;
           base_datos: string | null;
+          confianza: number | null;
           doi: string;
+          evidencia: string | null;
           id_calculo: number;
           id_referencia: number;
           id_subfactor: number;
@@ -406,7 +408,9 @@ export type Database = {
         Insert: {
           anio: number;
           base_datos?: string | null;
+          confianza?: number | null;
           doi: string;
+          evidencia?: string | null;
           id_calculo: number;
           id_referencia?: never;
           id_subfactor: number;
@@ -415,7 +419,9 @@ export type Database = {
         Update: {
           anio?: number;
           base_datos?: string | null;
+          confianza?: number | null;
           doi?: string;
+          evidencia?: string | null;
           id_calculo?: number;
           id_referencia?: never;
           id_subfactor?: number;
@@ -431,6 +437,58 @@ export type Database = {
           },
           {
             foreignKeyName: 'referencia_id_subfactor_fkey';
+            columns: ['id_subfactor'];
+            isOneToOne: false;
+            referencedRelation: 'subfactor';
+            referencedColumns: ['id_subfactor'];
+          },
+        ];
+      };
+      referencia_rechazada: {
+        Row: {
+          anio: number;
+          base_datos: string | null;
+          confianza: number | null;
+          doi: string;
+          evidencia: string | null;
+          id_calculo: number;
+          id_referencia_rechazada: number;
+          id_subfactor: number;
+          titulo: string;
+        };
+        ComputedFields: never;
+        Insert: {
+          anio: number;
+          base_datos?: string | null;
+          confianza?: number | null;
+          doi: string;
+          evidencia?: string | null;
+          id_calculo: number;
+          id_referencia_rechazada?: never;
+          id_subfactor: number;
+          titulo: string;
+        };
+        Update: {
+          anio?: number;
+          base_datos?: string | null;
+          confianza?: number | null;
+          doi?: string;
+          evidencia?: string | null;
+          id_calculo?: number;
+          id_referencia_rechazada?: never;
+          id_subfactor?: number;
+          titulo?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'referencia_rechazada_id_calculo_fkey';
+            columns: ['id_calculo'];
+            isOneToOne: false;
+            referencedRelation: 'calculo_sugerida';
+            referencedColumns: ['id_calculo'];
+          },
+          {
+            foreignKeyName: 'referencia_rechazada_id_subfactor_fkey';
             columns: ['id_subfactor'];
             isOneToOne: false;
             referencedRelation: 'subfactor';

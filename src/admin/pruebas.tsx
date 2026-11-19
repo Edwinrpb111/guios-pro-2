@@ -161,6 +161,7 @@ export function crearApiFalsa(parcial: Partial<ApiAdmin> = {}): ApiFalsa {
     filasSugeridas: vi.fn().mockResolvedValue(FILAS_TESIS),
     catalogo: vi.fn().mockResolvedValue(CATALOGO),
     referencias: vi.fn().mockResolvedValue([]),
+    rechazadas: vi.fn().mockResolvedValue([]),
     iniciarRecalculo: vi.fn().mockResolvedValue(2),
     pasoRecalculo: vi.fn().mockResolvedValue({ progreso: 18, pendientes: 0, estado: 'en_proceso' }),
     registroPasos: vi.fn().mockResolvedValue([]),

@@ -336,6 +336,44 @@ a.boton {
 .admin-referencias li > span {
   display: block;
 }
+.admin-referencias__titulo {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 700;
+}
+.admin-referencias__evidencia {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.admin-pestanas {
+  display: flex;
+  gap: var(--espacio-2);
+  margin-bottom: var(--espacio-2);
+  border-bottom: 1px solid var(--line);
+}
+.admin-pestanas__pestana {
+  margin-bottom: -1px;
+  padding: 6px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font-weight: 600;
+}
+.admin-pestanas__pestana:hover {
+  color: var(--text);
+}
+.admin-pestanas__pestana[aria-selected='true'] {
+  color: var(--navy);
+  border-bottom-color: var(--orange);
+}
+.admin-pestanas__pestana:focus-visible {
+  outline-offset: -2px;
+  border-radius: var(--radio-chico) var(--radio-chico) 0 0;
+}
 
 /* ---------- configuración del recálculo (issue #33) ---------- */
 .admin-configuracion {
