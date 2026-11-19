@@ -360,3 +360,34 @@ describe('useRecalculo: reintento automático ante un corte (issue #43)', () => 
     expect(api.pasoRecalculo).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useRecalculo: refresco del registro (issue #43)', () => {
+  it('avisa tras cada paso terminado para volver a leer recalculo_paso', async () => {
+    const api = crearApiFalsa({
+      pasoRecalculo: pasos(
+        { progreso: 1, pendientes: 2, estado: 'en_proceso' },
+        { progreso: 9, pendientes: 1, estado: 'en_proceso' },
+        PASO_FINAL,
+      ),
+    });
+    calculoCompletadoAlFinal(api);
+    const { result } = montar(api);
+    expect(result.current.registroVersion).toBe(0);
+    await waitFor(() => expect(result.current.fase).toBe('revision'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(3);
+  });
+
+  it('también avisa cuando un paso falla, para ver cómo quedó', async () => {
+    const api = crearApiFalsa({ pasoRecalculo: pasos(new ErrorAdmin('Falló')) });
+    const { result } = montar(api);
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(1);
+  });
+
+  it('avisa tras cada intento de un paso cortado, no solo al final', async () => {
+    const api = crearApiFalsa({ pasoRecalculo: pasos(CORTE, CORTE, CORTE) });
+    const { result } = montar(api, 2, { esperar: esperaFalsa() });
+    await waitFor(() => expect(result.current.fase).toBe('error'));
+    expect(result.current.registroVersion).toBeGreaterThanOrEqual(3);
+  });
+});

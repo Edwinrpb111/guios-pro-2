@@ -34,6 +34,8 @@ export interface EstadoRecalculo {
   filas: FilaSugerida[];
   /** Publicando o descartando. */
   ocupado: boolean;
+  /** Sube tras cada intento de un paso: la pantalla vuelve a leer el registro de los pasos. */
+  registroVersion: number;
 }
 
 const INICIAL: EstadoRecalculo = {
@@ -44,6 +46,7 @@ const INICIAL: EstadoRecalculo = {
   mensaje: null,
   filas: [],
   ocupado: false,
+  registroVersion: 0,
 };
 
 interface Control {
@@ -83,6 +86,10 @@ export function useRecalculo(id: number, opciones: OpcionesRecalculo = {}) {
   const motor = useMemo(() => {
     const actualizar = (cambios: Partial<EstadoRecalculo>) =>
       setEstado((anterior) => ({ ...anterior, ...cambios }));
+
+    /** Un intento de paso terminó (bien o mal): el registro en la base cambió. */
+    const registroCambio = () =>
+      setEstado((anterior) => ({ ...anterior, registroVersion: anterior.registroVersion + 1 }));
 
     async function abrir(c: Control): Promise<void> {
       const calculo = await api.obtenerCalculo(id);
@@ -130,8 +137,11 @@ export function useRecalculo(id: number, opciones: OpcionesRecalculo = {}) {
     async function invocarPaso(c: Control): Promise<ResultadoPaso | null> {
       for (let reintentos = 0; ; reintentos++) {
         try {
-          return await api.pasoRecalculo(id);
+          const resultado = await api.pasoRecalculo(id);
+          registroCambio();
+          return resultado;
         } catch (error) {
+          registroCambio();
           const tipo = error instanceof ErrorAdmin ? error.tipo : 'otro';
           if (tipo === 'otro' || reintentos >= REINTENTOS[tipo]) {
             throw tipo === 'tiempo' && reintentos > 0
