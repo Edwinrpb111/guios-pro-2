@@ -3,7 +3,13 @@ import { atender } from './http.ts';
 import { iniciar } from './recalculo_iniciar.ts';
 import { calcularProgreso, paso } from './recalculo_paso.ts';
 import { ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
-import { CATALOGO_PRUEBA, clasificadorGuionado, TOKEN_ADMIN, TOKEN_DECISOR } from './pruebas.ts';
+import {
+  CATALOGO_PRUEBA,
+  clasificadorGuionado,
+  TOKEN_ADMIN,
+  TOKEN_DECISOR,
+  verificadorFalso,
+} from './pruebas.ts';
 import {
   crearDependenciasPrueba,
   CONFIGURACION_PRUEBA,
@@ -21,7 +27,7 @@ function llamar(deps: Dependencias, cuerpo: unknown, token: string | null = TOKE
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
       body: JSON.stringify(cuerpo),
     }),
-    { origenes: [], crear: () => deps },
+    { origenes: [], verificador: () => verificadorFalso, crear: () => deps },
     (entrada, admin, dependencias) => paso(entrada, admin, dependencias),
   );
 }
@@ -33,7 +39,7 @@ async function nuevoCalculo(deps: Deps, fuentes = ['openalex', 'crossref']): Pro
       headers: { authorization: `Bearer ${TOKEN_ADMIN}` },
       body: JSON.stringify({ anio_inicio: 2020, anio_fin: 2025, fuentes }),
     }),
-    { origenes: [], crear: () => deps },
+    { origenes: [], verificador: () => verificadorFalso, crear: () => deps },
     (entrada, admin, dependencias) => iniciar(entrada, admin, dependencias),
   );
   return (await respuesta.json()).id_calculo;

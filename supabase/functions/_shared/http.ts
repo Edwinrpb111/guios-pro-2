@@ -1,6 +1,6 @@
 // Capa HTTP común de las Edge Functions: CORS solo para el frontend (BRIEF §14), exigencia de
 // administrador (§11.3) y errores como `{error, codigo}` con un mensaje en español.
-import { exigirAdmin, exigirJwt, type UsuarioVerificado } from './auth.ts';
+import { exigirAdmin, exigirJwt, type UsuarioVerificado, type VerificadorAdmin } from './auth.ts';
 import type { Dependencias } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
 
@@ -19,9 +19,14 @@ export interface OpcionesServidor {
   /** Orígenes del frontend que CORS acepta. */
   origenes: string[];
   /**
+   * Da el verificador del JWT y del rol. No lee la configuración del recálculo: así se exige
+   * administrador antes de tocarla (issue #33).
+   */
+  verificador: () => VerificadorAdmin | Promise<VerificadorAdmin>;
+  /**
    * Crea las dependencias; puede lanzar un `ErrorApi` `configuracion_*` si falta configuración.
-   * Se invoca solo cuando la petición trae token, y ese error no se muestra al cliente. Puede ser
-   * asíncrona: lee la configuración guardada en la base (issue #33).
+   * Se invoca solo después de comprobar que quien llama es administrador, y ese error no se
+   * muestra al cliente. Puede ser asíncrona: lee la configuración guardada en la base (issue #33).
    */
   crear: () => Dependencias | Promise<Dependencias>;
 }
@@ -95,12 +100,11 @@ export async function atender(
   }
 
   try {
-    // Primero el token: quien no se identifica recibe 401 sin que se toque la configuración, así
-    // que nunca ve detalles de ella. Validar el JWT y el rol requiere las dependencias (cliente de
-    // Supabase), por eso `crear` va después de comprobar que hay token.
+    // Primero el token y el rol: quien no se identifica recibe 401 y un decisor 403 sin que se
+    // lea la configuración del recálculo, así que nunca ve detalles de ella ni un error suyo.
     exigirJwt(peticion);
+    const admin = await exigirAdmin(peticion, await opciones.verificador());
     const dependencias = await opciones.crear();
-    const admin = await exigirAdmin(peticion, dependencias.verificador);
     const cuerpo = await leerCuerpo(peticion);
     const resultado = await accion(cuerpo, admin, dependencias);
     return responder(resultado.estado, resultado.cuerpo, cabeceras);

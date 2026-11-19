@@ -2,7 +2,7 @@ import { assert, assertEquals, assertStringIncludes } from 'jsr:@std/assert@1';
 import { atender } from './http.ts';
 import { ErrorApi } from './errores.ts';
 import { crearDependenciasPrueba } from './pruebas_recalculo.ts';
-import { TOKEN_ADMIN, TOKEN_DECISOR } from './pruebas.ts';
+import { TOKEN_ADMIN, TOKEN_DECISOR, verificadorFalso } from './pruebas.ts';
 
 const ORIGEN = 'https://guios.vercel.app';
 const ORIGENES = [ORIGEN];
@@ -27,10 +27,14 @@ function atenderCon(
 ) {
   const dependencias = crearDependenciasPrueba();
   let accionEjecutada = false;
-  const respuesta = atender(peticion, { origenes: ORIGENES, crear: () => dependencias }, () => {
-    accionEjecutada = true;
-    return accion();
-  });
+  const respuesta = atender(
+    peticion,
+    { origenes: ORIGENES, verificador: () => verificadorFalso, crear: () => dependencias },
+    () => {
+      accionEjecutada = true;
+      return accion();
+    },
+  );
   return respuesta.then((r) => ({ respuesta: r, ejecutada: () => accionEjecutada }));
 }
 
@@ -141,6 +145,7 @@ Deno.test('un error inesperado es 500 error_interno y no revela su detalle', asy
 function opcionesConConfiguracionRota(creaciones: { cantidad: number }, error: Error) {
   return {
     origenes: ORIGENES,
+    verificador: () => verificadorFalso,
     crear: () => {
       creaciones.cantidad++;
       throw error;
@@ -247,7 +252,11 @@ Deno.test('crear puede ser asíncrono (lee la configuración de la base)', async
   const dependencias = crearDependenciasPrueba();
   const respuesta = await atender(
     solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
-    { origenes: ORIGENES, crear: () => Promise.resolve(dependencias) },
+    {
+      origenes: ORIGENES,
+      verificador: () => verificadorFalso,
+      crear: () => Promise.resolve(dependencias),
+    },
     () => Promise.resolve({ estado: 200, cuerpo: { ok: true } }),
   );
   assertEquals(respuesta.status, 200);
@@ -258,12 +267,31 @@ Deno.test(
   async () => {
     const respuesta = await atender(
       solicitud({ origen: ORIGEN, token: TOKEN_ADMIN }),
-      { origenes: ORIGENES, crear: () => Promise.reject(new Error('clave-secreta en el detalle')) },
+      {
+        origenes: ORIGENES,
+        verificador: () => verificadorFalso,
+        crear: () => Promise.reject(new Error('clave-secreta en el detalle')),
+      },
       () => Promise.resolve({ estado: 200, cuerpo: {} }),
     );
     assertEquals(respuesta.status, 500);
     const texto = JSON.stringify(await respuesta.json());
     assertEquals((JSON.parse(texto) as { codigo: string }).codigo, 'error_interno');
     assert(!texto.includes('clave-secreta'));
+  },
+);
+
+Deno.test(
+  'un decisor recibe 403 sin que se lea la configuración, aunque esté rota (admin antes que config)',
+  async () => {
+    const creaciones = { cantidad: 0 };
+    const respuesta = await atender(
+      solicitud({ origen: ORIGEN, token: TOKEN_DECISOR }),
+      opcionesConConfiguracionRota(creaciones, ERROR_CONFIGURACION),
+      () => Promise.resolve({ estado: 200, cuerpo: {} }),
+    );
+    assertEquals(respuesta.status, 403);
+    assertEquals((await respuesta.json()).codigo, 'solo_administrador');
+    assertEquals(creaciones.cantidad, 0);
   },
 );
