@@ -94,7 +94,10 @@ export interface BusquedaRegistro {
   error: string | null;
 }
 
-/** Un lote enviado a la IA. */
+/** Etapa de un paso en curso (`registro.etapa`, issue #45); `null` = el paso terminó. */
+export type EtapaPaso = 'buscando' | 'clasificando' | 'guardando';
+
+/** Una tanda (lote) enviada a la IA. */
 export interface LoteRegistro {
   n: number | null;
   tamano: number | null;
@@ -102,6 +105,10 @@ export interface LoteRegistro {
   reintentos: number | null;
   resultado: string | null;
   aceptados: number | null;
+  /** Tokens que gastó la tanda (si el proveedor los informa): entrada, salida y razonamiento. */
+  tokensEntrada: number | null;
+  tokensSalida: number | null;
+  tokensRazonamiento: number | null;
 }
 
 /** Registro del último intento de un paso (`recalculo_paso.registro`), ya validado. */
@@ -109,7 +116,12 @@ export interface RegistroPaso {
   intento: number | null;
   proveedor: string | null;
   busqueda: BusquedaRegistro[];
+  /** Tandas ya terminadas, en el orden en que terminaron. */
   lotes: LoteRegistro[];
+  /** Etapa del paso mientras corre; `null` si terminó o el registro no la trae. */
+  etapa: EtapaPaso | null;
+  /** Tandas planificadas para el paso; `null` hasta que termina la búsqueda. */
+  lotesTotal: number | null;
   aceptados: number | null;
   resultado: string | null;
   mensaje: string | null;

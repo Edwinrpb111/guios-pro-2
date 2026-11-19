@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { LoteRegistro, PasoRegistro, RegistroPaso } from '../admin/tipos';
+import { SIN_TOKENS } from '../admin/pruebas';
 import { formatearDuracion, formatearHora } from './formato';
 import { RegistroRecalculo } from './RegistroRecalculo';
 
@@ -25,9 +26,11 @@ const REGISTRO_OK: RegistroPaso = {
     { fuente: 'crossref', ms: 800, candidatos: 12, error: null },
   ],
   lotes: [
-    { n: 1, tamano: 10, ms: 2345, reintentos: 0, resultado: 'ok', aceptados: 3 },
-    { n: 2, tamano: 10, ms: 1500, reintentos: 1, resultado: 'ok', aceptados: 6 },
+    { n: 1, tamano: 10, ms: 2345, reintentos: 0, resultado: 'ok', aceptados: 3, ...SIN_TOKENS },
+    { n: 2, tamano: 10, ms: 1500, reintentos: 1, resultado: 'ok', aceptados: 6, ...SIN_TOKENS },
   ],
+  etapa: null,
+  lotesTotal: 2,
   aceptados: 9,
   resultado: 'hecho',
   mensaje: null,
@@ -49,8 +52,18 @@ const PASO_FALLO: PasoRegistro = {
       { fuente: 'crossref', ms: 40000, candidatos: null, error: 'Crossref respondió 503.' },
     ],
     lotes: [
-      { n: 1, tamano: 10, ms: 60000, reintentos: 3, resultado: 'reintento_agotado', aceptados: 0 },
+      {
+        n: 1,
+        tamano: 10,
+        ms: 60000,
+        reintentos: 3,
+        resultado: 'reintento_agotado',
+        aceptados: 0,
+        ...SIN_TOKENS,
+      },
     ],
+    etapa: null,
+    lotesTotal: 1,
     aceptados: 0,
     resultado: 'pausado',
     mensaje: 'Gemini no respondió tras varios reintentos.',
@@ -72,6 +85,8 @@ const REGISTRO_VACIO: RegistroPaso = {
   proveedor: null,
   busqueda: [],
   lotes: [],
+  etapa: null,
+  lotesTotal: null,
   aceptados: null,
   resultado: null,
   mensaje: null,
@@ -204,6 +219,7 @@ describe('RegistroRecalculo', () => {
       reintentos: null,
       resultado: null,
       aceptados: null,
+      ...SIN_TOKENS,
     };
     mostrar([{ ...PASO_BASE, registro: { ...REGISTRO_OK, busqueda: [], lotes: [lote] } }]);
     expect(tarjeta('Costo de licencias').getByText(/Lote —: — · — · — · —/)).toBeInTheDocument();

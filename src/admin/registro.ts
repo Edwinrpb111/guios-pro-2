@@ -2,7 +2,7 @@
  * Lectura defensiva de `recalculo_paso.registro` (issue #43). El JSON lo escribe una Edge Function
  * pero se trata como no confiable: cada campo se valida y lo que falte o venga mal queda en `null`.
  */
-import type { BusquedaRegistro, LoteRegistro, RegistroPaso } from './tipos';
+import type { BusquedaRegistro, EtapaPaso, LoteRegistro, RegistroPaso } from './tipos';
 
 /** Tope de entradas por lista: el panel no debe romperse con un registro desmesurado. */
 const MAX_ENTRADAS = 50;
@@ -16,6 +16,18 @@ function esObjeto(valor: unknown): valor is Objeto {
 
 function numero(valor: unknown): number | null {
   return typeof valor === 'number' && Number.isFinite(valor) && valor >= 0 ? valor : null;
+}
+
+function entero(valor: unknown): number | null {
+  const n = numero(valor);
+  return n !== null && Number.isInteger(n) ? n : null;
+}
+
+const ETAPAS: readonly EtapaPaso[] = ['buscando', 'clasificando', 'guardando'];
+
+/** Etapa del paso en curso (issue #45); cualquier otro valor se trata como «sin etapa». */
+function etapa(valor: unknown): EtapaPaso | null {
+  return ETAPAS.find((e) => e === valor) ?? null;
 }
 
 function texto(valor: unknown): string | null {
@@ -49,6 +61,9 @@ function leerLote(e: Objeto): LoteRegistro {
     reintentos: numero(e['reintentos']),
     resultado: texto(e['resultado']),
     aceptados: numero(e['aceptados']),
+    tokensEntrada: entero(e['tokens_entrada']),
+    tokensSalida: entero(e['tokens_salida']),
+    tokensRazonamiento: entero(e['tokens_razonamiento']),
   };
 }
 
@@ -60,6 +75,8 @@ export function leerRegistro(valor: unknown): RegistroPaso | null {
     proveedor: texto(valor['proveedor']),
     busqueda: lista(valor['busqueda'], leerBusqueda),
     lotes: lista(valor['lotes'], leerLote),
+    etapa: etapa(valor['etapa']),
+    lotesTotal: entero(valor['lotes_total']),
     aceptados: numero(valor['aceptados']),
     resultado: texto(valor['resultado']),
     mensaje: texto(valor['mensaje']),

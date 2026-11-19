@@ -4,6 +4,7 @@ import {
   CALCULO_IA,
   CALCULO_TESIS,
   crearApiFalsa,
+  crearLote,
   renderAdmin,
   type ApiFalsa,
 } from '../admin/pruebas';
@@ -23,7 +24,9 @@ const PASO_HECHO: PasoRegistro = {
     intento: 1,
     proveedor: 'gemini',
     busqueda: [{ fuente: 'openalex', ms: 1234, candidatos: 25, error: null }],
-    lotes: [{ n: 1, tamano: 10, ms: 2345, reintentos: 0, resultado: 'ok', aceptados: 9 }],
+    lotes: [crearLote({ n: 1, ms: 2345, aceptados: 9 })],
+    etapa: null,
+    lotesTotal: 1,
     aceptados: 9,
     resultado: 'hecho',
     mensaje: null,
