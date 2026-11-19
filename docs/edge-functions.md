@@ -28,6 +28,7 @@ Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`es
 | 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                                                                                              |
 | 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                                                                                           |
 | 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                                                                                            |
+| 503  | `paso_sin_tiempo`                                           | El paso agotó su tope de 110 s (ver abajo). El cálculo queda `pausado` y el paso, `pendiente`: se reanuda                                                                          |
 | 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas                                                                 |
 | 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`                                                                             |
 | 503  | `proveedor_no_disponible`                                   | 429/503 de Gemini o del proveedor compatible tras agotar los reintentos, otro 5xx, caída de red, clave rechazada o sin saldo (402). El cálculo queda `pausado` con `mensaje_error` |
@@ -35,9 +36,39 @@ Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`es
 
 **Orden de las comprobaciones.** Primero el token: sin `Authorization: Bearer` la respuesta es 401 sin tocar la configuración. Los errores de configuración (`configuracion_*`: variable ausente o inválida) se registran solo en el servidor y el cliente recibe `error_interno`, sin nombrar variables.
 
+### Tope de 110 s por paso (issue #43, [ADR-013](decisiones/ADR-013-tope-por-paso-y-registro-del-recalculo.md))
+
+- Cada invocación de `recalculo-paso` tiene un presupuesto de **110 s** de reloj de pared, contado desde que entra: incluye búsquedas, llamadas a la IA, esperas de ritmo y reintentos. Deja 40 s de margen sobre los 150 s de la plataforma.
+- Cada `fetch` usa `min(su tiempo propio, tiempo restante)`: OpenAlex y Crossref 20 s; Gemini y el compatible con OpenAI **30 s** (antes 60 s).
+- No se empieza un lote, una espera de ritmo ni un reintento si quedarían menos de **15 s**.
+- Al agotarse: respuesta **503 `paso_sin_tiempo`** con «El subfactor «X» tardó más de lo permitido (110 s). Reduce el máximo de candidatos o sube las llamadas por minuto y reanuda.», cálculo `pausado` (con ese `mensaje_error`) y paso `pendiente` sin guardar nada parcial. Volver a invocar reanuda el mismo subfactor.
+
+### Registro por paso (issue #43)
+
+`recalculo_paso` guarda el **último intento** de cada subfactor en tres columnas que solo escribe la función (`service_role`) y lee el administrador:
+
+| Columna       | Contenido                                                                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `iniciado_en` | Cuándo empezó el intento (se escribe al empezar: un paso cortado por la plataforma la conserva)                                                                                                         |
+| `duracion_ms` | Cuánto tardó; **nula** si el paso sigue en curso o lo cortaron                                                                                                                                          |
+| `registro`    | JSON: `intento`, `proveedor`, `busqueda[{fuente, ms, candidatos, error}]`, `lotes[{n, tamano, ms, reintentos, resultado, aceptados}]`, `aceptados`, `resultado` (`hecho`/`pausado`/`error`) y `mensaje` |
+
+- `intento` sube cada vez que se repite el mismo paso. Mientras el intento corre, `registro` es provisional (`resultado: error`, «El paso no terminó…»); lo reemplaza al terminar.
+- `lotes[].resultado`: `ok`, `reintento_agotado`, `sin_tiempo`, `clave_rechazada`, `sin_saldo`, `respuesta_invalida` o `error`.
+- Nunca incluye claves, direcciones, prompts ni textos de candidatos. `detalle` conserva su significado de siempre.
+- Si no se puede escribir el registro, el paso sigue (el fallo queda en los logs del servidor).
+
+**Logs de la función.** Cada intento escribe **una** línea JSON con `console.log`, sin claves, URL ni textos:
+
+```json
+{evento:recalculo_paso,id_calculo:4,id_subfactor:12,subfactor:1.2,intento:1,proveedor:gemini,resultado:pausado,duracion_ms:110512,busqueda:[{fuente:openalex,ms:1834,candidatos:25}],candidatos:25,lotes:3,aceptados:0}
+```
+
+Para verlos: panel de Supabase → **Edge Functions** → **recalculo-paso** → **Logs**. Los fallos inesperados (`error_interno`) y los fallos al escribir el registro aparecen ahí como `console.error`.
+
 ### Pausa y reanudación (BRIEF §13.5)
 
-- Gemini: antes de cada llamada se espera para respetar `llamadas_por_minuto` (15 por defecto) y un 429 o 503 se reintenta hasta 3 veces, esperando el `retryDelay` de Gemini (máximo 30 s por espera y 90 s en total por paso); el clasificador falso no espera ([ADR-011](decisiones/ADR-011-ritmo-de-llamadas-a-gemini.md)).
+- Gemini: antes de cada llamada se espera para respetar `llamadas_por_minuto` (15 por defecto) y un 429 o 503 se reintenta hasta 3 veces, esperando el `retryDelay` de Gemini (máximo 30 s por espera y 90 s en total por paso, siempre dentro del tope de 110 s del paso); el clasificador falso no espera ([ADR-011](decisiones/ADR-011-ritmo-de-llamadas-a-gemini.md)).
 - Compatible con OpenAI (issue #40): mismo ritmo y mismos reintentos, usando la cabecera `Retry-After` ([ADR-012](decisiones/ADR-012-proveedor-compatible-con-openai.md)).
 - Si se agotan esos reintentos, o falla otra API o la red (sin reintento), **no se reintenta en bucle**: el cálculo pasa a `pausado`, se guarda un `mensaje_error` legible y la respuesta (503/502) incluye `{estado: 'pausado', progreso, pendientes}`.
 - Volver a invocar `recalculo-paso` **reanuda** (`pausado → en_proceso`, se borra el mensaje) desde el paso pendiente o con error. Cerrar la pestaña no pierde nada: lo hecho queda guardado.
