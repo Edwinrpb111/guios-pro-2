@@ -5,6 +5,7 @@
 import { FunctionsRelayError, type SupabaseClient } from '@supabase/supabase-js';
 import { esImportancia, type Importancia } from '../guios-core';
 import type { Database, Json } from '../lib/database.types';
+import { leerRegistro } from './registro';
 import {
   CLAVES,
   ErrorAdmin,
@@ -12,9 +13,11 @@ import {
   type CalculoResumen,
   type ConfiguracionRecalculo,
   type EstadoCalculo,
+  type EstadoPaso,
   type FilaSugerida,
   type NombreClave,
   type ParametrosCalculo,
+  type PasoRegistro,
 } from './tipos';
 
 export type ClienteAdmin = SupabaseClient<Database>;
@@ -31,6 +34,12 @@ const ESTADOS: readonly EstadoCalculo[] = [
   'descartado',
   'fallido',
 ];
+
+const ESTADOS_PASO: readonly EstadoPaso[] = ['pendiente', 'hecho', 'error'];
+
+const COLUMNAS_PASO =
+  'id_subfactor, estado, candidatos, aceptados, detalle, iniciado_en, duracion_ms, registro, ' +
+  'subfactor(enunciado)';
 
 /** PostgREST devuelve como máximo 1000 filas por consulta (`max_rows`). */
 const TAMANO_PAGINA = 1000;
@@ -97,6 +106,51 @@ function mapearCalculo(fila: FilaCalculo): CalculoResumen {
     mensajeError: fila.mensaje_error,
     parametros,
   };
+}
+
+interface FilaPaso {
+  id_subfactor: number;
+  estado: string;
+  candidatos: number;
+  aceptados: number;
+  detalle: string | null;
+  iniciado_en: string | null;
+  duracion_ms: number | null;
+  registro: Json | null;
+  /** PostgREST devuelve el subfactor embebido como objeto (o lista/null si algo cambia). */
+  subfactor: { enunciado?: unknown } | { enunciado?: unknown }[] | null;
+}
+
+function nombreDeSubfactor(subfactor: FilaPaso['subfactor']): string | null {
+  const fila = Array.isArray(subfactor) ? subfactor[0] : subfactor;
+  return typeof fila?.enunciado === 'string' && fila.enunciado !== '' ? fila.enunciado : null;
+}
+
+/**
+ * Pasos con actividad (empezados o ya con resultado), del más reciente al más antiguo. Los
+ * pendientes que nunca empezaron no son registro: son el trabajo que falta.
+ */
+function mapearPasos(filas: FilaPaso[]): PasoRegistro[] {
+  return filas
+    .filter((f) => f.iniciado_en !== null || f.estado !== 'pendiente')
+    .map((f) => {
+      if (!ESTADOS_PASO.includes(f.estado as EstadoPaso)) {
+        throw new ErrorAdmin(
+          `El paso del subfactor ${f.id_subfactor} tiene un estado desconocido.`,
+        );
+      }
+      return {
+        idSubfactor: f.id_subfactor,
+        nombre: nombreDeSubfactor(f.subfactor),
+        estado: f.estado as EstadoPaso,
+        iniciadoEn: f.iniciado_en,
+        duracionMs: f.duracion_ms,
+        candidatos: f.candidatos,
+        aceptados: f.aceptados,
+        detalle: f.detalle,
+        registro: leerRegistro(f.registro),
+      };
+    });
 }
 
 const SOLO_ADMINISTRADOR =
@@ -319,6 +373,19 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
 
     pasoRecalculo(id) {
       return invocar(cliente, 'recalculo-paso', { id_calculo: id });
+    },
+
+    async registroPasos(id) {
+      const filas = exigir(
+        await cliente
+          .from('recalculo_paso')
+          .select(COLUMNAS_PASO)
+          .eq('id_calculo', id)
+          // Los pasos sin inicio quedan al final; entre iguales, un orden estable.
+          .order('iniciado_en', { ascending: false, nullsFirst: false })
+          .order('id_subfactor'),
+      ) as unknown as FilaPaso[];
+      return mapearPasos(filas);
     },
 
     obtenerConfiguracion: () => obtenerConfiguracion(cliente),
