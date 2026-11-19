@@ -107,7 +107,7 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
     cliente
       .from('configuracion_recalculo')
       .select(
-        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, crossref_mailto, actualizado_en',
+        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, crossref_mailto, openai_base_url, openai_modelo, actualizado_en',
       )
       .maybeSingle()
       .then(exigir),
@@ -124,6 +124,7 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
   if (
     fila.proveedor_llm !== null &&
     fila.proveedor_llm !== 'gemini' &&
+    fila.proveedor_llm !== 'openai' &&
     fila.proveedor_llm !== 'fake'
   ) {
     throw new ErrorAdmin('La configuración tiene un proveedor del clasificador desconocido.');
@@ -137,6 +138,8 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
       maxCandidatos: fila.max_candidatos,
       llamadasPorMinuto: fila.llamadas_por_minuto,
       crossrefMailto: fila.crossref_mailto,
+      openaiBaseUrl: fila.openai_base_url,
+      openaiModelo: fila.openai_modelo,
     },
     actualizadoEn: fila.actualizado_en,
     claves: (estados ?? []).map((e) => {
@@ -316,6 +319,8 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
             max_candidatos: p.maxCandidatos,
             llamadas_por_minuto: p.llamadasPorMinuto,
             crossref_mailto: p.crossrefMailto,
+            openai_base_url: p.openaiBaseUrl,
+            openai_modelo: p.openaiModelo,
           })
           .eq('id', true)
           .select('id'),

@@ -47,7 +47,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     expect(screen.getByLabelText('Modelo')).toHaveValue('gemini-3.1-flash-lite');
     expect(screen.getByLabelText(/Umbral de confianza/)).toHaveValue('0.7');
     expect(screen.getByLabelText(/Máximo de candidatos/)).toHaveValue('');
-    expect(screen.getByLabelText('Llamadas a Gemini por minuto')).toHaveValue('');
+    expect(screen.getByLabelText('Llamadas a la IA por minuto')).toHaveValue('');
     expect(screen.getByLabelText('Correo para Crossref')).toHaveValue('equipo@unemi.edu.ec');
 
     expect(claveGemini().getByText(/Configurada · actualizada el 18\/11\/2026/)).toBeVisible();
@@ -76,7 +76,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     await userEvent.clear(screen.getByLabelText(/Umbral de confianza/));
     await userEvent.type(screen.getByLabelText(/Umbral de confianza/), '0,8');
     await userEvent.type(maximo, '15');
-    await userEvent.type(screen.getByLabelText('Llamadas a Gemini por minuto'), '30');
+    await userEvent.type(screen.getByLabelText('Llamadas a la IA por minuto'), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
     await waitFor(() =>
@@ -87,6 +87,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
         crossrefMailto: 'equipo@unemi.edu.ec',
+        openaiBaseUrl: null,
+        openaiModelo: null,
       }),
     );
     expect(await screen.findByText('Parámetros guardados.')).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
     const api = crearApiFalsa();
     renderizar(api);
     await abrirAvanzadas();
-    await userEvent.type(await screen.findByLabelText('Llamadas a Gemini por minuto'), '1001');
+    await userEvent.type(await screen.findByLabelText('Llamadas a la IA por minuto'), '1001');
     await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/llamadas por minuto/i);
@@ -120,7 +122,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
   it('explica el ritmo: plan gratis cerca de 15 y que con facturación se puede subir', async () => {
     renderizar();
     await abrirAvanzadas();
-    const campo = await screen.findByLabelText('Llamadas a Gemini por minuto');
+    const campo = await screen.findByLabelText('Llamadas a la IA por minuto');
     expect(campo).toHaveAccessibleDescription(/plan gratis.*15.*facturación.*subir/i);
     expect(campo).toHaveAttribute('placeholder', '15');
   });
@@ -218,6 +220,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
         maxCandidatos: null,
         llamadasPorMinuto: null,
         crossrefMailto: null,
+        openaiBaseUrl: null,
+        openaiModelo: null,
       },
       cambios: [],
     };
@@ -258,6 +262,8 @@ describe('AdminConfiguracionPage (issue #33)', () => {
             maxCandidatos: 30,
             llamadasPorMinuto: 20,
             crossrefMailto: 'equipo@unemi.edu.ec',
+            openaiBaseUrl: null,
+            openaiModelo: null,
           }),
         );
         expect(await screen.findByText(/El recálculo usará Gemini/)).toBeInTheDocument();
@@ -345,7 +351,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       expect(screen.getByLabelText('Modelo')).not.toBeVisible();
       expect(screen.getByLabelText(/Umbral de confianza/)).not.toBeVisible();
       expect(screen.getByLabelText(/Máximo de candidatos/)).not.toBeVisible();
-      expect(screen.getByLabelText('Llamadas a Gemini por minuto')).not.toBeVisible();
+      expect(screen.getByLabelText('Llamadas a la IA por minuto')).not.toBeVisible();
       expect(screen.getByLabelText('Correo para Crossref')).not.toBeVisible();
       expect(screen.getByRole('radio', { name: /Usar el secreto de Supabase/ })).not.toBeVisible();
 
@@ -435,7 +441,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       expect(
         caja.getByText(/lo decide el secreto LLM_PROVIDER de Supabase, que la app no puede ver/),
       ).toBeInTheDocument();
-      expect(caja.getByText(/elige Gemini o Falso/i)).toBeInTheDocument();
+      expect(caja.getByText(/elige Gemini, Compatible con OpenAI o Falso/i)).toBeInTheDocument();
     });
 
     it('refleja lo guardado, no lo que se está editando', async () => {
@@ -444,6 +450,333 @@ describe('AdminConfiguracionPage (issue #33)', () => {
       expect(
         (await resumen()).getByText('Clasificador falso (demostración, sin red ni claves)'),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('proveedor compatible con OpenAI (S14, issue #40)', () => {
+    const OPCION = 'Compatible con OpenAI (OpenRouter, Groq, DeepSeek…)';
+    const claveCompat = () =>
+      within(screen.getByRole('group', { name: 'Clave de la IA compatible con OpenAI' }));
+    const CLAVE_COMPAT_GUARDADA = {
+      nombre: 'OPENAI_COMPAT_API_KEY',
+      configurada: true,
+      actualizadaEn: '2026-11-19T15:00:00Z',
+    } as const;
+    const CLAVE_GEMINI_GUARDADA = {
+      nombre: 'GEMINI_API_KEY',
+      configurada: true,
+      actualizadaEn: '2026-11-18T15:00:00Z',
+    } as const;
+    const SOLO_COMPAT = [SIN_CLAVES[0], CLAVE_COMPAT_GUARDADA, SIN_CLAVES[1]];
+    const GROQ = {
+      proveedorLlm: 'openai',
+      openaiBaseUrl: 'https://api.groq.com/openai/v1',
+      openaiModelo: 'llama-3.3-70b-versatile',
+    } as const;
+
+    /** API falsa con otros parámetros y el estado de claves indicado. */
+    function apiConClaves(
+      parametros: Partial<ParametrosRecalculo>,
+      claves: ConfiguracionRecalculo['claves'],
+    ) {
+      const configuracion: ConfiguracionRecalculo = {
+        ...CONFIGURACION_PRUEBA,
+        parametros: { ...CONFIGURACION_PRUEBA.parametros, ...parametros },
+        claves,
+      };
+      return crearApiFalsa({ obtenerConfiguracion: vi.fn().mockResolvedValue(configuracion) });
+    }
+
+    it('ofrece una tercera opción grande junto a Gemini y Falso', async () => {
+      renderizar();
+      await screen.findByRole('radio', { name: 'Gemini' });
+      expect(proveedor().getAllByRole('radio')).toHaveLength(3);
+      expect(proveedor().getByRole('radio', { name: OPCION })).not.toBeChecked();
+      expect(
+        proveedor().getByText(/Servicios baratos o gratis con el formato de OpenAI/),
+      ).toBeInTheDocument();
+    });
+
+    it('al elegirla aparecen dirección, modelo y clave en el mismo bloque, con ejemplos', async () => {
+      renderizar(apiCon({ proveedorLlm: 'fake' }, false));
+      const bloque = within(await screen.findByRole('group', { name: 'Clasificador' }));
+      expect(bloque.queryByLabelText('Dirección base (https)')).toBeNull();
+      expect(bloque.queryByLabelText('Modelo de la IA compatible')).toBeNull();
+      expect(
+        bloque.queryByRole('group', { name: 'Clave de la IA compatible con OpenAI' }),
+      ).toBeNull();
+
+      await userEvent.click(bloque.getByRole('radio', { name: OPCION }));
+      expect(bloque.getByLabelText('Dirección base (https)')).toHaveValue('');
+      expect(bloque.getByLabelText('Modelo de la IA compatible')).toHaveValue('');
+      const clave = within(
+        bloque.getByRole('group', { name: 'Clave de la IA compatible con OpenAI' }),
+      );
+      expect(clave.getByText('OPENAI_COMPAT_API_KEY')).toBeInTheDocument();
+      expect(clave.getByText('No configurada')).toBeInTheDocument();
+      expect(bloque.getByRole('group', { name: 'Clave de OpenAlex' })).toBeInTheDocument();
+      // No aparece la clave de Gemini.
+      expect(bloque.queryByRole('group', { name: 'Clave de Gemini' })).toBeNull();
+      // Ejemplos de direcciones.
+      expect(bloque.getByText('https://openrouter.ai/api/v1')).toBeInTheDocument();
+      expect(bloque.getByText('https://api.groq.com/openai/v1')).toBeInTheDocument();
+      expect(bloque.getByText('https://api.deepseek.com')).toBeInTheDocument();
+
+      await userEvent.click(bloque.getByRole('radio', { name: 'Gemini' }));
+      expect(bloque.queryByLabelText('Dirección base (https)')).toBeNull();
+      expect(bloque.getByRole('group', { name: 'Clave de Gemini' })).toBeInTheDocument();
+      expect(
+        bloque.queryByRole('group', { name: 'Clave de la IA compatible con OpenAI' }),
+      ).toBeNull();
+    });
+
+    it('muestra lo guardado y la clave nunca se muestra: campo de contraseña vacío', async () => {
+      renderizar(apiConClaves(GROQ, SOLO_COMPAT));
+      expect(await screen.findByLabelText('Dirección base (https)')).toHaveValue(
+        'https://api.groq.com/openai/v1',
+      );
+      expect(screen.getByLabelText('Modelo de la IA compatible')).toHaveValue(
+        'llama-3.3-70b-versatile',
+      );
+      expect(proveedor().getByRole('radio', { name: OPCION })).toBeChecked();
+      const campo = screen.getByLabelText('Nueva clave de la IA compatible con OpenAI');
+      expect(campo).toHaveAttribute('type', 'password');
+      expect(campo).toHaveAttribute('autocomplete', 'new-password');
+      expect(campo).toHaveValue('');
+      expect(claveCompat().getByText(/Configurada · actualizada el 19\/11\/2026/)).toBeVisible();
+    });
+
+    it('guarda proveedor, dirección (sin «/» final) y modelo con los demás parámetros', async () => {
+      const api = apiCon({ proveedorLlm: null });
+      renderizar(api);
+      await userEvent.click(await screen.findByRole('radio', { name: OPCION }));
+      await userEvent.type(
+        screen.getByLabelText('Dirección base (https)'),
+        'https://openrouter.ai/api/v1/',
+      );
+      await userEvent.type(
+        screen.getByLabelText('Modelo de la IA compatible'),
+        'meta-llama/llama-3.3-70b-instruct:free',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      await waitFor(() =>
+        expect(api.guardarParametros).toHaveBeenCalledWith({
+          ...CONFIGURACION_PRUEBA.parametros,
+          proveedorLlm: 'openai',
+          openaiBaseUrl: 'https://openrouter.ai/api/v1',
+          openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
+        }),
+      );
+    });
+
+    it('no guarda una dirección que no sea https y lo anuncia con role="alert"', async () => {
+      const api = crearApiFalsa();
+      renderizar(api);
+      await userEvent.click(await screen.findByRole('radio', { name: OPCION }));
+      await userEvent.type(
+        screen.getByLabelText('Dirección base (https)'),
+        'http://api.groq.com/openai/v1',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(/https/i);
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    });
+
+    it('no guarda una dirección con usuario y clave ni la repite en el aviso', async () => {
+      const api = crearApiFalsa();
+      renderizar(api);
+      await userEvent.click(await screen.findByRole('radio', { name: OPCION }));
+      await userEvent.type(
+        screen.getByLabelText('Dirección base (https)'),
+        'https://jose:secreto123@api.groq.com/v1',
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      const alerta = await screen.findByRole('alert');
+      expect(alerta).toHaveTextContent(/usuario|clave|credenciales/i);
+      expect(alerta).not.toHaveTextContent('secreto123');
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    });
+
+    it('no guarda un modelo con caracteres no permitidos', async () => {
+      const api = crearApiFalsa();
+      renderizar(api);
+      await userEvent.click(await screen.findByRole('radio', { name: OPCION }));
+      await userEvent.type(screen.getByLabelText('Modelo de la IA compatible'), 'modelo malo');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(/modelo/i);
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    });
+
+    it('guarda la clave sin mostrarla y vacía el campo', async () => {
+      const api = apiConClaves(GROQ, [SIN_CLAVES[0], SIN_CLAVES[1]]);
+      renderizar(api);
+      const campo = await screen.findByLabelText('Nueva clave de la IA compatible con OpenAI');
+      await userEvent.type(campo, 'sk-super-secreta');
+      await userEvent.click(claveCompat().getByRole('button', { name: 'Guardar clave' }));
+      await waitFor(() =>
+        expect(api.guardarClave).toHaveBeenCalledWith('OPENAI_COMPAT_API_KEY', 'sk-super-secreta'),
+      );
+      expect(
+        await screen.findByText('Clave de la IA compatible con OpenAI guardada.'),
+      ).toBeInTheDocument();
+      expect(campo).toHaveValue('');
+      expect(screen.queryByText(/sk-super-secreta/)).toBeNull();
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    });
+
+    it('una clave configurada se reemplaza o se borra tras confirmar', async () => {
+      const api = apiConClaves(GROQ, SOLO_COMPAT);
+      renderizar(api);
+      await screen.findByLabelText('Nueva clave de la IA compatible con OpenAI');
+      expect(claveCompat().getByRole('button', { name: 'Reemplazar clave' })).toBeInTheDocument();
+      await userEvent.click(claveCompat().getByRole('button', { name: 'Borrar clave' }));
+      expect(api.borrarClave).not.toHaveBeenCalled();
+      await userEvent.click(
+        claveCompat().getByRole('button', { name: 'Sí, borrar OPENAI_COMPAT_API_KEY' }),
+      );
+      await waitFor(() => expect(api.borrarClave).toHaveBeenCalledWith('OPENAI_COMPAT_API_KEY'));
+      expect(
+        await screen.findByText('Clave de la IA compatible con OpenAI borrada.'),
+      ).toBeInTheDocument();
+    });
+
+    it('pulsar Intro en la clave guarda la clave y no los parámetros', async () => {
+      const api = apiConClaves(GROQ, [SIN_CLAVES[0], SIN_CLAVES[1]]);
+      renderizar(api);
+      await userEvent.type(
+        await screen.findByLabelText('Nueva clave de la IA compatible con OpenAI'),
+        'abc{Enter}',
+      );
+      await waitFor(() =>
+        expect(api.guardarClave).toHaveBeenCalledWith('OPENAI_COMPAT_API_KEY', 'abc'),
+      );
+      expect(api.guardarParametros).not.toHaveBeenCalled();
+    });
+
+    it('«Llamadas a la IA por minuto» vale también para este proveedor', async () => {
+      const api = apiConClaves(GROQ, SOLO_COMPAT);
+      renderizar(api);
+      await abrirAvanzadas();
+      await userEvent.type(await screen.findByLabelText('Llamadas a la IA por minuto'), '30');
+      await userEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+      await waitFor(() =>
+        expect(api.guardarParametros).toHaveBeenCalledWith(
+          expect.objectContaining({ proveedorLlm: 'openai', llamadasPorMinuto: 30 }),
+        ),
+      );
+    });
+
+    describe('resumen «Qué va a usar el recálculo»', () => {
+      it('muestra «Compatible con OpenAI · modelo · servidor» y que la clave está guardada', async () => {
+        renderizar(apiConClaves({ ...GROQ, umbral: 0.7 }, SOLO_COMPAT));
+        const caja = await resumen();
+        expect(
+          caja.getByText(
+            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,7 · máx. 50 candidatos (por defecto) · 15 llamadas por minuto (por defecto) · clave guardada en la app',
+          ),
+        ).toBeInTheDocument();
+        expect(caja.queryByText(/el recálculo fallará/)).toBeNull();
+        expect(caja.queryByText(/Gemini/)).toBeNull();
+      });
+
+      it('sin clave guardada advierte que usará el secreto de Supabase o fallará', async () => {
+        renderizar(apiConClaves(GROQ, [SIN_CLAVES[0], SIN_CLAVES[1]]));
+        const caja = await resumen();
+        expect(
+          caja.getByText(/Compatible con OpenAI · llama-3\.3-70b-versatile · api\.groq\.com/),
+        ).toBeInTheDocument();
+        expect(caja.getByText(/clave no guardada en la app/)).toBeInTheDocument();
+        expect(
+          caja.getByText(
+            /usará OPENAI_COMPAT_API_KEY de los secretos de Supabase si existe; si no, el recálculo fallará/,
+          ),
+        ).toBeInTheDocument();
+      });
+
+      it('sin dirección ni modelo guardados dice que salen de los secretos de Supabase', async () => {
+        renderizar(
+          apiConClaves(
+            { proveedorLlm: 'openai', openaiBaseUrl: null, openaiModelo: null },
+            SOLO_COMPAT,
+          ),
+        );
+        const caja = await resumen();
+        expect(
+          caja.getByText(
+            /Compatible con OpenAI · modelo del secreto OPENAI_COMPAT_MODEL · dirección del secreto OPENAI_COMPAT_BASE_URL/,
+          ),
+        ).toBeInTheDocument();
+        expect(
+          caja.getByText(
+            /OPENAI_COMPAT_BASE_URL y OPENAI_COMPAT_MODEL de los secretos de Supabase; si faltan, el recálculo fallará/,
+          ),
+        ).toBeInTheDocument();
+      });
+
+      it('con todo definido no muestra «por defecto»', async () => {
+        renderizar(
+          apiConClaves(
+            { ...GROQ, umbral: 0.5, maxCandidatos: 20, llamadasPorMinuto: 60 },
+            SOLO_COMPAT,
+          ),
+        );
+        const caja = await resumen();
+        expect(
+          caja.getByText(
+            'Compatible con OpenAI · llama-3.3-70b-versatile · api.groq.com · umbral 0,5 · máx. 20 candidatos · 60 llamadas por minuto · clave guardada en la app',
+          ),
+        ).toBeInTheDocument();
+        expect(caja.queryByText(/por defecto/)).toBeNull();
+      });
+    });
+
+    describe('aviso de clave guardada que no se usa', () => {
+      it('con Falso y una clave del compatible guardada avisa y «Usar…» lo fija en un clic', async () => {
+        const api = apiConClaves({ ...GROQ, proveedorLlm: 'fake', umbral: 0.9 }, SOLO_COMPAT);
+        renderizar(api);
+        const aviso = within(await screen.findByRole('status', { name: 'Clave sin usar' }));
+        expect(
+          aviso.getByText(/clave de la IA compatible con OpenAI guardada/i),
+        ).toBeInTheDocument();
+        expect(aviso.getByText(/clasificador falso/i)).toBeInTheDocument();
+
+        await userEvent.click(
+          aviso.getByRole('button', { name: 'Usar el proveedor compatible con OpenAI' }),
+        );
+        await waitFor(() =>
+          expect(api.guardarParametros).toHaveBeenCalledWith({
+            ...CONFIGURACION_PRUEBA.parametros,
+            ...GROQ,
+            umbral: 0.9,
+          }),
+        );
+        expect(
+          await screen.findByText(/El recálculo usará el proveedor compatible/),
+        ).toBeInTheDocument();
+        expect(proveedor().getByRole('radio', { name: OPCION })).toBeChecked();
+      });
+
+      it('con Gemini fijado avisa por la clave del compatible y nombra el proveedor guardado', async () => {
+        renderizar(apiConClaves({ proveedorLlm: 'gemini' }, SOLO_COMPAT));
+        const aviso = within(await screen.findByRole('status', { name: 'Clave sin usar' }));
+        expect(aviso.getByText(/el proveedor guardado es Gemini/i)).toBeInTheDocument();
+      });
+
+      it('con el compatible fijado no avisa por su propia clave', async () => {
+        renderizar(apiConClaves(GROQ, SOLO_COMPAT));
+        await resumen();
+        expect(screen.queryByRole('status', { name: 'Clave sin usar' })).toBeNull();
+      });
+
+      it('con el compatible fijado avisa por una clave de Gemini guardada', async () => {
+        renderizar(
+          apiConClaves(GROQ, [CLAVE_GEMINI_GUARDADA, CLAVE_COMPAT_GUARDADA, SIN_CLAVES[1]]),
+        );
+        const aviso = within(await screen.findByRole('status', { name: 'Clave sin usar' }));
+        expect(aviso.getByText(/clave de Gemini guardada/i)).toBeInTheDocument();
+        expect(aviso.getByText(/compatible con OpenAI/i)).toBeInTheDocument();
+        expect(aviso.getByRole('button', { name: 'Usar Gemini' })).toBeInTheDocument();
+      });
     });
   });
 });

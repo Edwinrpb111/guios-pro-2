@@ -324,10 +324,17 @@ describe('crearApiAdmin (Supabase)', () => {
       max_candidatos: null,
       llamadas_por_minuto: 12,
       crossref_mailto: 'equipo@unemi.edu.ec',
+      openai_base_url: 'https://openrouter.ai/api/v1',
+      openai_modelo: 'meta-llama/llama-3.3-70b-instruct:free',
       actualizado_en: '2026-11-18T10:00:00Z',
     };
     const ESTADO = [
       { nombre: 'GEMINI_API_KEY', configurada: true, actualizada_en: '2026-11-18T10:00:00Z' },
+      {
+        nombre: 'OPENAI_COMPAT_API_KEY',
+        configurada: true,
+        actualizada_en: '2026-11-19T10:00:00Z',
+      },
       { nombre: 'OPENALEX_API_KEY', configurada: false, actualizada_en: null },
     ];
     const CAMBIOS = [
@@ -355,10 +362,17 @@ describe('crearApiAdmin (Supabase)', () => {
           maxCandidatos: null,
           llamadasPorMinuto: 12,
           crossrefMailto: 'equipo@unemi.edu.ec',
+          openaiBaseUrl: 'https://openrouter.ai/api/v1',
+          openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
         },
         actualizadoEn: '2026-11-18T10:00:00Z',
         claves: [
           { nombre: 'GEMINI_API_KEY', configurada: true, actualizadaEn: '2026-11-18T10:00:00Z' },
+          {
+            nombre: 'OPENAI_COMPAT_API_KEY',
+            configurada: true,
+            actualizadaEn: '2026-11-19T10:00:00Z',
+          },
           { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
         ],
         cambios: [
@@ -374,9 +388,31 @@ describe('crearApiAdmin (Supabase)', () => {
       const pasos = llamadas.find((l) => l.tabla === 'configuracion_recalculo')?.pasos ?? [];
       // Nunca se piden columnas de claves: solo existen en Vault.
       expect(JSON.stringify(pasos)).not.toMatch(/api_key/);
+      // Sí se piden la dirección base y el modelo del proveedor compatible (no son secretos).
+      expect(JSON.stringify(pasos)).toMatch(/openai_base_url, openai_modelo/);
       expect(
         llamadas.find((l) => l.tabla === 'configuracion_recalculo_cambio')?.pasos,
       ).toContainEqual(['limit', [10]]);
+    });
+
+    it('acepta el proveedor «openai» y rechaza uno desconocido', async () => {
+      for (const [proveedor, acepta] of [
+        ['openai', true],
+        ['otro', false],
+      ] as const) {
+        const { cliente } = clienteSimulado({
+          tablas: {
+            configuracion_recalculo: { data: { ...FILA, proveedor_llm: proveedor }, error: null },
+          },
+          rpc: { estado_claves_recalculo: { data: ESTADO, error: null } },
+        });
+        const lectura = crearApiAdmin(cliente).obtenerConfiguracion();
+        if (acepta) {
+          expect((await lectura).parametros.proveedorLlm).toBe('openai');
+        } else {
+          await expect(lectura).rejects.toThrow(/proveedor del clasificador desconocido/);
+        }
+      }
     });
 
     it('sin fila visible (no es administrador) lo explica', async () => {
@@ -413,6 +449,8 @@ describe('crearApiAdmin (Supabase)', () => {
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
         crossrefMailto: null,
+        openaiBaseUrl: 'https://api.groq.com/openai/v1',
+        openaiModelo: 'llama-3.3-70b-versatile',
       });
       expect(llamadas[0]?.pasos).toEqual([
         [
@@ -425,6 +463,8 @@ describe('crearApiAdmin (Supabase)', () => {
               max_candidatos: 15,
               llamadas_por_minuto: 30,
               crossref_mailto: null,
+              openai_base_url: 'https://api.groq.com/openai/v1',
+              openai_modelo: 'llama-3.3-70b-versatile',
             },
           ],
         ],
@@ -445,6 +485,8 @@ describe('crearApiAdmin (Supabase)', () => {
           maxCandidatos: null,
           llamadasPorMinuto: null,
           crossrefMailto: null,
+          openaiBaseUrl: null,
+          openaiModelo: null,
         }),
       ).rejects.toThrow(/Solo un administrador/);
     });
@@ -452,9 +494,11 @@ describe('crearApiAdmin (Supabase)', () => {
     it('guarda y borra claves con sus funciones SQL de solo escritura', async () => {
       const { cliente, rpcs } = clienteSimulado();
       const api = crearApiAdmin(cliente);
+      await api.guardarClave('OPENAI_COMPAT_API_KEY', 'k-compat');
       await api.guardarClave('GEMINI_API_KEY', 'k-1');
       await api.borrarClave('OPENALEX_API_KEY');
       expect(rpcs).toEqual([
+        ['guardar_clave_recalculo', { p_nombre: 'OPENAI_COMPAT_API_KEY', p_valor: 'k-compat' }],
         ['guardar_clave_recalculo', { p_nombre: 'GEMINI_API_KEY', p_valor: 'k-1' }],
         ['borrar_clave_recalculo', { p_nombre: 'OPENALEX_API_KEY' }],
       ]);

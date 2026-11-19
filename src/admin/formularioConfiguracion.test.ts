@@ -12,6 +12,8 @@ const VACIO: FormularioConfiguracion = {
   maxCandidatos: '',
   llamadasPorMinuto: '',
   crossrefMailto: '',
+  openaiBaseUrl: '',
+  openaiModelo: '',
 };
 
 describe('validarConfiguracion (issue #33)', () => {
@@ -24,6 +26,8 @@ describe('validarConfiguracion (issue #33)', () => {
         maxCandidatos: null,
         llamadasPorMinuto: null,
         crossrefMailto: null,
+        openaiBaseUrl: null,
+        openaiModelo: null,
       },
     });
   });
@@ -37,6 +41,8 @@ describe('validarConfiguracion (issue #33)', () => {
         maxCandidatos: ' 15 ',
         llamadasPorMinuto: ' 30 ',
         crossrefMailto: ' equipo@unemi.edu.ec ',
+        openaiBaseUrl: '',
+        openaiModelo: '',
       }),
     ).toEqual({
       parametros: {
@@ -46,6 +52,8 @@ describe('validarConfiguracion (issue #33)', () => {
         maxCandidatos: 15,
         llamadasPorMinuto: 30,
         crossrefMailto: 'equipo@unemi.edu.ec',
+        openaiBaseUrl: null,
+        openaiModelo: null,
       },
     });
     expect(validarConfiguracion({ ...VACIO, llamadasPorMinuto: '1' })).toMatchObject({
@@ -78,11 +86,90 @@ describe('validarConfiguracion (issue #33)', () => {
     [{ modelo: 'x'.repeat(101) }, /modelo/i],
     [{ modelo: '../otro:generateContent' }, /modelo/i],
     [{ modelo: 'modelo con espacios' }, /modelo/i],
-    [{ proveedorLlm: 'openai' }, /proveedor/i],
+    [{ proveedorLlm: 'otro' }, /proveedor/i],
+    [{ proveedorLlm: 'OpenAI' }, /proveedor/i],
   ])('rechaza %o con un mensaje claro', (cambio, mensaje) => {
     const resultado = validarConfiguracion({ ...VACIO, ...cambio } as FormularioConfiguracion);
     expect(resultado.error).toMatch(mensaje);
   });
+});
+
+describe('validarConfiguracion: proveedor compatible con OpenAI (issue #40)', () => {
+  it('acepta el proveedor «openai» con dirección base y modelo, y normaliza la dirección', () => {
+    expect(
+      validarConfiguracion({
+        ...VACIO,
+        proveedorLlm: 'openai',
+        openaiBaseUrl: '  https://openrouter.ai/api/v1/  ',
+        openaiModelo: ' meta-llama/llama-3.3-70b-instruct:free ',
+      }),
+    ).toEqual({
+      parametros: {
+        proveedorLlm: 'openai',
+        modelo: null,
+        umbral: null,
+        maxCandidatos: null,
+        llamadasPorMinuto: null,
+        crossrefMailto: null,
+        openaiBaseUrl: 'https://openrouter.ai/api/v1',
+        openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
+      },
+    });
+  });
+
+  it.each([
+    ['https://api.groq.com/openai/v1/', 'https://api.groq.com/openai/v1'],
+    ['https://api.deepseek.com', 'https://api.deepseek.com'],
+    ['https://api.mistral.ai/v1//', 'https://api.mistral.ai/v1'],
+    ['https://servidor.ejemplo.org:8443/v1', 'https://servidor.ejemplo.org:8443/v1'],
+  ])('la dirección %s se guarda como %s', (texto, esperada) => {
+    expect(validarConfiguracion({ ...VACIO, openaiBaseUrl: texto })).toMatchObject({
+      parametros: { openaiBaseUrl: esperada },
+    });
+  });
+
+  it.each([
+    ['http://api.groq.com/openai/v1', /https/i],
+    ['ftp://api.groq.com/v1', /https/i],
+    ['api.groq.com/openai/v1', /https/i],
+    ['https://jose:secreto123@api.groq.com/v1', /usuario|clave|credenciales/i],
+    ['https://secreto123@api.groq.com/v1', /usuario|clave|credenciales/i],
+    ['https://api.groq.com/v1?api_key=abc', /parámetros|consulta/i],
+    ['https://api.groq.com/v1?', /parámetros|consulta/i],
+    ['https://api.groq.com/v1#parte', /fragmento|#/i],
+    ['https://api.groq.com/v1 con espacios', /dirección base/i],
+    ['https://', /dirección base/i],
+    ['https:///v1', /dirección base/i],
+    ['https://api.groq.com\\v1', /dirección base/i],
+    [`https://ejemplo.com/${'a'.repeat(200)}`, /200/],
+  ])('rechaza la dirección base %s', (direccion, mensaje) => {
+    const resultado = validarConfiguracion({ ...VACIO, openaiBaseUrl: direccion });
+    expect(resultado.error).toMatch(mensaje);
+    // El mensaje nunca repite la dirección escrita: podría llevar una clave.
+    expect(resultado.error).not.toContain('secreto123');
+  });
+
+  it('el modelo admite «/», «:» y «@» y llega a 150 caracteres', () => {
+    for (const modelo of [
+      'gpt-4o-mini',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      '@cf/meta/llama-3.1-8b-instruct',
+      'x'.repeat(150),
+    ]) {
+      expect(validarConfiguracion({ ...VACIO, openaiModelo: modelo })).toMatchObject({
+        parametros: { openaiModelo: modelo },
+      });
+    }
+    // El del proveedor Gemini no cambia: sigue sin admitir «/» (va en la URL de Gemini).
+    expect(validarConfiguracion({ ...VACIO, modelo: 'a/b' }).error).toMatch(/modelo/i);
+  });
+
+  it.each(['con espacios', 'comilla"', 'x'.repeat(151), 'ñandú'])(
+    'rechaza el modelo %s',
+    (modelo) => {
+      expect(validarConfiguracion({ ...VACIO, openaiModelo: modelo }).error).toMatch(/modelo/i);
+    },
+  );
 });
 
 describe('formularioDesdeParametros', () => {
@@ -95,6 +182,8 @@ describe('formularioDesdeParametros', () => {
         maxCandidatos: null,
         llamadasPorMinuto: 15,
         crossrefMailto: 'a@b.ec',
+        openaiBaseUrl: 'https://api.groq.com/openai/v1',
+        openaiModelo: null,
       }),
     ).toEqual({
       proveedorLlm: 'fake',
@@ -103,6 +192,8 @@ describe('formularioDesdeParametros', () => {
       maxCandidatos: '',
       llamadasPorMinuto: '15',
       crossrefMailto: 'a@b.ec',
+      openaiBaseUrl: 'https://api.groq.com/openai/v1',
+      openaiModelo: '',
     });
   });
 });

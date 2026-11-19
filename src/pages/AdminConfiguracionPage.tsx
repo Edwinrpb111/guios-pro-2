@@ -36,7 +36,32 @@ function mensajeDe(error: unknown, porDefecto: string): string {
   return error instanceof Error && error.message !== '' ? error.message : porDefecto;
 }
 
-type ValorProveedor = '' | 'gemini' | 'fake';
+type ValorProveedor = '' | 'gemini' | 'openai' | 'fake';
+
+/** Ejemplos de dirección base de servicios compatibles con OpenAI (issue #40). */
+const EJEMPLOS_DIRECCION = [
+  { servicio: 'OpenRouter', direccion: 'https://openrouter.ai/api/v1' },
+  { servicio: 'Groq', direccion: 'https://api.groq.com/openai/v1' },
+  { servicio: 'DeepSeek', direccion: 'https://api.deepseek.com' },
+] as const;
+
+/** Claves que activan el aviso «Clave sin usar»: cada una solo se usa con su proveedor. */
+const PROVEEDORES_CON_CLAVE = [
+  {
+    proveedor: 'gemini',
+    clave: 'GEMINI_API_KEY',
+    nombre: 'Gemini',
+    boton: 'Usar Gemini',
+    exito: 'El recálculo usará Gemini.',
+  },
+  {
+    proveedor: 'openai',
+    clave: 'OPENAI_COMPAT_API_KEY',
+    nombre: 'la IA compatible con OpenAI',
+    boton: 'Usar el proveedor compatible con OpenAI',
+    exito: 'El recálculo usará el proveedor compatible con OpenAI.',
+  },
+] as const;
 
 /** Opción grande del grupo «Proveedor del clasificador»: radio nativo + título + explicación. */
 function OpcionProveedor({
@@ -76,17 +101,25 @@ function OpcionProveedor({
 }
 
 function motivoSinUso(proveedor: ParametrosRecalculo['proveedorLlm']): string {
-  return proveedor === 'fake'
-    ? 'el proveedor guardado es el clasificador falso (demostración).'
-    : 'el proveedor no está fijado y lo decide el secreto LLM_PROVIDER de Supabase.';
+  switch (proveedor) {
+    case 'fake':
+      return 'el proveedor guardado es el clasificador falso (demostración).';
+    case 'gemini':
+      return 'el proveedor guardado es Gemini.';
+    case 'openai':
+      return 'el proveedor guardado es el compatible con OpenAI.';
+    default:
+      return 'el proveedor no está fijado y lo decide el secreto LLM_PROVIDER de Supabase.';
+  }
 }
 
 /**
- * Un solo bloque para configurar el clasificador (issue #37): se elige Gemini o Falso y, con
- * Gemini, la clave aparece ahí mismo. Modelo, umbral, máximo de candidatos, llamadas por minuto
- * a Gemini (issue #39), correo de Crossref y
- * «usar el secreto de Supabase» van en «Opciones avanzadas». Un campo vacío usa el secreto de
- * Supabase de la Edge Function o, si tampoco existe, el valor por defecto.
+ * Un solo bloque para configurar el clasificador (issue #37): se elige Gemini, un servicio
+ * compatible con OpenAI (issue #40) o Falso y, con los dos primeros, sus datos y su clave aparecen
+ * ahí mismo. Modelo de Gemini, umbral, máximo de candidatos, llamadas por minuto a la IA
+ * (issue #39), correo de Crossref y «usar el secreto de Supabase» van en «Opciones avanzadas».
+ * Un campo vacío usa el secreto de Supabase de la Edge Function o, si tampoco existe, el valor por
+ * defecto.
  */
 function ConfiguracionClasificador({
   configuracion,
@@ -102,7 +135,9 @@ function ConfiguracionClasificador({
     formularioDesdeParametros(inicial),
   );
   const [mensaje, setMensaje] = useState<Mensaje | null>(null);
-  const [errorAviso, setErrorAviso] = useState<string | null>(null);
+  const [errorAviso, setErrorAviso] = useState<{ proveedor: ValorProveedor; texto: string } | null>(
+    null,
+  );
   const [enviando, setEnviando] = useState(false);
   const [avanzadasAbiertas, setAvanzadasAbiertas] = useState(false);
 
@@ -134,17 +169,20 @@ function ConfiguracionClasificador({
     }
   };
 
-  /** Un clic: fija Gemini con los demás parámetros guardados tal cual están. */
-  const usarGemini = async () => {
+  /** Un clic: fija el proveedor con los demás parámetros guardados tal cual están. */
+  const usarProveedor = async (proveedor: 'gemini' | 'openai', exito: string) => {
     setErrorAviso(null);
     setEnviando(true);
     try {
-      await api.guardarParametros({ ...inicial, proveedorLlm: 'gemini' });
-      elegirProveedor('gemini');
-      setMensaje({ tipo: 'exito', texto: 'Parámetros guardados. El recálculo usará Gemini.' });
+      await api.guardarParametros({ ...inicial, proveedorLlm: proveedor });
+      elegirProveedor(proveedor);
+      setMensaje({ tipo: 'exito', texto: `Parámetros guardados. ${exito}` });
       alGuardar();
     } catch (e) {
-      setErrorAviso(mensajeDe(e, 'No se pudieron guardar los parámetros.'));
+      setErrorAviso({
+        proveedor,
+        texto: mensajeDe(e, 'No se pudieron guardar los parámetros.'),
+      });
     } finally {
       setEnviando(false);
     }
@@ -156,27 +194,28 @@ function ConfiguracionClasificador({
       configurada: false,
       actualizadaEn: null,
     };
-  const claveGeminiGuardada = estadoClave('GEMINI_API_KEY').configurada;
 
   return (
     <>
-      {claveGeminiGuardada && inicial.proveedorLlm !== 'gemini' && (
-        <Aviso tipo="advertencia" etiqueta="Clave sin usar">
+      {PROVEEDORES_CON_CLAVE.filter(
+        (p) => estadoClave(p.clave).configurada && inicial.proveedorLlm !== p.proveedor,
+      ).map((p) => (
+        <Aviso key={p.proveedor} tipo="advertencia" etiqueta="Clave sin usar">
           <p>
-            Hay una clave de Gemini guardada, pero el recálculo no la usa:{' '}
+            Hay una clave de {p.nombre} guardada, pero el recálculo no la usa:{' '}
             {motivoSinUso(inicial.proveedorLlm)}
           </p>
-          {errorAviso !== null && <Aviso tipo="error">{errorAviso}</Aviso>}
+          {errorAviso?.proveedor === p.proveedor && <Aviso tipo="error">{errorAviso.texto}</Aviso>}
           <button
             type="button"
             className="boton boton--primario"
-            onClick={() => void usarGemini()}
+            onClick={() => void usarProveedor(p.proveedor, p.exito)}
             disabled={enviando}
           >
-            Usar Gemini
+            {p.boton}
           </button>
         </Aviso>
-      )}
+      ))}
       <form
         className="admin-tarjeta admin-formulario admin-configuracion__bloque"
         onSubmit={(e) => void guardar(e)}
@@ -208,14 +247,89 @@ function ConfiguracionClasificador({
                 descripcion="Sin red ni claves. El resultado siempre es el mismo: sirve para probar, no para resultados reales."
                 alElegir={elegirProveedor}
               />
+              <OpcionProveedor
+                id={`${id}-openai`}
+                valor="openai"
+                actual={formulario.proveedorLlm}
+                titulo="Compatible con OpenAI (OpenRouter, Groq, DeepSeek…)"
+                descripcion="Servicios baratos o gratis con el formato de OpenAI (también Mistral, Together y OpenAI). Necesita dirección, modelo y clave."
+                alElegir={elegirProveedor}
+              />
             </div>
           </div>
           {formulario.proveedorLlm === '' && (
             <p className="admin-ayuda">
               Ahora no hay ninguna opción elegida: lo decide el secreto LLM_PROVIDER de Supabase
-              (Opciones avanzadas), que la app no puede ver. Elige Gemini o Falso para saber qué se
-              usará.
+              (Opciones avanzadas), que la app no puede ver. Elige Gemini, Compatible con OpenAI o
+              Falso para saber qué se usará.
             </p>
+          )}
+          {formulario.proveedorLlm === 'openai' && (
+            <div className="admin-claves">
+              <h3>Servicio compatible con OpenAI</h3>
+              <p className="admin-ayuda">
+                Sirve para OpenRouter, Groq, DeepSeek, Mistral, OpenAI y cualquier servicio que use
+                el formato chat/completions de OpenAI. Copia la dirección base y el nombre del
+                modelo de la documentación del servicio.
+              </p>
+              <label className="admin-campo">
+                Dirección base (https)
+                <input
+                  value={formulario.openaiBaseUrl}
+                  onChange={campo('openaiBaseUrl')}
+                  placeholder="https://openrouter.ai/api/v1"
+                  inputMode="url"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby={`${id}-direccion`}
+                />
+              </label>
+              <div id={`${id}-direccion`} className="admin-ayuda admin-campo__ayuda">
+                <p>
+                  Solo https, sin usuario ni clave en la dirección. Vacío: OPENAI_COMPAT_BASE_URL.
+                  Ejemplos:
+                </p>
+                <ul>
+                  {EJEMPLOS_DIRECCION.map((e) => (
+                    <li key={e.servicio}>
+                      {e.servicio}: <code>{e.direccion}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <label className="admin-campo">
+                Modelo de la IA compatible
+                <input
+                  value={formulario.openaiModelo}
+                  onChange={campo('openaiModelo')}
+                  placeholder="meta-llama/llama-3.3-70b-instruct:free"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-describedby={`${id}-modelo-compatible`}
+                />
+              </label>
+              <span id={`${id}-modelo-compatible`} className="admin-ayuda admin-campo__ayuda">
+                Tal cual lo pide el servicio (OpenRouter usa «organización/modelo»). Vacío:
+                OPENAI_COMPAT_MODEL.
+              </span>
+              <h3>Claves del servicio compatible y de OpenAlex</h3>
+              <p className="admin-ayuda">
+                Se guardan cifradas en Supabase Vault, al instante y por separado de la elección de
+                arriba, y nunca se vuelven a mostrar. Si una clave no está guardada aquí, el
+                recálculo usa la del secreto de Supabase con el mismo nombre.
+              </p>
+              <CampoClave
+                servicio="la IA compatible con OpenAI"
+                estado={estadoClave('OPENAI_COMPAT_API_KEY')}
+                alCambiar={alGuardar}
+              />
+              <CampoClave
+                servicio="OpenAlex"
+                estado={estadoClave('OPENALEX_API_KEY')}
+                alCambiar={alGuardar}
+                ayuda="Opcional: solo hace falta si el recálculo busca en OpenAlex. Crossref funciona sin clave."
+              />
+            </div>
           )}
           {formulario.proveedorLlm === 'gemini' && (
             <div className="admin-claves">
@@ -273,7 +387,8 @@ function ConfiguracionClasificador({
             />
           </label>
           <span id={`${id}-modelo`} className="admin-ayuda admin-campo__ayuda">
-            Vacío: LLM_MODEL o gemini-3.1-flash-lite.
+            Modelo de Gemini. Vacío: LLM_MODEL o gemini-3.1-flash-lite. El del servicio compatible
+            con OpenAI se elige arriba.
           </span>
           <div className="admin-formulario__anios">
             <label className="admin-campo">
@@ -296,7 +411,7 @@ function ConfiguracionClasificador({
             </label>
           </div>
           <label className="admin-campo">
-            Llamadas a Gemini por minuto
+            Llamadas a la IA por minuto
             <input
               inputMode="numeric"
               value={formulario.llamadasPorMinuto}
@@ -307,10 +422,10 @@ function ConfiguracionClasificador({
           </label>
           <span id={`${id}-ritmo`} className="admin-ayuda admin-campo__ayuda">
             De 1 a 1000. El recálculo espera entre llamadas para no pasar de este número por minuto,
-            y si Gemini responde que se superó el límite, espera y reintenta solo unas veces antes
-            de pausar. El plan gratis permite cerca de 15 por minuto; con facturación activada se
-            puede subir. Con menos de 4, un subfactor con muchos candidatos puede tardar demasiado
-            en un solo paso. Vacío: LLM_LLAMADAS_POR_MINUTO o 15.
+            y si la IA responde que se superó el límite, espera y reintenta solo unas veces antes de
+            pausar. El plan gratis de Gemini permite cerca de 15 por minuto; con facturación
+            activada se puede subir. Con menos de 4, un subfactor con muchos candidatos puede tardar
+            demasiado en un solo paso. Vacío: LLM_LLAMADAS_POR_MINUTO o 15.
           </span>
           <label className="admin-campo">
             Correo para Crossref

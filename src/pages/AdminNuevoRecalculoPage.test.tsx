@@ -68,4 +68,51 @@ describe('P-09: recuadro de estado del clasificador (issue #33)', () => {
     expect(caja.getByRole('link', { name: 'Configuración del recálculo' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Iniciar recálculo' })).toBeEnabled();
   });
+
+  it('con el proveedor compatible con OpenAI muestra modelo, servidor y el estado de la clave', async () => {
+    renderAdmin(<AdminNuevoRecalculoPage />, {
+      api: con({
+        parametros: {
+          ...CONFIGURACION_PRUEBA.parametros,
+          proveedorLlm: 'openai',
+          openaiBaseUrl: 'https://openrouter.ai/api/v1',
+          openaiModelo: 'meta-llama/llama-3.3-70b-instruct:free',
+        },
+        claves: [
+          { nombre: 'GEMINI_API_KEY', configurada: false, actualizadaEn: null },
+          {
+            nombre: 'OPENAI_COMPAT_API_KEY',
+            configurada: true,
+            actualizadaEn: '2026-11-19T15:00:00Z',
+          },
+          { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
+        ],
+      }),
+    });
+    const caja = await recuadro();
+    expect(
+      await caja.findByText(
+        /Compatible con OpenAI · meta-llama\/llama-3\.3-70b-instruct:free · openrouter\.ai · umbral 0,7/,
+      ),
+    ).toBeInTheDocument();
+    expect(caja.getByText(/clave guardada en la app/)).toBeInTheDocument();
+    expect(caja.queryByText(/Gemini/)).toBeNull();
+  });
+
+  it('con el proveedor compatible sin clave guardada avisa que se usará el secreto de Supabase', async () => {
+    renderAdmin(<AdminNuevoRecalculoPage />, {
+      api: con({
+        parametros: {
+          ...CONFIGURACION_PRUEBA.parametros,
+          proveedorLlm: 'openai',
+          openaiBaseUrl: 'https://api.groq.com/openai/v1',
+          openaiModelo: 'llama-3.3-70b-versatile',
+        },
+      }),
+    });
+    const caja = await recuadro();
+    expect(
+      await caja.findByText(/OPENAI_COMPAT_API_KEY de los secretos de Supabase/),
+    ).toBeInTheDocument();
+  });
 });
