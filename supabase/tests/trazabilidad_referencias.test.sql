@@ -3,7 +3,7 @@
 -- Se ejecutan con `npm run test:db` (supabase test db) sobre Supabase local.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(40);
 
 -- ---------------------------------------------------------------------------
 -- Datos de prueba (como postgres, sin RLS); el rollback final restaura la base.
@@ -151,9 +151,9 @@ select throws_ok(
 reset role;
 
 set local role anon;
-select is(
-  (select count(*)::int from public.referencia_rechazada), 0,
-  'un anónimo no ve ningún rechazado');
+select throws_ok(
+  $$ select count(*) from public.referencia_rechazada $$,
+  '42501', null, 'un anónimo no lee los rechazados (sin privilegio de select)');
 reset role;
 
 -- ---------------------------------------------------------------------------
@@ -164,6 +164,30 @@ select is(
   (select count(*)::int from public.referencia_rechazada
    where id_calculo = (select valor from ctx where clave = 'calculo')),
   0, 'al borrar el cálculo se borran sus rechazados en cascada');
+
+-- ---------------------------------------------------------------------------
+-- Privilegios: ni anon ni authenticated tienen más que lo necesario. TRUNCATE, REFERENCES y
+-- TRIGGER no pasan por RLS, así que se revocan junto con insert/update/delete. Un administrador
+-- conserva solo SELECT (la política de RLS lo limita a es_admin()).
+-- ---------------------------------------------------------------------------
+select table_privs_are('public', 'referencia_rechazada', 'anon', array[]::text[],
+  'anon no tiene ningún privilegio sobre referencia_rechazada (ni truncate, references, trigger, insert, update, delete)');
+select table_privs_are('public', 'referencia_rechazada', 'authenticated', array['SELECT'],
+  'authenticated solo tiene SELECT sobre referencia_rechazada');
+select is(
+  has_table_privilege('authenticated', 'public.referencia_rechazada', 'select'),
+  true, 'authenticated conserva select (la política de RLS lo limita al administrador)');
+
+set local role authenticated;
+select throws_ok(
+  $$ truncate public.referencia_rechazada $$,
+  '42501', null, 'authenticated no puede hacer truncate de referencia_rechazada (ignora RLS)');
+reset role;
+set local role anon;
+select throws_ok(
+  $$ truncate public.referencia_rechazada $$,
+  '42501', null, 'anon no puede hacer truncate de referencia_rechazada (ignora RLS)');
+reset role;
 
 select * from finish();
 rollback;

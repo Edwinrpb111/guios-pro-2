@@ -33,7 +33,10 @@ create index referencia_rechazada_id_subfactor_idx on public.referencia_rechazad
 alter table public.referencia_rechazada enable row level security;
 
 -- Lectura solo para administradores; sin políticas de escritura, RLS bloquea insert/update/delete
--- del cliente. Se quitan además los privilegios para que falle de forma explícita (42501).
+-- del cliente. Además se quitan TODOS los privilegios a anon y authenticated y se devuelve solo
+-- SELECT a authenticated: así insert/update/delete fallan de forma explícita (42501) y TRUNCATE,
+-- REFERENCES y TRIGGER (que no pasan por RLS) tampoco quedan abiertos. Solo escribe service_role.
 create policy "recalculo: leer admin" on public.referencia_rechazada
   for select to authenticated using ((select public.es_admin()));
-revoke insert, update, delete on public.referencia_rechazada from anon, authenticated;
+revoke all on public.referencia_rechazada from anon, authenticated;
+grant select on public.referencia_rechazada to authenticated;
