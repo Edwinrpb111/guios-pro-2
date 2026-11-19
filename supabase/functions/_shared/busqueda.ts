@@ -155,7 +155,7 @@ export async function buscarYClasificar(entrada: {
       tokensSalida: null,
       tokensRazonamiento: null,
     };
-    const anotar = async (resultado: EntradaLote['resultado'], aceptadosLote: number) => {
+    const anotar = (resultado: EntradaLote['resultado'], aceptadosLote: number): void => {
       registro?.anotarLote({
         n,
         tamano: lote.length,
@@ -167,7 +167,8 @@ export async function buscarYClasificar(entrada: {
         tokens_salida: medicion.tokensSalida,
         tokens_razonamiento: medicion.tokensRazonamiento,
       });
-      await registro?.publicar();
+      // No se espera: la escritura va en cola y `vaciar()` la espera al final del paso.
+      void registro?.publicar();
     };
     try {
       // Con poco tiempo no se empieza el lote: se pausa y se reanuda con todo el tiempo.
@@ -181,9 +182,9 @@ export async function buscarYClasificar(entrada: {
       );
       const delLote = aceptarVeredictos(lote, veredictos, umbral);
       aceptadosPorLote[indice] = delLote;
-      await anotar('ok', delLote.length);
+      anotar('ok', delLote.length);
     } catch (error) {
-      await anotar(motivoDe(error), 0);
+      anotar(motivoDe(error), 0);
       throw error;
     }
   };

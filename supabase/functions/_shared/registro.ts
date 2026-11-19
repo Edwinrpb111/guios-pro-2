@@ -67,6 +67,21 @@ export function motivoDe(error: unknown): MotivoLote {
   return 'error';
 }
 
+/** Tiempo máximo de cada escritura del progreso en la base. */
+export const LIMITE_ESCRITURA_MS = 5_000;
+
+/** Espera `promesa` hasta `ms`; después la abandona sin error y limpia el temporizador. */
+function conLimite(promesa: Promise<void>, ms: number): Promise<void> {
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+  const vencida = new Promise<void>((resolver) => {
+    temporizador = setTimeout(() => {
+      console.error(JSON.stringify({ evento: 'registro_escritura_vencida', limite_ms: ms }));
+      resolver();
+    }, ms);
+  });
+  return Promise.race([promesa, vencida]).finally(() => clearTimeout(temporizador));
+}
+
 /** Escribe un registro parcial del paso; no debe lanzar (el registro es solo un apoyo). */
 export type AlProgresar = (registro: RegistroPaso) => Promise<void>;
 
@@ -86,6 +101,8 @@ export class RegistradorPaso {
     readonly proveedor: string,
     readonly intento: number,
     readonly alProgresar?: AlProgresar,
+    /** Una escritura que tarda más se abandona: el registro no puede frenar el paso. */
+    readonly limiteEscrituraMs = LIMITE_ESCRITURA_MS,
   ) {}
 
   anotarBusqueda(entrada: EntradaBusqueda): void {
@@ -114,7 +131,9 @@ export class RegistradorPaso {
     const alProgresar = this.alProgresar;
     if (alProgresar === undefined) return Promise.resolve();
     const instantanea = this.interrumpido();
-    const escritura = this.#cola.then(() => alProgresar(instantanea));
+    const escritura = this.#cola.then(() =>
+      conLimite(alProgresar(instantanea), this.limiteEscrituraMs),
+    );
     this.#cola = escritura.catch(() => undefined);
     return this.#cola;
   }
