@@ -49,7 +49,7 @@ const SIN_CONEXION =
 
 /** Corte de la plataforma (504, 546 WORKER_LIMIT, relay): el paso no alcanzó a terminar. */
 export const PASO_SIN_TIEMPO =
-  'El paso tardó más de lo permitido. Se reintentará; si se repite, reduce el máximo de candidatos o sube las llamadas por minuto.';
+  'El paso tardó más de lo permitido. Se reintentará; si se repite, sube las llamadas por minuto o inicia un cálculo nuevo con menos candidatos.';
 
 /** Estados con que la plataforma corta una Edge Function por tiempo o por límite de recursos. */
 const ESTADOS_DE_CORTE: readonly number[] = [504, 546];

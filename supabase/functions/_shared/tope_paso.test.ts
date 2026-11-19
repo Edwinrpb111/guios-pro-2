@@ -385,7 +385,7 @@ Deno.test('paso: al agotar los 110 s el cálculo queda pausado con un mensaje cl
   assertEquals(cuerpo.estado, 'pausado');
   assertEquals([cuerpo.progreso, cuerpo.pendientes], [0, 5]);
   const mensaje =
-    'El subfactor «Formatos estándar» tardó más de lo permitido (110 s). Reduce el máximo de candidatos o sube las llamadas por minuto y reanuda.';
+    'El subfactor «Formatos estándar» tardó más de lo permitido (110 s). Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.';
   assertEquals(cuerpo.error, mensaje);
   const calculo = repositorio.calculos.get(id)!;
   assertEquals(calculo.estado, 'pausado');

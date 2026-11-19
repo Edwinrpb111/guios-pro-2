@@ -63,7 +63,7 @@ const REINTENTOS: Record<'tiempo' | 'red', number> = { tiempo: 2, red: 1 };
 const ESPERA_BASE_MS = 3000;
 
 const PASO_NO_COMPLETADO =
-  'El paso tardó más de lo permitido y no se completó tras varios intentos. Reduce el máximo de candidatos o sube las llamadas por minuto, y pulsa Reintentar.';
+  'El paso tardó más de lo permitido y no se completó tras varios intentos. Sube las llamadas por minuto y pulsa Reintentar, o inicia un cálculo nuevo con menos candidatos.';
 
 export interface OpcionesRecalculo {
   /** Espera entre reintentos; se inyecta en las pruebas. Debe ser estable entre renders. */

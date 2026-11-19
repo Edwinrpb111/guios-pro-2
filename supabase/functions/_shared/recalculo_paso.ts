@@ -65,7 +65,7 @@ function fuentesDe(calculo: Calculo): NombreBase[] {
 
 /** Mensaje de pausa cuando el paso agota su tope de tiempo (código `paso_sin_tiempo`). */
 function mensajeSinTiempo(subfactor: SubfactorCatalogo): string {
-  return `El subfactor «${subfactor.enunciado}» tardó más de lo permitido (${PRESUPUESTO_PASO_MS / 1000} s). Reduce el máximo de candidatos o sube las llamadas por minuto y reanuda.`;
+  return `El subfactor «${subfactor.enunciado}» tardó más de lo permitido (${PRESUPUESTO_PASO_MS / 1000} s). Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.`;
 }
 
 /** Intentos anteriores del paso; si no se puede leer, se cuenta desde cero (el paso sigue). */

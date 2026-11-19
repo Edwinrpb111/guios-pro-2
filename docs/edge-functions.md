@@ -41,7 +41,7 @@ Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`es
 - Cada invocación de `recalculo-paso` tiene un presupuesto de **110 s** de reloj de pared, contado desde que entra: incluye búsquedas, llamadas a la IA, esperas de ritmo y reintentos. Deja 40 s de margen sobre los 150 s de la plataforma.
 - Cada `fetch` usa `min(su tiempo propio, tiempo restante)`: OpenAlex y Crossref 20 s; Gemini y el compatible con OpenAI **30 s** (antes 60 s).
 - No se empieza un lote, una espera de ritmo ni un reintento si quedarían menos de **15 s**.
-- Al agotarse: respuesta **503 `paso_sin_tiempo`** con «El subfactor «X» tardó más de lo permitido (110 s). Reduce el máximo de candidatos o sube las llamadas por minuto y reanuda.», cálculo `pausado` (con ese `mensaje_error`) y paso `pendiente` sin guardar nada parcial. Volver a invocar reanuda el mismo subfactor.
+- Al agotarse: respuesta **503 `paso_sin_tiempo`** con «El subfactor «X» tardó más de lo permitido (110 s). Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.», cálculo `pausado` (con ese `mensaje_error`) y paso `pendiente` sin guardar nada parcial. Volver a invocar reanuda el mismo subfactor.
 
 ### Registro por paso (issue #43)
 

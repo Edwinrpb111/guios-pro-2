@@ -51,7 +51,7 @@ export class ErrorProveedorNoDisponible extends Error {
  */
 export class ErrorPasoSinTiempo extends ErrorProveedorNoDisponible {
   constructor(
-    mensaje = 'El paso tardó más de lo permitido. Reduce el máximo de candidatos o sube las llamadas por minuto y reanuda.',
+    mensaje = 'El paso tardó más de lo permitido. Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.',
   ) {
     super(mensaje, 'sin_tiempo');
     this.name = 'ErrorPasoSinTiempo';

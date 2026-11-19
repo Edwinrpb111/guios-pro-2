@@ -94,7 +94,7 @@ export class RitmoDeLlamadas {
     // en lugar de agotar el tiempo de la Edge Function.
     if (falta > 0 && this.#esperado + falta > this.#presupuestoMs) {
       throw new ErrorProveedorNoDisponible(
-        'Las llamadas por minuto configuradas son muy pocas para completar este paso a tiempo. Sube las llamadas por minuto o baja el máximo de candidatos y reanuda el cálculo.',
+        'Las llamadas por minuto configuradas son muy pocas para completar este paso a tiempo. Sube las llamadas por minuto y reanuda el cálculo, o inicia uno nuevo con menos candidatos.',
       );
     }
     this.#exigirTiempo(falta);
