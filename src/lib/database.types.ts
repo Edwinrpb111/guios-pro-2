@@ -81,6 +81,8 @@ export type Database = {
           llamadas_por_minuto: number | null;
           max_candidatos: number | null;
           modelo: string | null;
+          openai_base_url: string | null;
+          openai_modelo: string | null;
           proveedor_llm: string | null;
           umbral: number | null;
         };
@@ -93,6 +95,8 @@ export type Database = {
           llamadas_por_minuto?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
+          openai_base_url?: string | null;
+          openai_modelo?: string | null;
           proveedor_llm?: string | null;
           umbral?: number | null;
         };
@@ -104,6 +108,8 @@ export type Database = {
           llamadas_por_minuto?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
+          openai_base_url?: string | null;
+          openai_modelo?: string | null;
           proveedor_llm?: string | null;
           umbral?: number | null;
         };
@@ -641,6 +647,9 @@ export type Database = {
           llamadas_por_minuto: number;
           max_candidatos: number;
           modelo: string;
+          openai_base_url: string;
+          openai_compat_api_key: string;
+          openai_modelo: string;
           openalex_api_key: string;
           proveedor_llm: string;
           umbral: number;

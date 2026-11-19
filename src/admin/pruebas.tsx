@@ -90,10 +90,13 @@ export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
     maxCandidatos: null,
     llamadasPorMinuto: null,
     crossrefMailto: 'equipo@unemi.edu.ec',
+    openaiBaseUrl: null,
+    openaiModelo: null,
   },
   actualizadoEn: '2026-11-18T15:00:00Z',
   claves: [
     { nombre: 'GEMINI_API_KEY', configurada: true, actualizadaEn: '2026-11-18T15:00:00Z' },
+    { nombre: 'OPENAI_COMPAT_API_KEY', configurada: false, actualizadaEn: null },
     { nombre: 'OPENALEX_API_KEY', configurada: false, actualizadaEn: null },
   ],
   cambios: [

@@ -1,5 +1,10 @@
 import { assertEquals, assertStringIncludes, assertThrows } from 'jsr:@std/assert@1';
-import { combinarConEntorno, leerConfiguracion, leerOrigenes } from './configuracion.ts';
+import {
+  combinarConEntorno,
+  leerConfiguracion,
+  leerOrigenes,
+  modeloDelProveedor,
+} from './configuracion.ts';
 import { ErrorApi } from './errores.ts';
 
 function entorno(valores: Record<string, string>) {
@@ -41,7 +46,7 @@ Deno.test('configuración: lee las variables y trata una cadena vacía como ause
 
 Deno.test('configuración: un valor inválido da 500 con el nombre de la variable', () => {
   for (const [variable, valor] of [
-    ['LLM_PROVIDER', 'openai'],
+    ['LLM_PROVIDER', 'otro'],
     ['LLM_UMBRAL', '1.5'],
     ['LLM_UMBRAL', 'alto'],
     ['LLM_UMBRAL', '-0.1'],
@@ -147,7 +152,7 @@ Deno.test('configuración guardada: un valor inválido de la base también da 50
   for (const guardada of [
     { umbral: 1.5 },
     { max_candidatos: 0 },
-    { proveedor_llm: 'openai' },
+    { proveedor_llm: 'otro' },
     { llamadas_por_minuto: 0 },
     { llamadas_por_minuto: 1001 },
   ]) {
@@ -157,4 +162,166 @@ Deno.test('configuración guardada: un valor inválido de la base también da 50
     );
     assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
   }
+});
+
+// Proveedor «compatible con OpenAI» (issue #40) ------------------------------------------------
+
+const OPENAI = {
+  LLM_PROVIDER: 'openai',
+  OPENAI_COMPAT_BASE_URL: 'https://openrouter.ai/api/v1',
+  OPENAI_COMPAT_MODEL: 'meta-llama/llama-3.3-70b-instruct:free',
+  OPENAI_COMPAT_API_KEY: 'sk-or-prueba',
+};
+
+Deno.test('configuración openai: lee dirección base, modelo y clave', () => {
+  const config = leerConfiguracion(entorno(OPENAI));
+  assertEquals(config.proveedorLlm, 'openai');
+  assertEquals(config.openaiBaseUrl, 'https://openrouter.ai/api/v1');
+  assertEquals(config.openaiModelo, 'meta-llama/llama-3.3-70b-instruct:free');
+  assertEquals(config.openaiApiKey, 'sk-or-prueba');
+  assertEquals(modeloDelProveedor(config), 'meta-llama/llama-3.3-70b-instruct:free');
+});
+
+Deno.test(
+  'configuración openai: sin los datos del proveedor no falla al leer (se pide al usarlo)',
+  () => {
+    const config = leerConfiguracion(entorno({ LLM_PROVIDER: 'openai' }));
+    assertEquals(config.openaiBaseUrl, undefined);
+    assertEquals(config.openaiModelo, undefined);
+    assertEquals(config.openaiApiKey, undefined);
+    assertEquals(modeloDelProveedor(config), '');
+  },
+);
+
+Deno.test('configuración openai: normaliza la dirección base (sin «/» final ni espacios)', () => {
+  for (const [texto, esperada] of [
+    ['https://api.groq.com/openai/v1/', 'https://api.groq.com/openai/v1'],
+    ['  https://api.deepseek.com  ', 'https://api.deepseek.com'],
+    ['https://api.deepseek.com/', 'https://api.deepseek.com'],
+    ['https://api.mistral.ai/v1//', 'https://api.mistral.ai/v1'],
+    ['https://servidor.ejemplo.org:8443/v1', 'https://servidor.ejemplo.org:8443/v1'],
+  ] as const) {
+    const config = leerConfiguracion(entorno({ ...OPENAI, OPENAI_COMPAT_BASE_URL: texto }));
+    assertEquals(config.openaiBaseUrl, esperada);
+  }
+});
+
+Deno.test('configuración openai: rechaza direcciones base que no sean https limpias', () => {
+  for (const direccion of [
+    'http://api.groq.com/openai/v1',
+    'ftp://api.groq.com/v1',
+    'api.groq.com/openai/v1',
+    'https://jose:secreto123@api.groq.com/v1',
+    'https://secreto123@api.groq.com/v1',
+    'https://api.groq.com/v1?api_key=abc',
+    'https://api.groq.com/v1?',
+    'https://api.groq.com/v1#parte',
+    'https://api.groq.com/v1 con espacios',
+    'https://',
+    'https:///v1',
+    'https://api.groq.com\\v1',
+    `https://ejemplo.com/${'a'.repeat(200)}`,
+  ]) {
+    const error = assertThrows(
+      () => leerConfiguracion(entorno({ ...OPENAI, OPENAI_COMPAT_BASE_URL: direccion })),
+      ErrorApi,
+      'OPENAI_COMPAT_BASE_URL',
+    );
+    assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
+    // El mensaje nunca repite la dirección: podría llevar credenciales.
+    assertEquals(error.message.includes('secreto123'), false);
+    assertEquals(error.message.includes('api.groq.com'), false);
+  }
+});
+
+Deno.test(
+  'configuración openai: el modelo admite «/», «:», «@» y no pasa de 150 caracteres',
+  () => {
+    for (const modelo of [
+      'gpt-4o-mini',
+      'meta-llama/llama-3.3-70b-instruct:free',
+      'accounts/fireworks/models/llama-v3p1-8b-instruct',
+      '@cf/meta/llama-3.1-8b-instruct',
+      'x'.repeat(150),
+    ]) {
+      assertEquals(
+        leerConfiguracion(entorno({ ...OPENAI, OPENAI_COMPAT_MODEL: modelo })).openaiModelo,
+        modelo,
+      );
+    }
+    for (const modelo of ['con espacios', 'comilla"', 'salto\nlinea', 'x'.repeat(151), 'ñandú']) {
+      const error = assertThrows(
+        () => leerConfiguracion(entorno({ ...OPENAI, OPENAI_COMPAT_MODEL: modelo })),
+        ErrorApi,
+        'OPENAI_COMPAT_MODEL',
+      );
+      assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
+    }
+  },
+);
+
+Deno.test(
+  'configuración openai: con otro proveedor no se validan ni se exigen sus variables',
+  () => {
+    for (const proveedor of ['gemini', 'fake']) {
+      const config = leerConfiguracion(
+        entorno({ LLM_PROVIDER: proveedor, OPENAI_COMPAT_BASE_URL: 'http://inválida' }),
+      );
+      assertEquals(config.proveedorLlm, proveedor);
+    }
+  },
+);
+
+Deno.test('configuración guardada openai: lo de la base manda y lo demás sale del entorno', () => {
+  const config = leerConfiguracion(
+    combinarConEntorno(
+      {
+        proveedor_llm: 'openai',
+        openai_base_url: 'https://api.groq.com/openai/v1/',
+        openai_modelo: 'llama-3.3-70b-versatile',
+        openai_compat_api_key: 'k-base',
+      },
+      entorno({
+        OPENAI_COMPAT_BASE_URL: 'https://otra.example/v1',
+        OPENAI_COMPAT_MODEL: 'modelo-entorno',
+        OPENAI_COMPAT_API_KEY: 'k-entorno',
+      }),
+    ),
+  );
+  assertEquals(config.openaiBaseUrl, 'https://api.groq.com/openai/v1');
+  assertEquals(config.openaiModelo, 'llama-3.3-70b-versatile');
+  assertEquals(config.openaiApiKey, 'k-base');
+
+  const delEntorno = leerConfiguracion(
+    combinarConEntorno(
+      {
+        proveedor_llm: 'openai',
+        openai_base_url: null,
+        openai_modelo: '',
+        openai_compat_api_key: null,
+      },
+      entorno({
+        OPENAI_COMPAT_BASE_URL: 'https://otra.example/v1',
+        OPENAI_COMPAT_MODEL: 'modelo-entorno',
+        OPENAI_COMPAT_API_KEY: 'k-entorno',
+      }),
+    ),
+  );
+  assertEquals(delEntorno.openaiBaseUrl, 'https://otra.example/v1');
+  assertEquals(delEntorno.openaiModelo, 'modelo-entorno');
+  assertEquals(delEntorno.openaiApiKey, 'k-entorno');
+});
+
+Deno.test('configuración guardada openai: una dirección inválida de la base también da 500', () => {
+  const error = assertThrows(
+    () =>
+      leerConfiguracion(
+        combinarConEntorno(
+          { proveedor_llm: 'openai', openai_base_url: 'http://api.groq.com/v1' },
+          entorno({}),
+        ),
+      ),
+    ErrorApi,
+  );
+  assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
 });

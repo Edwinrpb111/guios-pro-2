@@ -1,9 +1,10 @@
 /**
  * Validación del formulario «Configuración del recálculo» (issue #33). Son las mismas reglas que
  * imponen la base (CHECK de `configuracion_recalculo`) y la Edge Function (`configuracion.ts`):
- * umbral entre 0 y 1, máximo de candidatos entero entre 1 y 200 y llamadas por minuto a
- * Gemini entero entre 1 y 1000. Un campo vacío = `null`, es
- * decir, «usar el secreto de Supabase o el valor por defecto».
+ * umbral entre 0 y 1, máximo de candidatos entero entre 1 y 200, llamadas por minuto a la IA
+ * entero entre 1 y 1000 y, para el proveedor compatible con OpenAI (issue #40), una dirección base
+ * https limpia y un modelo de hasta 150 caracteres. Un campo vacío = `null`, es decir, «usar el
+ * secreto de Supabase o el valor por defecto».
  */
 import type { ParametrosRecalculo, ProveedorLlm } from './tipos';
 
@@ -13,6 +14,12 @@ export const LARGO_MAXIMO_MODELO = 100;
 /** El modelo va en la URL de Gemini: mismo patrón que el CHECK de la base. */
 const MODELO_VALIDO = /^[A-Za-z0-9._-]+$/;
 export const LARGO_MAXIMO_CLAVE = 1000;
+export const LARGO_MAXIMO_MODELO_OPENAI = 150;
+export const LARGO_MAXIMO_URL_BASE = 200;
+/** OpenRouter y otros usan «/» y «:» en el modelo; va en el cuerpo JSON, no en la URL. */
+const MODELO_OPENAI_VALIDO = /^[A-Za-z0-9._:/@-]+$/;
+/** https://servidor[:puerto][/ruta]: mismo patrón que el CHECK de `openai_base_url`. */
+const URL_BASE_VALIDA = /^https:\/\/[^/?#@\\\s]+(\/[^?#\\\s]*)?$/;
 
 export interface FormularioConfiguracion {
   proveedorLlm: string;
@@ -21,6 +28,8 @@ export interface FormularioConfiguracion {
   maxCandidatos: string;
   llamadasPorMinuto: string;
   crossrefMailto: string;
+  openaiBaseUrl: string;
+  openaiModelo: string;
 }
 
 export type ValidacionConfiguracion =
@@ -36,13 +45,67 @@ export function formularioDesdeParametros(p: ParametrosRecalculo): FormularioCon
     maxCandidatos: p.maxCandidatos === null ? '' : String(p.maxCandidatos),
     llamadasPorMinuto: p.llamadasPorMinuto === null ? '' : String(p.llamadasPorMinuto),
     crossrefMailto: p.crossrefMailto ?? '',
+    openaiBaseUrl: p.openaiBaseUrl ?? '',
+    openaiModelo: p.openaiModelo ?? '',
   };
+}
+
+/**
+ * Dirección base normalizada (sin espacios ni «/» final) o el motivo del rechazo. Los mensajes no
+ * repiten la dirección escrita: podría llevar un usuario y una clave.
+ */
+function validarUrlBase(texto: string): { url: string; error?: never } | { error: string } {
+  const url = texto.trim();
+  if (url.length > LARGO_MAXIMO_URL_BASE) {
+    return { error: `La dirección base no puede superar ${LARGO_MAXIMO_URL_BASE} caracteres.` };
+  }
+  if (!/^https:\/\//i.test(url)) {
+    return {
+      error:
+        'La dirección base debe empezar con https:// (por ejemplo, https://openrouter.ai/api/v1).',
+    };
+  }
+  if (url.includes('@')) {
+    return {
+      error: 'La dirección base no puede llevar usuario ni clave: la clave se guarda aparte.',
+    };
+  }
+  if (url.includes('?')) {
+    return { error: 'La dirección base no puede llevar parámetros de consulta (?…).' };
+  }
+  if (url.includes('#')) {
+    return { error: 'La dirección base no puede llevar un fragmento (#…).' };
+  }
+  let valida = URL_BASE_VALIDA.test(url);
+  if (valida) {
+    try {
+      const interpretada = new URL(url);
+      valida = interpretada.protocol === 'https:' && interpretada.hostname !== '';
+    } catch {
+      valida = false;
+    }
+  }
+  if (!valida) {
+    return {
+      error:
+        'La dirección base no es válida: usa https://servidor/ruta, sin espacios (por ejemplo, https://api.groq.com/openai/v1).',
+    };
+  }
+  return { url: url.replace(/\/+$/, '') };
 }
 
 export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConfiguracion {
   const proveedor = f.proveedorLlm.trim();
-  if (proveedor !== '' && proveedor !== 'gemini' && proveedor !== 'fake') {
-    return { error: 'El proveedor del clasificador debe ser Gemini o el falso de demostración.' };
+  if (
+    proveedor !== '' &&
+    proveedor !== 'gemini' &&
+    proveedor !== 'openai' &&
+    proveedor !== 'fake'
+  ) {
+    return {
+      error:
+        'El proveedor del clasificador debe ser Gemini, uno compatible con OpenAI o el falso de demostración.',
+    };
   }
 
   const modelo = f.modelo.trim();
@@ -80,7 +143,28 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
     (!/^\d+$/.test(textoRitmo) || ritmo < 1 || ritmo > LLAMADAS_POR_MINUTO_TOPE)
   ) {
     return {
-      error: `Las llamadas por minuto a Gemini deben ser un entero entre 1 y ${LLAMADAS_POR_MINUTO_TOPE}.`,
+      error: `Las llamadas por minuto a la IA deben ser un entero entre 1 y ${LLAMADAS_POR_MINUTO_TOPE}.`,
+    };
+  }
+
+  const textoUrl = f.openaiBaseUrl.trim();
+  let openaiBaseUrl: string | null = null;
+  if (textoUrl !== '') {
+    const url = validarUrlBase(textoUrl);
+    if (url.error !== undefined) return { error: url.error };
+    openaiBaseUrl = url.url;
+  }
+
+  const openaiModelo = f.openaiModelo.trim();
+  if (openaiModelo.length > LARGO_MAXIMO_MODELO_OPENAI) {
+    return {
+      error: `El modelo del proveedor compatible no puede superar ${LARGO_MAXIMO_MODELO_OPENAI} caracteres.`,
+    };
+  }
+  if (openaiModelo !== '' && !MODELO_OPENAI_VALIDO.test(openaiModelo)) {
+    return {
+      error:
+        'El modelo del proveedor compatible solo admite letras, dígitos, punto, guion, guion bajo, «:», «/» y «@» (por ejemplo, meta-llama/llama-3.3-70b-instruct:free).',
     };
   }
 
@@ -97,6 +181,8 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
       maxCandidatos: maximo,
       llamadasPorMinuto: ritmo,
       crossrefMailto: correo === '' ? null : correo,
+      openaiBaseUrl,
+      openaiModelo: openaiModelo === '' ? null : openaiModelo,
     },
   };
 }

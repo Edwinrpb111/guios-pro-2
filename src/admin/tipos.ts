@@ -97,13 +97,14 @@ export interface ResultadoPaso {
 }
 
 /** Proveedor del clasificador: `fake` es el modo de demostración sin red (BRIEF §13.6). */
-export type ProveedorLlm = 'gemini' | 'fake';
+export type ProveedorLlm = 'gemini' | 'openai' | 'fake';
 
 /** Claves de las APIs que se guardan en Supabase Vault (issue #33). */
-export type NombreClave = 'GEMINI_API_KEY' | 'OPENALEX_API_KEY';
+export type NombreClave = 'GEMINI_API_KEY' | 'OPENAI_COMPAT_API_KEY' | 'OPENALEX_API_KEY';
 
 export const CLAVES: readonly { nombre: NombreClave; servicio: string }[] = [
   { nombre: 'GEMINI_API_KEY', servicio: 'Gemini' },
+  { nombre: 'OPENAI_COMPAT_API_KEY', servicio: 'la IA compatible con OpenAI' },
   { nombre: 'OPENALEX_API_KEY', servicio: 'OpenAlex' },
 ];
 
@@ -116,9 +117,13 @@ export interface ParametrosRecalculo {
   modelo: string | null;
   umbral: number | null;
   maxCandidatos: number | null;
-  /** Llamadas por minuto a Gemini (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
+  /** Llamadas por minuto a la IA (1..1000); `null` = LLM_LLAMADAS_POR_MINUTO o 15. */
   llamadasPorMinuto: number | null;
   crossrefMailto: string | null;
+  /** Dirección base https del proveedor compatible con OpenAI (issue #40); `null` = OPENAI_COMPAT_BASE_URL. */
+  openaiBaseUrl: string | null;
+  /** Modelo del proveedor compatible con OpenAI; `null` = OPENAI_COMPAT_MODEL. */
+  openaiModelo: string | null;
 }
 
 /** Estado de una clave: nunca su valor. */
