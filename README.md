@@ -143,16 +143,17 @@ docs/
 
 ## Documentación
 
-| Documento                                                | Contenido                                                       |
-| -------------------------------------------------------- | --------------------------------------------------------------- |
-| [`BRIEF.md`](BRIEF.md)                                   | Especificación completa (fuente de verdad)                      |
-| [`docs/variables-entorno.md`](docs/variables-entorno.md) | Variables del navegador, de las pruebas y de las Edge Functions |
-| [`docs/componentes.md`](docs/componentes.md)             | Componentes base del CP1                                        |
-| [`docs/evaluacion.md`](docs/evaluacion.md)               | Flujo de una evaluación: subfactores, resultados e informe      |
-| [`docs/recalculo.md`](docs/recalculo.md)                 | Recálculo de la importancia sugerida: IL, IS y publicación      |
-| [`docs/edge-functions.md`](docs/edge-functions.md)       | Contrato y pruebas de las Edge Functions                        |
-| [`docs/ayuda-metodo.md`](docs/ayuda-metodo.md)           | Ayuda del método (P-11)                                         |
-| [`docs/pruebas-e2e.md`](docs/pruebas-e2e.md)             | Prueba E2E del piloto de la tesis                               |
+| Documento                                                                          | Contenido                                                                          |
+| ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| [`BRIEF.md`](BRIEF.md)                                                             | Especificación completa (fuente de verdad)                                         |
+| [`docs/variables-entorno.md`](docs/variables-entorno.md)                           | Variables del navegador, de las pruebas y de las Edge Functions                    |
+| [`docs/componentes.md`](docs/componentes.md)                                       | Componentes base del CP1                                                           |
+| [`docs/evaluacion.md`](docs/evaluacion.md)                                         | Flujo de una evaluación: subfactores, resultados e informe                         |
+| [`docs/recalculo.md`](docs/recalculo.md)                                           | Recálculo de la importancia sugerida: IL, IS y publicación                         |
+| [`docs/como-funciona-la-sugerencia-ia.md`](docs/como-funciona-la-sugerencia-ia.md) | Cómo funciona la IS por IA de punta a punta: búsqueda, prompt, respuesta y puntaje |
+| [`docs/edge-functions.md`](docs/edge-functions.md)                                 | Contrato y pruebas de las Edge Functions                                           |
+| [`docs/ayuda-metodo.md`](docs/ayuda-metodo.md)                                     | Ayuda del método (P-11)                                                            |
+| [`docs/pruebas-e2e.md`](docs/pruebas-e2e.md)                                       | Prueba E2E del piloto de la tesis                                                  |
 
 ### Decisiones de arquitectura (ADR)
 

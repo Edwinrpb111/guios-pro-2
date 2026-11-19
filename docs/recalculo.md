@@ -1,6 +1,6 @@
 # Recálculo de la importancia sugerida: IL, IS y publicación (HU-08)
 
-Cómo el administrador recalcula la IS de los 18 factores, la revisa y la publica (BRIEF §11.2, §13.2, §13.5; issue #11). La búsqueda y clasificación de artículos con las Edge Functions están en [`edge-functions.md`](edge-functions.md).
+Cómo el administrador recalcula la IS de los 18 factores, la revisa y la publica (BRIEF §11.2, §13.2, §13.5; issue #11). La búsqueda y clasificación de artículos con las Edge Functions están en [`edge-functions.md`](edge-functions.md). Para una explicación de punta a punta, sin detalle técnico, ver [`como-funciona-la-sugerencia-ia.md`](como-funciona-la-sugerencia-ia.md).
 
 ## Pantallas (solo administradores)
 
