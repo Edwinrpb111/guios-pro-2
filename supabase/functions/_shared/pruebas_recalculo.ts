@@ -174,6 +174,8 @@ export const CONFIGURACION_PRUEBA: Configuracion = {
   umbral: 0.7,
   maxCandidatos: 50,
   llamadasPorMinuto: 15,
+  llamadasSimultaneas: 5,
+  desactivarRazonamiento: false,
   openalexApiKey: undefined,
   crossrefMailto: undefined,
   geminiApiKey: undefined,

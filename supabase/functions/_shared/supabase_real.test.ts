@@ -320,6 +320,8 @@ Deno.test(
       proveedor: 'fake',
       busqueda: [],
       lotes: [],
+      etapa: null,
+      lotes_total: 0,
       aceptados: 0,
       resultado: 'hecho' as const,
       mensaje: null,

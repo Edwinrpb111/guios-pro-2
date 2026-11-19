@@ -161,13 +161,21 @@ export async function paso(
   // El registro se escribe YA al empezar: si la plataforma corta el paso, queda el inicio, el
   // intento y `duracion_ms` nula. Una falla al escribir el registro nunca tumba el paso.
   const intento = (await leerIntentos(repositorio, idCalculo, siguiente.id_subfactor)) + 1;
-  const registrador = new RegistradorPaso(configuracion.proveedorLlm, intento);
+  // Cada avance (tras la búsqueda, tras cada tanda, antes de guardar) se escribe de inmediato para
+  // que el panel lo muestre en vivo (issue #45); `guardarRegistro` nunca lanza.
+  const registrador = new RegistradorPaso(configuracion.proveedorLlm, intento, (parcial) =>
+    guardarRegistro(repositorio, idCalculo, siguiente.id_subfactor, {
+      duracion_ms: null,
+      registro: parcial,
+    }),
+  );
   await guardarRegistro(repositorio, idCalculo, siguiente.id_subfactor, {
     iniciado_en: new Date(presupuesto.inicio).toISOString(),
     duracion_ms: null,
     registro: registrador.interrumpido(),
   });
   const terminar = async (resultado: ResultadoPaso, mensaje: string | null, aceptados: number) => {
+    await registrador.vaciar(); // el registro final es siempre la última escritura
     const duracion = Math.max(0, presupuesto.ahora() - presupuesto.inicio);
     const registro = registrador.cerrar(resultado, mensaje, aceptados);
     await guardarRegistro(repositorio, idCalculo, siguiente.id_subfactor, {
@@ -208,6 +216,7 @@ export async function paso(
       umbral: parametros?.umbral ?? configuracion.umbral,
       maxCandidatos: parametros?.max_candidatos ?? configuracion.maxCandidatos,
       presupuesto,
+      llamadasSimultaneas: configuracion.llamadasSimultaneas,
       registro: registrador,
     });
     await repositorio.completarPaso(
