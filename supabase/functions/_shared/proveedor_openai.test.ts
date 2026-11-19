@@ -36,8 +36,18 @@ const MENSAJE_PAUSA =
   'El proveedor de IA no está disponible o alcanzó su cuota. Reanuda el cálculo más tarde.';
 
 const VEREDICTOS = [
-  { indice: 1, trata_subfactor: true, confianza: 0.95, evidencia: 'trata el tema' },
-  { indice: 2, trata_subfactor: true, confianza: 0.4, evidencia: 'poca relación' },
+  {
+    indice: 1,
+    trata_subfactor: true,
+    confianza: 0.95,
+    evidencia: 'trata el tema',
+  },
+  {
+    indice: 2,
+    trata_subfactor: true,
+    confianza: 0.4,
+    evidencia: 'poca relación',
+  },
   { indice: 3, trata_subfactor: false, confianza: 0.9, evidencia: 'otro tema' },
 ];
 
@@ -106,7 +116,11 @@ function llamar(deps: Dependencias, cuerpo: unknown) {
   );
 }
 
-const ENTRADA_INICIO = { anio_inicio: 2020, anio_fin: 2025, fuentes: ['openalex'] };
+const ENTRADA_INICIO = {
+  anio_inicio: 2020,
+  anio_fin: 2025,
+  fuentes: ['openalex'],
+};
 
 async function nuevoCalculo(deps: Dependencias): Promise<number> {
   const respuesta = await atender(
@@ -172,7 +186,9 @@ Deno.test(
     const cuerpo = await peticion.json();
     assertEquals(cuerpo.model, MODELO);
     assertEquals(cuerpo.temperature, 0);
-    assertEquals(cuerpo.response_format, { type: 'json_object' });
+    // Sin `response_format: json_object`: choca con el arreglo que pide el prompt y algunos
+    // servidores devolvían un solo veredicto suelto en lugar de los del lote entero.
+    assertEquals(cuerpo.response_format, undefined);
     assertEquals(
       cuerpo.messages.map((m: { role: string }) => m.role),
       ['system', 'user'],
@@ -228,10 +244,17 @@ Deno.test(
   async () => {
     const reloj = crearRelojFalso();
     const horas: number[] = [];
+    // Un veredicto por candidato del lote (10): un lote incompleto se volvería a pedir.
+    const diez = Array.from({ length: 10 }, (_, i) => ({
+      indice: i + 1,
+      trata_subfactor: false,
+      confianza: 0.9,
+      evidencia: 'otro tema',
+    }));
     const { fetch } = crearFetchGuionado([
       () => {
         horas.push(reloj.ahora());
-        return ok();
+        return respuestaChat(JSON.stringify(diez));
       },
     ]);
     const { deps } = crear(reloj, fetch, { LLM_LLAMADAS_POR_MINUTO: '30' }, 25);
@@ -310,7 +333,12 @@ Deno.test('openai: acepta un bloque ``` sin lenguaje y un arreglo suelto entre t
 Deno.test(
   'openai: acepta el objeto que exige response_format json_object con el arreglo dentro',
   async () => {
-    const unico = { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: 'único' };
+    const unico = {
+      indice: 1,
+      trata_subfactor: true,
+      confianza: 0.9,
+      evidencia: 'único',
+    };
     for (const [objeto, esperados] of [
       [{ resultados: VEREDICTOS }, VEREDICTOS],
       [{ nota: 'x', clasificacion: VEREDICTOS }, VEREDICTOS],
@@ -363,6 +391,93 @@ Deno.test('openai: una respuesta que no es JSON es ErrorRespuestaInvalida', asyn
     await assertRejects(() => clasificarLote(clasificador(fetch)), ErrorRespuestaInvalida);
   }
 });
+
+Deno.test('openai: de un JSON cortado rescata los veredictos completos', async () => {
+  const completo = JSON.stringify(VEREDICTOS);
+  const cortado = completo.slice(0, completo.indexOf('{"indice":3') + 20);
+  const { fetch, llamadas } = crearFetchGuionado([respuestaChat(cortado)]);
+  assertEquals(await clasificarLote(clasificador(fetch)), VEREDICTOS.slice(0, 2));
+  // Faltó un veredicto: se pidió otra vez y, como volvió igual, se quedan los rescatados.
+  assertEquals(llamadas.length, 2);
+});
+
+Deno.test(
+  'openai: si faltan veredictos del lote se pide otra vez y se usa la respuesta completa',
+  async () => {
+    const uno = respuestaChat(JSON.stringify(VEREDICTOS[0]));
+    const { fetch, llamadas } = crearFetchGuionado([uno, ok()]);
+    assertEquals(await clasificarLote(clasificador(fetch)), VEREDICTOS);
+    assertEquals(llamadas.length, 2);
+  },
+);
+
+Deno.test(
+  'openai: si la segunda respuesta también viene incompleta se usa lo que llegó, sin más intentos',
+  async () => {
+    const uno = respuestaChat(JSON.stringify(VEREDICTOS[0]));
+    const { fetch, llamadas } = crearFetchGuionado([uno]);
+    assertEquals(await clasificarLote(clasificador(fetch)), VEREDICTOS.slice(0, 1));
+    assertEquals(llamadas.length, 2);
+  },
+);
+
+Deno.test('openai: un lote completo no se vuelve a pedir', async () => {
+  const { fetch, llamadas } = crearFetchGuionado([ok()]);
+  assertEquals(await clasificarLote(clasificador(fetch)), VEREDICTOS);
+  assertEquals(llamadas.length, 1);
+});
+
+Deno.test(
+  'openai: una clasificación ilegible se pide una vez más y, si llega bien, el lote sigue',
+  async () => {
+    const { fetch, llamadas } = crearFetchGuionado([respuestaChat('esto no es JSON'), ok()]);
+    const medicion = {
+      reintentos: 0,
+      tokensEntrada: null,
+      tokensSalida: null,
+      tokensRazonamiento: null,
+    };
+    const veredictos = await clasificador(fetch).clasificar(
+      'Compatibilidad',
+      'Formatos estándar',
+      'Uso de formatos abiertos.',
+      LOTE,
+      medicion,
+    );
+    assertEquals(veredictos, VEREDICTOS);
+    assertEquals(llamadas.length, 2);
+    assertEquals(medicion.reintentos, 1);
+  },
+);
+
+Deno.test(
+  'openai: si la segunda respuesta también es ilegible, falla sin más intentos',
+  async () => {
+    const { fetch, llamadas } = crearFetchGuionado([respuestaChat('esto no es JSON')]);
+    await assertRejects(() => clasificarLote(clasificador(fetch)), ErrorRespuestaInvalida);
+    assertEquals(llamadas.length, 2);
+  },
+);
+
+Deno.test(
+  'openai: si la respuesta se cortó por el límite de tokens, el mensaje lo dice',
+  async () => {
+    const cortada = respuestaJson({
+      choices: [
+        {
+          finish_reason: 'length',
+          message: { content: '[{"indice": 1, "trata' },
+        },
+      ],
+    });
+    const { fetch } = crearFetchGuionado([cortada]);
+    const error = await assertRejects(
+      () => clasificarLote(clasificador(fetch)),
+      ErrorRespuestaInvalida,
+    );
+    assertStringIncludes(error.message, 'se cortó');
+  },
+);
 
 Deno.test(
   'openai: JSON inválido pausa el cálculo con respuesta_invalida y marca el paso',

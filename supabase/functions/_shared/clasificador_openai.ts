@@ -5,8 +5,8 @@
 import {
   ErrorPasoSinTiempo,
   ErrorProveedorNoDisponible,
-  MENSAJE_IA_TARDO,
   ErrorRespuestaInvalida,
+  MENSAJE_IA_TARDO,
 } from './errores.ts';
 import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import { armarPrompt, INSTRUCCION_SISTEMA, leerVeredictos } from './prompt.ts';
@@ -61,7 +61,9 @@ function extraerArreglo(texto: string): unknown[] | null {
   ] as const) {
     const desde = limpio.indexOf(abre);
     const hasta = limpio.lastIndexOf(cierra);
-    if (desde !== -1 && hasta > desde) fragmentos.push(limpio.slice(desde, hasta + 1));
+    if (desde !== -1 && hasta > desde) {
+      fragmentos.push(limpio.slice(desde, hasta + 1));
+    }
   }
 
   for (const fragmento of fragmentos) {
@@ -80,8 +82,44 @@ function extraerArreglo(texto: string): unknown[] | null {
       if ('indice' in valor) return [valor];
     }
   }
-  return null;
+
+  // JSON cortado (p. ej. por el límite de tokens) o con basura entre medio: se rescatan los
+  // veredictos que sí llegaron completos, objeto por objeto (no tienen objetos anidados).
+  const rescatados: unknown[] = [];
+  for (const objeto of limpio.matchAll(/\{[^{}]*\}/g)) {
+    try {
+      const valor: unknown = JSON.parse(objeto[0]);
+      if (valor !== null && typeof valor === 'object' && 'indice' in valor) {
+        rescatados.push(valor);
+      }
+    } catch {
+      // Ese fragmento no se puede leer: se sigue con el resto.
+    }
+  }
+  return rescatados.length > 0 ? rescatados : null;
 }
+
+/** `finish_reason` de la primera opción (`length` = se cortó por el límite de tokens). */
+function leerFinRazon(cuerpo: unknown): string | null {
+  const razon = (cuerpo as { choices?: { finish_reason?: unknown }[] } | null)?.choices?.[0]
+    ?.finish_reason;
+  return typeof razon === 'string' ? razon : null;
+}
+
+/** Candidatos distintos (índices 1..total) que recibieron veredicto. */
+function cubiertos(veredictos: Veredicto[], total: number): number {
+  return new Set(
+    veredictos.map((v) => v.indice).filter((i) => Number.isInteger(i) && i >= 1 && i <= total),
+  ).size;
+}
+
+/** Suma dos conteos de tokens; `null` solo si faltan los dos. */
+function sumar(a: number | null, b: number | null): number | null {
+  return a === null ? b : b === null ? a : a + b;
+}
+
+/** Largo máximo del texto ilegible que se deja en los registros del servidor. */
+const MUESTRA_MAXIMA = 300;
 
 /** Texto del primer mensaje del asistente (cadena o lista de partes de texto). */
 function leerTexto(cuerpo: unknown): string {
@@ -97,6 +135,9 @@ function leerTexto(cuerpo: unknown): string {
     })
     .join('');
 }
+
+/** Respuesta 200 sin clasificación legible: la única que se vuelve a pedir. */
+class ErrorRespuestaIlegible extends ErrorRespuestaInvalida {}
 
 export class ClasificadorCompatibleOpenAI implements Clasificador {
   readonly #apiKey: string;
@@ -137,6 +178,11 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     return this.#ritmo?.reintentos ?? 0;
   }
 
+  /**
+   * Clasifica el lote. Si la IA devuelve una clasificación vacía o ilegible, o sin un veredicto por candidato (pasa con modelos que
+   * razonan de más, cortan la respuesta o devuelven un solo objeto), se pide UNA vez más antes de fallar; ese segundo pedido
+   * cuenta como reintento del lote y sus tokens se suman.
+   */
   async clasificar(
     factor: string,
     subfactor: string,
@@ -144,22 +190,91 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     candidatos: Candidato[],
     medicion?: MedicionLlamada,
   ): Promise<Veredicto[]> {
+    let mejor: Veredicto[] | null = null;
+    for (let ronda = 0; ; ronda++) {
+      const parcial: MedicionLlamada = {
+        reintentos: 0,
+        tokensEntrada: null,
+        tokensSalida: null,
+        tokensRazonamiento: null,
+      };
+      try {
+        const veredictos = await this.#clasificarUnaVez(
+          factor,
+          subfactor,
+          contexto,
+          candidatos,
+          parcial,
+        );
+        const total = candidatos.length;
+        if (mejor === null || cubiertos(veredictos, total) > cubiertos(mejor, total)) {
+          mejor = veredictos;
+        }
+        // Un candidato sin veredicto quedaría rechazado sin que la IA lo haya clasificado.
+        if (cubiertos(mejor, total) === total || ronda >= 1) {
+          if (cubiertos(mejor, total) < total) {
+            console.error(
+              JSON.stringify({
+                evento: 'clasificacion_incompleta',
+                modelo: this.#modelo,
+                candidatos: total,
+                veredictos: cubiertos(mejor, total),
+              }),
+            );
+          }
+          return mejor;
+        }
+      } catch (error) {
+        if (!(error instanceof ErrorRespuestaIlegible) || ronda >= 1) {
+          // La primera ronda trajo algo y la segunda no: mejor lo que ya había que nada.
+          if (mejor !== null && error instanceof ErrorRespuestaIlegible) return mejor;
+          throw error;
+        }
+      } finally {
+        if (medicion !== undefined) {
+          medicion.reintentos = (ronda === 0 ? 0 : medicion.reintentos + 1) + parcial.reintentos;
+          medicion.tokensEntrada = sumar(
+            ronda === 0 ? null : medicion.tokensEntrada,
+            parcial.tokensEntrada,
+          );
+          medicion.tokensSalida = sumar(
+            ronda === 0 ? null : medicion.tokensSalida,
+            parcial.tokensSalida,
+          );
+          medicion.tokensRazonamiento = sumar(
+            ronda === 0 ? null : medicion.tokensRazonamiento,
+            parcial.tokensRazonamiento,
+          );
+        }
+      }
+    }
+  }
+
+  async #clasificarUnaVez(
+    factor: string,
+    subfactor: string,
+    contexto: string,
+    candidatos: Candidato[],
+    medicion: MedicionLlamada,
+  ): Promise<Veredicto[]> {
     // El modelo va en el cuerpo (puede llevar «/» y «:»), nunca en la dirección.
     const cuerpoPeticion = JSON.stringify({
       model: this.#modelo,
       temperature: 0,
-      response_format: { type: 'json_object' },
       ...(this.#desactivarRazonamiento ? parametrosSinRazonamiento(this.#urlBase) : {}),
       messages: [
         { role: 'system', content: INSTRUCCION_SISTEMA },
-        { role: 'user', content: armarPrompt(factor, subfactor, contexto, candidatos) },
+        {
+          role: 'user',
+          content: armarPrompt(factor, subfactor, contexto, candidatos),
+        },
       ],
     });
 
     let respuesta: Response;
     let cuerpo: unknown;
     for (let intento = 0; ; intento++) {
-      if (medicion !== undefined) medicion.reintentos = intento;
+      medicion.reintentos = intento;
       // Cada llamada, también un reintento, respeta el ritmo configurado.
       await this.#ritmo?.esperarTurno();
       const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
@@ -178,16 +293,22 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
         });
       } catch (error) {
         // Si la señal la acotó el tope del paso, no es un fallo de red: se pausa por tiempo.
-        if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
+        if (porPresupuesto && esErrorDeTiempo(error)) {
+          throw new ErrorPasoSinTiempo();
+        }
         // Pasaron los 45 s propios de la llamada: no es un problema de conexión.
-        if (esErrorDeTiempo(error)) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
+        if (esErrorDeTiempo(error)) {
+          throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
+        }
         throw new ErrorProveedorNoDisponible(
           'No se pudo conectar con el proveedor de IA. Revisa la dirección base y la conexión, y reanuda el cálculo.',
         );
       }
       cuerpo = await respuesta.json().catch(() => null);
       if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
-      if (signal.aborted) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
+      if (signal.aborted) {
+        throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
+      }
 
       // Solo el límite por minuto (429) y la saturación (503) se reintentan, esperando lo que
       // pida `Retry-After` (en segundos); si se agotan los reintentos o el tiempo del paso, el
@@ -223,7 +344,7 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
         'sin_saldo',
       );
     }
-    if (medicion !== undefined && respuesta.ok) Object.assign(medicion, leerUsoOpenAI(cuerpo));
+    if (respuesta.ok) Object.assign(medicion, leerUsoOpenAI(cuerpo));
     if (!respuesta.ok) {
       throw new ErrorRespuestaInvalida(
         `El proveedor de IA rechazó la petición (HTTP ${respuesta.status}). Revisa la dirección base y el modelo.`,
@@ -234,15 +355,29 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
     }
 
     const texto = leerTexto(cuerpo);
-    if (texto.trim() === '') {
-      throw new ErrorRespuestaInvalida(
-        'El proveedor de IA no devolvió una clasificación para este lote.',
-      );
-    }
-    const arreglo = extraerArreglo(texto);
+    const arreglo = texto.trim() === '' ? null : extraerArreglo(texto);
     if (arreglo === null) {
-      throw new ErrorRespuestaInvalida(
-        'El proveedor de IA devolvió una clasificación que no se pudo leer como JSON.',
+      const finRazon = leerFinRazon(cuerpo);
+      // Para diagnosticar, en los registros del servidor (nunca en el registro del paso): un
+      // recorte del texto recibido. No lleva la clave ni la dirección.
+      console.error(
+        JSON.stringify({
+          evento: 'clasificacion_ilegible',
+          modelo: this.#modelo,
+          fin: finRazon,
+          largo: texto.length,
+          muestra: texto.slice(0, MUESTRA_MAXIMA),
+        }),
+      );
+      const cortada =
+        finRazon === 'length'
+          ? ' La respuesta se cortó por el límite de tokens del modelo (suele pasar cuando razona de más).'
+          : '';
+      throw new ErrorRespuestaIlegible(
+        (texto.trim() === ''
+          ? 'El proveedor de IA no devolvió una clasificación para este lote.'
+          : 'El proveedor de IA devolvió una clasificación que no se pudo leer como JSON.') +
+          cortada,
       );
     }
     return leerVeredictos(arreglo);
