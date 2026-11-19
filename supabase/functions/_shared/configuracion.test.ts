@@ -325,3 +325,117 @@ Deno.test('configuración guardada openai: una dirección inválida de la base t
   );
   assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
 });
+
+// Tandas en paralelo y sin razonamiento (issue #45, S16a/b) ----------------------------------
+
+Deno.test(
+  'configuración paralelo: por defecto 5 llamadas simultáneas y razonamiento activo',
+  () => {
+    const config = leerConfiguracion(entorno({}));
+    assertEquals(config.llamadasSimultaneas, 5);
+    assertEquals(config.desactivarRazonamiento, false);
+  },
+);
+
+Deno.test(
+  'configuración paralelo: lee LLM_LLAMADAS_SIMULTANEAS y LLM_DESACTIVAR_RAZONAMIENTO',
+  () => {
+    const config = leerConfiguracion(
+      entorno({ LLM_LLAMADAS_SIMULTANEAS: '3', LLM_DESACTIVAR_RAZONAMIENTO: 'true' }),
+    );
+    assertEquals(config.llamadasSimultaneas, 3);
+    assertEquals(config.desactivarRazonamiento, true);
+    // Una cadena vacía cuenta como ausente: valen los valores por defecto.
+    const vacia = leerConfiguracion(
+      entorno({ LLM_LLAMADAS_SIMULTANEAS: ' ', LLM_DESACTIVAR_RAZONAMIENTO: '' }),
+    );
+    assertEquals([vacia.llamadasSimultaneas, vacia.desactivarRazonamiento], [5, false]);
+  },
+);
+
+Deno.test('configuración paralelo: LLM_LLAMADAS_SIMULTANEAS admite los extremos 1 y 10', () => {
+  for (const [texto, esperado] of [
+    ['1', 1],
+    ['10', 10],
+  ] as const) {
+    const config = leerConfiguracion(entorno({ LLM_LLAMADAS_SIMULTANEAS: texto }));
+    assertEquals(config.llamadasSimultaneas, esperado);
+  }
+});
+
+Deno.test('configuración paralelo: LLM_DESACTIVAR_RAZONAMIENTO acepta true y false', () => {
+  for (const [texto, esperado] of [
+    ['true', true],
+    ['false', false],
+    ['TRUE', true],
+    [' False ', false],
+  ] as const) {
+    const config = leerConfiguracion(entorno({ LLM_DESACTIVAR_RAZONAMIENTO: texto }));
+    assertEquals(config.desactivarRazonamiento, esperado);
+  }
+});
+
+Deno.test('configuración paralelo: un valor inválido da 500 con el nombre de la variable', () => {
+  for (const [variable, valor] of [
+    ['LLM_LLAMADAS_SIMULTANEAS', '0'],
+    ['LLM_LLAMADAS_SIMULTANEAS', '11'],
+    ['LLM_LLAMADAS_SIMULTANEAS', '2.5'],
+    ['LLM_LLAMADAS_SIMULTANEAS', 'muchas'],
+    ['LLM_LLAMADAS_SIMULTANEAS', '-1'],
+    ['LLM_DESACTIVAR_RAZONAMIENTO', 'si'],
+    ['LLM_DESACTIVAR_RAZONAMIENTO', '1'],
+    ['LLM_DESACTIVAR_RAZONAMIENTO', 'verdadero'],
+  ] as const) {
+    const error = assertThrows(() => leerConfiguracion(entorno({ [variable]: valor })), ErrorApi);
+    assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
+    assertStringIncludes(error.message, variable);
+  }
+});
+
+Deno.test('configuración guardada paralelo: lo de la base manda sobre el entorno', () => {
+  const config = leerConfiguracion(
+    combinarConEntorno(
+      { llamadas_simultaneas: 2, desactivar_razonamiento: true },
+      entorno({ LLM_LLAMADAS_SIMULTANEAS: '8', LLM_DESACTIVAR_RAZONAMIENTO: 'false' }),
+    ),
+  );
+  assertEquals([config.llamadasSimultaneas, config.desactivarRazonamiento], [2, true]);
+});
+
+Deno.test(
+  'configuración guardada paralelo: false en la base manda sobre un true del entorno',
+  () => {
+    const config = leerConfiguracion(
+      combinarConEntorno(
+        { desactivar_razonamiento: false },
+        entorno({ LLM_DESACTIVAR_RAZONAMIENTO: 'true' }),
+      ),
+    );
+    assertEquals(config.desactivarRazonamiento, false);
+  },
+);
+
+Deno.test('configuración guardada paralelo: sin valor en la base manda el entorno', () => {
+  for (const guardada of [{ llamadas_simultaneas: null, desactivar_razonamiento: null }, {}]) {
+    const config = leerConfiguracion(
+      combinarConEntorno(
+        guardada,
+        entorno({ LLM_LLAMADAS_SIMULTANEAS: '7', LLM_DESACTIVAR_RAZONAMIENTO: 'true' }),
+      ),
+    );
+    assertEquals([config.llamadasSimultaneas, config.desactivarRazonamiento], [7, true]);
+  }
+  const porDefecto = leerConfiguracion(combinarConEntorno({}, entorno({})));
+  assertEquals([porDefecto.llamadasSimultaneas, porDefecto.desactivarRazonamiento], [5, false]);
+});
+
+Deno.test('configuración guardada paralelo: un valor inválido de la base también da 500', () => {
+  for (const guardada of [{ llamadas_simultaneas: 0 }, { llamadas_simultaneas: 11 }]) {
+    const error = assertThrows(
+      () => leerConfiguracion(combinarConEntorno(guardada, entorno({}))),
+      ErrorApi,
+    );
+    assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);
+    assertStringIncludes(error.message, 'LLM_LLAMADAS_SIMULTANEAS');
+  }
+});

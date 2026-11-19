@@ -33,6 +33,9 @@ export type MotivoLote =
   | 'respuesta_invalida'
   | 'error';
 
+/** Mensaje cuando una llamada a la IA pasa de su tiempo propio de 45 s (issue #45, S16c). */
+export const MENSAJE_IA_TARDO = 'La IA tardó demasiado en responder.';
+
 /** 429, 5xx, caída de red o clave rechazada: el cálculo queda en `pausado` (BRIEF §13.5). */
 export class ErrorProveedorNoDisponible extends Error {
   readonly motivo: MotivoLote;

@@ -3,7 +3,12 @@
 // Vault); lo que falta sale de las variables de entorno. `leerConfiguracion` recibe una función en
 // lugar de leer `Deno.env`, para poder probarla.
 import { ErrorApi } from './errores.ts';
-import { LLAMADAS_POR_MINUTO_MAXIMO, LLAMADAS_POR_MINUTO_POR_DEFECTO } from './ritmo.ts';
+import {
+  LLAMADAS_POR_MINUTO_MAXIMO,
+  LLAMADAS_POR_MINUTO_POR_DEFECTO,
+  LLAMADAS_SIMULTANEAS_MAXIMO,
+  LLAMADAS_SIMULTANEAS_POR_DEFECTO,
+} from './ritmo.ts';
 
 export type ProveedorLlm = 'gemini' | 'openai' | 'fake';
 
@@ -14,6 +19,10 @@ export interface Configuracion {
   maxCandidatos: number;
   /** Máximo de llamadas por minuto a Gemini (1..1000); el plan gratis ronda 15. */
   llamadasPorMinuto: number;
+  /** Tandas de un paso que se mandan a la IA a la vez (1..10); 5 por defecto (issue #45). */
+  llamadasSimultaneas: number;
+  /** Pide al modelo que no razone antes de responder, si el proveedor lo permite (issue #45). */
+  desactivarRazonamiento: boolean;
   openalexApiKey: string | undefined;
   crossrefMailto: string | undefined;
   geminiApiKey: string | undefined;
@@ -119,6 +128,30 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
+  const textoSimultaneas = valor('LLM_LLAMADAS_SIMULTANEAS');
+  const llamadasSimultaneas =
+    textoSimultaneas === undefined ? LLAMADAS_SIMULTANEAS_POR_DEFECTO : Number(textoSimultaneas);
+  if (
+    !Number.isInteger(llamadasSimultaneas) ||
+    llamadasSimultaneas < 1 ||
+    llamadasSimultaneas > LLAMADAS_SIMULTANEAS_MAXIMO
+  ) {
+    throw invalida(
+      'LLM_LLAMADAS_SIMULTANEAS',
+      `debe ser un entero entre 1 y ${LLAMADAS_SIMULTANEAS_MAXIMO}`,
+    );
+  }
+
+  const textoRazonamiento = valor('LLM_DESACTIVAR_RAZONAMIENTO')?.toLowerCase();
+  if (
+    textoRazonamiento !== undefined &&
+    textoRazonamiento !== 'true' &&
+    textoRazonamiento !== 'false'
+  ) {
+    throw invalida('LLM_DESACTIVAR_RAZONAMIENTO', 'debe ser «true» o «false»');
+  }
+  const desactivarRazonamiento = textoRazonamiento === 'true';
+
   // El modelo va en la ruta de la URL de Gemini: solo letras, dígitos, punto, guion y guion bajo.
   const modelo = valor('LLM_MODEL') ?? MODELO_POR_DEFECTO;
   if (!MODELO_VALIDO.test(modelo)) {
@@ -160,6 +193,8 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     umbral,
     maxCandidatos,
     llamadasPorMinuto,
+    llamadasSimultaneas,
+    desactivarRazonamiento,
     openalexApiKey: valor('OPENALEX_API_KEY'),
     crossrefMailto: valor('CROSSREF_MAILTO'),
     geminiApiKey: valor('GEMINI_API_KEY'),
@@ -190,6 +225,8 @@ export interface ConfiguracionGuardada {
   umbral?: number | string | null;
   max_candidatos?: number | string | null;
   llamadas_por_minuto?: number | string | null;
+  llamadas_simultaneas?: number | string | null;
+  desactivar_razonamiento?: boolean | string | null;
   crossref_mailto?: string | null;
   openai_base_url?: string | null;
   openai_modelo?: string | null;
@@ -205,6 +242,8 @@ const VARIABLE_DE_CAMPO: Record<string, keyof ConfiguracionGuardada> = {
   LLM_UMBRAL: 'umbral',
   RECALCULO_MAX_CANDIDATOS: 'max_candidatos',
   LLM_LLAMADAS_POR_MINUTO: 'llamadas_por_minuto',
+  LLM_LLAMADAS_SIMULTANEAS: 'llamadas_simultaneas',
+  LLM_DESACTIVAR_RAZONAMIENTO: 'desactivar_razonamiento',
   CROSSREF_MAILTO: 'crossref_mailto',
   OPENAI_COMPAT_BASE_URL: 'openai_base_url',
   OPENAI_COMPAT_MODEL: 'openai_modelo',

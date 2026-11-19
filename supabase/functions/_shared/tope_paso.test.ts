@@ -72,7 +72,7 @@ const respuestaGemini = () =>
 // Fetch con tiempo acotado ----------------------------------------------------------------
 
 Deno.test(
-  'Gemini: la llamada espera como máximo 30 s y, si se corta, no es un corte por tope',
+  'Gemini: la llamada espera como máximo 45 s y, si se corta, dice que la IA tardó demasiado',
   async () => {
     const reloj = crearRelojFalso();
     const { presupuesto, pedidas, controles } = presupuestoFalso(reloj);
@@ -88,9 +88,10 @@ Deno.test(
       ErrorProveedorNoDisponible,
     );
 
-    assertEquals(pedidas, [30_000], 'el tiempo propio por defecto bajó de 60 s a 30 s');
+    assertEquals(pedidas, [45_000], 'el tiempo propio por llamada es de 45 s (issue #45)');
     assert(!(error instanceof ErrorPasoSinTiempo), 'con tiempo de sobra no es un corte por tope');
-    assert(error.message.includes('No se pudo conectar con Gemini'));
+    assertEquals(error.message, 'La IA tardó demasiado en responder.');
+    assert(!error.message.includes('No se pudo conectar'));
   },
 );
 
@@ -115,9 +116,9 @@ Deno.test(
   },
 );
 
-Deno.test('compatible con OpenAI: mismo tope de 30 s y de lo que queda del paso', async () => {
+Deno.test('compatible con OpenAI: mismo tope de 45 s y de lo que queda del paso', async () => {
   for (const [adelanto, esperado, porTope] of [
-    [0, 30_000, false],
+    [0, 45_000, false],
     [95_000, 15_000, true],
   ] as const) {
     const reloj = crearRelojFalso();
@@ -138,6 +139,7 @@ Deno.test('compatible con OpenAI: mismo tope de 30 s y de lo que queda del paso'
 
     assertEquals(pedidas, [esperado]);
     assertEquals(error instanceof ErrorPasoSinTiempo, porTope);
+    if (!porTope) assertEquals(error.message, 'La IA tardó demasiado en responder.');
   }
 });
 

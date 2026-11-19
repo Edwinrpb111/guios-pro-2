@@ -3,18 +3,23 @@
 import {
   ErrorPasoSinTiempo,
   ErrorProveedorNoDisponible,
+  MENSAJE_IA_TARDO,
   ErrorRespuestaInvalida,
 } from './errores.ts';
 import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import { armarPrompt, INSTRUCCION_SISTEMA, leerVeredictos, VERSION_PROMPT } from './prompt.ts';
 import { leerEsperaSugerida, type RitmoDeLlamadas } from './ritmo.ts';
-import type { Candidato, Clasificador, Veredicto } from './tipos.ts';
+import type { Candidato, Clasificador, MedicionLlamada, Veredicto } from './tipos.ts';
+import { leerUsoGemini } from './uso_tokens.ts';
 
 export { VERSION_PROMPT };
 
 const URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-/** Tiempo propio de cada llamada; el paso entero tiene además su tope de 110 s (issue #43). */
-const TIEMPO_MAXIMO_MS = 30_000;
+/**
+ * Tiempo propio de cada llamada a la IA (issue #45); el paso entero tiene además su tope de 110 s
+ * (issue #43). Pasado ese tiempo la llamada se corta y el paso se pausa con un mensaje claro.
+ */
+const TIEMPO_MAXIMO_MS = 45_000;
 
 const ESQUEMA_RESPUESTA = {
   type: 'ARRAY',
@@ -58,11 +63,14 @@ export class GeminiClasificador implements Clasificador {
   readonly #fetch: typeof fetch;
   readonly #ritmo: RitmoDeLlamadas | undefined;
   readonly #presupuesto: PresupuestoPaso | undefined;
+  readonly #desactivarRazonamiento: boolean;
 
   /**
    * Con `ritmo` el clasificador espera antes de cada llamada para respetar el límite por minuto
    * y reintenta un 429/503 unas veces (issue #39). Sin `ritmo` no espera ni reintenta. Con
-   * `presupuesto`, cada llamada dura como máximo lo que queda del paso (issue #43).
+   * `presupuesto`, cada llamada dura como máximo lo que queda del paso (issue #43). Con
+   * `desactivarRazonamiento` pide `thinkingBudget: 0` (issue #45; los modelos que no admiten
+   * desactivar el razonamiento responden con un error 400).
    */
   constructor(opciones: {
     apiKey: string;
@@ -70,12 +78,14 @@ export class GeminiClasificador implements Clasificador {
     fetch?: typeof fetch;
     ritmo?: RitmoDeLlamadas;
     presupuesto?: PresupuestoPaso;
+    desactivarRazonamiento?: boolean;
   }) {
     this.#apiKey = opciones.apiKey;
     this.#modelo = opciones.modelo;
     this.#fetch = opciones.fetch ?? fetch;
     this.#ritmo = opciones.ritmo;
     this.#presupuesto = opciones.presupuesto;
+    this.#desactivarRazonamiento = opciones.desactivarRazonamiento ?? false;
   }
 
   /** Reintentos acumulados en este paso, para que el registro los reparta por lote. */
@@ -88,6 +98,7 @@ export class GeminiClasificador implements Clasificador {
     subfactor: string,
     contexto: string,
     candidatos: Candidato[],
+    medicion?: MedicionLlamada,
   ): Promise<Veredicto[]> {
     const cuerpoPeticion = JSON.stringify({
       systemInstruction: { parts: [{ text: INSTRUCCION_SISTEMA }] },
@@ -101,12 +112,14 @@ export class GeminiClasificador implements Clasificador {
         temperature: 0,
         responseMimeType: 'application/json',
         responseSchema: ESQUEMA_RESPUESTA,
+        ...(this.#desactivarRazonamiento ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     });
 
     let respuesta: Response;
     let cuerpo: unknown;
     for (let intento = 0; ; intento++) {
+      if (medicion !== undefined) medicion.reintentos = intento;
       // Cada llamada, también un reintento, respeta el ritmo configurado.
       await this.#ritmo?.esperarTurno();
       const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
@@ -121,12 +134,15 @@ export class GeminiClasificador implements Clasificador {
       } catch (error) {
         // Si la señal la acotó el tope del paso, no es un fallo de red: se pausa por tiempo.
         if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
+        // Pasaron los 45 s propios de la llamada: no es un problema de conexión.
+        if (esErrorDeTiempo(error)) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
         throw new ErrorProveedorNoDisponible(
           'No se pudo conectar con Gemini. Revisa la conexión y reanuda el cálculo.',
         );
       }
       cuerpo = await respuesta.json().catch(() => null);
       if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
+      if (signal.aborted) throw new ErrorProveedorNoDisponible(MENSAJE_IA_TARDO);
 
       // Solo el límite por minuto (429) y la saturación (503) se reintentan; si se agotan los
       // reintentos o el tiempo del paso, sigue el camino de siempre: pausar el cálculo.
@@ -159,6 +175,7 @@ export class GeminiClasificador implements Clasificador {
         'clave_rechazada',
       );
     }
+    if (medicion !== undefined && respuesta.ok) Object.assign(medicion, leerUsoGemini(cuerpo));
     if (!respuesta.ok) {
       throw new ErrorRespuestaInvalida(`Gemini rechazó la petición (HTTP ${respuesta.status}).`);
     }
