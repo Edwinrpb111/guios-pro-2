@@ -3,6 +3,7 @@
 // Vault); lo que falta sale de las variables de entorno. `leerConfiguracion` recibe una función en
 // lugar de leer `Deno.env`, para poder probarla.
 import { ErrorApi } from './errores.ts';
+import { LLAMADAS_POR_MINUTO_MAXIMO, LLAMADAS_POR_MINUTO_POR_DEFECTO } from './ritmo.ts';
 
 export type ProveedorLlm = 'gemini' | 'fake';
 
@@ -11,6 +12,8 @@ export interface Configuracion {
   modelo: string;
   umbral: number;
   maxCandidatos: number;
+  /** Máximo de llamadas por minuto a Gemini (1..1000); el plan gratis ronda 15. */
+  llamadasPorMinuto: number;
   openalexApiKey: string | undefined;
   crossrefMailto: string | undefined;
   geminiApiKey: string | undefined;
@@ -61,6 +64,20 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
+  const textoRitmo = valor('LLM_LLAMADAS_POR_MINUTO');
+  const llamadasPorMinuto =
+    textoRitmo === undefined ? LLAMADAS_POR_MINUTO_POR_DEFECTO : Number(textoRitmo);
+  if (
+    !Number.isInteger(llamadasPorMinuto) ||
+    llamadasPorMinuto < 1 ||
+    llamadasPorMinuto > LLAMADAS_POR_MINUTO_MAXIMO
+  ) {
+    throw invalida(
+      'LLM_LLAMADAS_POR_MINUTO',
+      `debe ser un entero entre 1 y ${LLAMADAS_POR_MINUTO_MAXIMO}`,
+    );
+  }
+
   // El modelo va en la ruta de la URL de Gemini: solo letras, dígitos, punto, guion y guion bajo.
   const modelo = valor('LLM_MODEL') ?? MODELO_POR_DEFECTO;
   if (!MODELO_VALIDO.test(modelo)) {
@@ -75,6 +92,7 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     modelo,
     umbral,
     maxCandidatos,
+    llamadasPorMinuto,
     openalexApiKey: valor('OPENALEX_API_KEY'),
     crossrefMailto: valor('CROSSREF_MAILTO'),
     geminiApiKey: valor('GEMINI_API_KEY'),
@@ -101,6 +119,7 @@ export interface ConfiguracionGuardada {
   modelo?: string | null;
   umbral?: number | string | null;
   max_candidatos?: number | string | null;
+  llamadas_por_minuto?: number | string | null;
   crossref_mailto?: string | null;
   gemini_api_key?: string | null;
   openalex_api_key?: string | null;
@@ -112,6 +131,7 @@ const VARIABLE_DE_CAMPO: Record<string, keyof ConfiguracionGuardada> = {
   LLM_MODEL: 'modelo',
   LLM_UMBRAL: 'umbral',
   RECALCULO_MAX_CANDIDATOS: 'max_candidatos',
+  LLM_LLAMADAS_POR_MINUTO: 'llamadas_por_minuto',
   CROSSREF_MAILTO: 'crossref_mailto',
   GEMINI_API_KEY: 'gemini_api_key',
   OPENALEX_API_KEY: 'openalex_api_key',
