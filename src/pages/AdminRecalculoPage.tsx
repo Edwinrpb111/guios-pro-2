@@ -103,12 +103,13 @@ function VistaRecalculo({ id }: { id: number }) {
 
   // Consola en vivo (issue #45, S16e): mientras corre un paso se relee el registro cada 2 s.
   // Se detiene al terminar, pausar o salir de la pantalla (limpieza del efecto).
-  const { recargar } = registro;
+  // `sondear` no lanza otra lectura si la anterior sigue en vuelo (una lectura lenta no se pierde).
+  const { sondear } = registro;
   useEffect(() => {
     if (!corriendo) return;
-    const temporizador = setInterval(recargar, INTERVALO_LECTURA_MS);
+    const temporizador = setInterval(sondear, INTERVALO_LECTURA_MS);
     return () => clearInterval(temporizador);
-  }, [corriendo, recargar]);
+  }, [corriendo, sondear]);
 
   const totalSubfactores = comparacion.datos
     ? comparacion.datos.catalogo.reduce((suma, factor) => suma + factor.subfactores.length, 0)

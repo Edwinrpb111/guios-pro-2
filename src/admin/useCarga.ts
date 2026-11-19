@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface Carga<T> {
   datos: T | undefined;
@@ -6,11 +6,14 @@ export interface Carga<T> {
   error: string | null;
   cargando: boolean;
   recargar: () => void;
+  /** Como `recargar`, pero no hace nada si todavía hay una lectura en vuelo (sondeo, #45). */
+  sondear: () => void;
 }
 
 /** Ejecuta `cargar` (memorizada con `useCallback`) al montar y cada vez que se pide recargar. */
 export function useCarga<T>(cargar: () => Promise<T>): Carga<T> {
-  const [estado, setEstado] = useState<Omit<Carga<T>, 'recargar'>>({
+  const enVuelo = useRef(false);
+  const [estado, setEstado] = useState<Omit<Carga<T>, 'recargar' | 'sondear'>>({
     datos: undefined,
     error: null,
     cargando: true,
@@ -19,12 +22,17 @@ export function useCarga<T>(cargar: () => Promise<T>): Carga<T> {
 
   useEffect(() => {
     let vigente = true;
+    enVuelo.current = true;
     cargar().then(
       (datos) => {
-        if (vigente) setEstado({ datos, error: null, cargando: false });
+        if (vigente) {
+          enVuelo.current = false;
+          setEstado({ datos, error: null, cargando: false });
+        }
       },
       (error: unknown) => {
         if (vigente) {
+          enVuelo.current = false;
           setEstado((anterior) => ({
             ...anterior,
             error: error instanceof Error ? error.message : 'No se pudieron cargar los datos.',
@@ -39,5 +47,8 @@ export function useCarga<T>(cargar: () => Promise<T>): Carga<T> {
   }, [cargar, version]);
 
   const recargar = useCallback(() => setVersion((v) => v + 1), []);
-  return { ...estado, recargar };
+  const sondear = useCallback(() => {
+    if (!enVuelo.current) setVersion((v) => v + 1);
+  }, []);
+  return { ...estado, recargar, sondear };
 }
