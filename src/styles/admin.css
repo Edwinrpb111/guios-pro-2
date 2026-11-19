@@ -443,3 +443,115 @@ a.boton {
     justify-content: flex-end;
   }
 }
+
+/* ---------- configuración guiada del clasificador (issue #37) ---------- */
+.admin-aviso--advertencia {
+  background: var(--Dbg);
+  border-color: var(--D);
+}
+.admin-aviso--advertencia p {
+  margin: 0 0 var(--espacio-2);
+}
+.admin-resumen__principal {
+  margin: 0 0 var(--espacio-2);
+}
+.admin-resumen__alerta {
+  margin: 0 0 var(--espacio-2);
+  padding: var(--espacio-2) var(--espacio-3);
+  border-left: 4px solid var(--D);
+  background: var(--Dbg);
+  border-radius: var(--radio-chico);
+}
+.admin-clasificador-bloque {
+  border: 0;
+  margin: 0 0 var(--espacio-3);
+  padding: 0;
+  min-width: 0;
+}
+.admin-clasificador-bloque legend {
+  font-size: var(--texto-base);
+  font-weight: 700;
+  color: var(--navy);
+  padding: 0;
+  margin-bottom: var(--espacio-2);
+}
+.admin-opciones {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+.admin-opciones--una {
+  grid-template-columns: minmax(0, 1fr);
+}
+.admin-opcion {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--espacio-3);
+  align-items: start;
+  padding: var(--espacio-4);
+  border: 2px solid var(--line2);
+  border-radius: var(--radio);
+  background: #fff;
+}
+.admin-opcion[data-activa='true'] {
+  border-color: var(--navy2);
+  background: var(--navy3);
+}
+.admin-opcion:focus-within {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+.admin-opcion input[type='radio'] {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  accent-color: var(--navy2);
+}
+.admin-opcion__titulo {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--navy);
+  cursor: pointer;
+}
+/* Toda la tarjeta es clicable: el área del título se extiende sobre ella. */
+.admin-opcion__titulo::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.admin-opcion__descripcion {
+  grid-column: 2;
+  margin: var(--espacio-1) 0 0;
+  color: var(--muted);
+}
+.admin-claves {
+  border-top: 1px solid var(--line);
+  padding-top: var(--espacio-3);
+}
+.admin-claves h3 {
+  font-size: var(--texto-base);
+  color: var(--navy);
+  margin: 0 0 var(--espacio-2);
+}
+.admin-avanzadas {
+  border-top: 1px solid var(--line);
+  padding-top: var(--espacio-3);
+  margin-bottom: var(--espacio-3);
+}
+.admin-avanzadas > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+  padding: var(--espacio-1) 0;
+}
+.admin-avanzadas > summary:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+@media (max-width: 640px) {
+  .admin-opciones {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

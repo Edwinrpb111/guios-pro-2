@@ -33,18 +33,22 @@ export function MarcoAdmin({ titulo, descripcion, acciones, children }: MarcoAdm
   );
 }
 
-/** Aviso con rol `alert` (errores) o `status` (información). */
+/** Aviso con rol `alert` (errores) o `status` (información y advertencias). */
 export function Aviso({
   tipo = 'info',
+  etiqueta,
   children,
 }: {
-  tipo?: 'info' | 'error' | 'exito';
+  tipo?: 'info' | 'error' | 'exito' | 'advertencia';
+  /** Nombre accesible del aviso, para distinguirlo de otros. */
+  etiqueta?: string;
   children: ReactNode;
 }) {
   return (
     <div
       className={`admin-aviso admin-aviso--${tipo}`}
       role={tipo === 'error' ? 'alert' : 'status'}
+      aria-label={etiqueta}
     >
       {children}
     </div>

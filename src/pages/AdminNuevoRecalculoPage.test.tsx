@@ -16,10 +16,10 @@ describe('P-09: recuadro de estado del clasificador (issue #33)', () => {
   it('con Gemini y la clave guardada muestra modelo, umbral, límite y el enlace', async () => {
     renderAdmin(<AdminNuevoRecalculoPage />, { api: con({}) });
     const caja = await recuadro();
-    expect(await caja.findByText(/Gemini · gemini-3\.1-flash-lite/)).toBeInTheDocument();
+    expect(await caja.findByText(/Gemini · modelo gemini-3\.1-flash-lite/)).toBeInTheDocument();
     expect(caja.getByText(/umbral 0,7/)).toBeInTheDocument();
-    expect(caja.getByText(/máx\. de candidatos: secretos de Supabase/)).toBeInTheDocument();
-    expect(caja.getByText(/Clave de Gemini: configurada/)).toBeInTheDocument();
+    expect(caja.getByText(/máx\. 50 candidatos \(por defecto\)/)).toBeInTheDocument();
+    expect(caja.getByText(/clave guardada en la app/)).toBeInTheDocument();
     expect(caja.getByRole('link', { name: 'Configuración del recálculo' })).toHaveAttribute(
       'href',
       '/admin/configuracion',
