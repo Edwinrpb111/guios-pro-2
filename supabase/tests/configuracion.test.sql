@@ -3,7 +3,7 @@
 -- Se ejecutan con `npm run test:db` (supabase test db) sobre Supabase local.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(57);
 
 -- ---------------------------------------------------------------------------
 -- Datos de prueba (como postgres, sin RLS); el rollback final restaura la base.
@@ -47,6 +47,8 @@ select throws_ok($$ update public.configuracion_recalculo set max_candidatos = 2
   '23514', null, 'máximo de candidatos mayor que 200 rechazado');
 select throws_ok($$ update public.configuracion_recalculo set modelo = '   ' $$,
   '23514', null, 'modelo en blanco rechazado');
+select throws_ok($$ update public.configuracion_recalculo set modelo = '../otro:generateContent' $$,
+  '23514', null, 'modelo con caracteres fuera de [A-Za-z0-9._-] rechazado (va en la URL)');
 select throws_ok($$ update public.configuracion_recalculo set crossref_mailto = 'sin-arroba' $$,
   '23514', null, 'correo de Crossref inválido rechazado');
 
@@ -207,6 +209,10 @@ select is(
   (select count(*)::int from public.configuracion_recalculo_cambio
    where cambio = 'clave GEMINI_API_KEY borrada'),
   1, 'el borrado queda registrado');
+select is(
+  (select count(*)::int from public.configuracion_recalculo_cambio
+   where cambio = 'clave OPENALEX_API_KEY borrada'),
+  0, 'borrar una clave que no existía no deja registro');
 reset role;
 
 set local role service_role;

@@ -45,6 +45,9 @@ Deno.test('configuración: un valor inválido da 500 con el nombre de la variabl
     ['RECALCULO_MAX_CANDIDATOS', '0'],
     ['RECALCULO_MAX_CANDIDATOS', '2.5'],
     ['RECALCULO_MAX_CANDIDATOS', '1000'],
+    ['LLM_MODEL', '../otro:generateContent?x='],
+    ['LLM_MODEL', 'modelo con espacios'],
+    ['LLM_MODEL', 'x'.repeat(101)],
   ] as const) {
     const error = assertThrows(() => leerConfiguracion(entorno({ [variable]: valor })), ErrorApi);
     assertEquals([error.estado, error.codigo], [500, 'configuracion_invalida']);

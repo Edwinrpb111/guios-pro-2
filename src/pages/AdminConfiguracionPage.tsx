@@ -256,8 +256,13 @@ function CampoClave({
               <button type="button" className="boton" onClick={() => setConfirmando(false)}>
                 Cancelar
               </button>
-              <button type="button" className="boton" onClick={() => void borrar()}>
-                Sí, borrar
+              <button
+                type="button"
+                className="boton boton--peligro"
+                onClick={() => void borrar()}
+                disabled={enviando}
+              >
+                Sí, borrar {estado.nombre}
               </button>
             </>
           )}

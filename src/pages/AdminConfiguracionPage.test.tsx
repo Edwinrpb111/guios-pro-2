@@ -99,7 +99,7 @@ describe('AdminConfiguracionPage (issue #33)', () => {
 
     await userEvent.click(claveGemini().getByRole('button', { name: 'Borrar clave' }));
     expect(api.borrarClave).not.toHaveBeenCalled();
-    await userEvent.click(claveGemini().getByRole('button', { name: 'Sí, borrar' }));
+    await userEvent.click(claveGemini().getByRole('button', { name: 'Sí, borrar GEMINI_API_KEY' }));
 
     await waitFor(() => expect(api.borrarClave).toHaveBeenCalledWith('GEMINI_API_KEY'));
     expect(await screen.findByText('Clave de Gemini borrada.')).toBeInTheDocument();

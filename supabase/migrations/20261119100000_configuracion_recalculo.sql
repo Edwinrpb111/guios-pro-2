@@ -17,7 +17,7 @@ create extension if not exists supabase_vault;
 create table public.configuracion_recalculo (
   id boolean primary key default true check (id),
   proveedor_llm text check (proveedor_llm in ('gemini', 'fake')),
-  modelo text check (modelo is null or (modelo = btrim(modelo) and length(modelo) between 1 and 100)),
+  modelo text check (modelo is null or modelo ~ '^[A-Za-z0-9._-]{1,100}$'),
   umbral numeric check (umbral between 0 and 1),
   max_candidatos integer check (max_candidatos between 1 and 200),
   crossref_mailto text check (
@@ -161,9 +161,12 @@ begin
   perform pg_advisory_xact_lock(hashtext(v_secreto));
   delete from vault.secrets where name = v_secreto;
 
-  insert into public.configuracion_recalculo_cambio (cambio, realizado_por_nombre)
-  values ('clave ' || p_nombre || ' borrada',
-          (select p.nombre_completo from public.perfil p where p.id = (select auth.uid())));
+  -- Solo se registra un borrado real: borrar una clave que no estaba no deja rastro.
+  if found then
+    insert into public.configuracion_recalculo_cambio (cambio, realizado_por_nombre)
+    values ('clave ' || p_nombre || ' borrada',
+            (select p.nombre_completo from public.perfil p where p.id = (select auth.uid())));
+  end if;
 end;
 $$;
 revoke execute on function public.borrar_clave_recalculo(text) from public, anon;

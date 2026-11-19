@@ -61,6 +61,8 @@ describe('validarConfiguracion (issue #33)', () => {
     [{ maxCandidatos: '2.5' }, /candidatos/i],
     [{ crossrefMailto: 'sin-arroba' }, /correo/i],
     [{ modelo: 'x'.repeat(101) }, /modelo/i],
+    [{ modelo: '../otro:generateContent' }, /modelo/i],
+    [{ modelo: 'modelo con espacios' }, /modelo/i],
     [{ proveedorLlm: 'openai' }, /proveedor/i],
   ])('rechaza %o con un mensaje claro', (cambio, mensaje) => {
     const resultado = validarConfiguracion({ ...VACIO, ...cambio } as FormularioConfiguracion);

@@ -17,6 +17,7 @@ export interface Configuracion {
 }
 
 const MODELO_POR_DEFECTO = 'gemini-3.1-flash-lite';
+const MODELO_VALIDO = /^[A-Za-z0-9._-]{1,100}$/;
 const UMBRAL_POR_DEFECTO = 0.7;
 const MAX_CANDIDATOS_POR_DEFECTO = 50;
 const MAX_CANDIDATOS_TOPE = 200;
@@ -60,9 +61,18 @@ export function leerConfiguracion(leer: (nombre: string) => string | undefined):
     );
   }
 
+  // El modelo va en la ruta de la URL de Gemini: solo letras, dígitos, punto, guion y guion bajo.
+  const modelo = valor('LLM_MODEL') ?? MODELO_POR_DEFECTO;
+  if (!MODELO_VALIDO.test(modelo)) {
+    throw invalida(
+      'LLM_MODEL',
+      'solo admite letras, dígitos, punto, guion y guion bajo (hasta 100 caracteres)',
+    );
+  }
+
   return {
     proveedorLlm: proveedor,
-    modelo: valor('LLM_MODEL') ?? MODELO_POR_DEFECTO,
+    modelo,
     umbral,
     maxCandidatos,
     openalexApiKey: valor('OPENALEX_API_KEY'),

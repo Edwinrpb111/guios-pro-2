@@ -8,6 +8,8 @@ import type { ParametrosRecalculo, ProveedorLlm } from './tipos';
 
 export const MAX_CANDIDATOS_TOPE = 200;
 export const LARGO_MAXIMO_MODELO = 100;
+/** El modelo va en la URL de Gemini: mismo patrón que el CHECK de la base. */
+const MODELO_VALIDO = /^[A-Za-z0-9._-]+$/;
 export const LARGO_MAXIMO_CLAVE = 1000;
 
 export interface FormularioConfiguracion {
@@ -42,6 +44,12 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
   const modelo = f.modelo.trim();
   if (modelo.length > LARGO_MAXIMO_MODELO) {
     return { error: `El modelo no puede superar ${LARGO_MAXIMO_MODELO} caracteres.` };
+  }
+  if (modelo !== '' && !MODELO_VALIDO.test(modelo)) {
+    return {
+      error:
+        'El modelo solo admite letras, dígitos, punto, guion y guion bajo (por ejemplo, gemini-3.1-flash-lite).',
+    };
   }
 
   const textoUmbral = f.umbral.trim().replace(',', '.');
