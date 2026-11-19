@@ -3,7 +3,7 @@
 -- Se ejecutan con `npm run test:db` (supabase test db) sobre Supabase local.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(66);
 
 -- ---------------------------------------------------------------------------
 -- Datos de prueba (como postgres, sin RLS); el rollback final restaura la base.
@@ -23,12 +23,14 @@ select is(
    where oid in ('public.configuracion_recalculo'::regclass,
                  'public.configuracion_recalculo_cambio'::regclass)),
   true, 'RLS activo en las dos tablas de configuración');
+select has_column('public', 'configuracion_recalculo', 'llamadas_por_minuto',
+  'existe la columna llamadas_por_minuto (ritmo de llamadas a Gemini, issue #39)');
 select is((select count(*)::int from public.configuracion_recalculo), 1,
   'hay exactamente una fila de configuración');
 select results_eq(
-  $$ select proveedor_llm, modelo, umbral, max_candidatos, crossref_mailto
+  $$ select proveedor_llm, modelo, umbral, max_candidatos, crossref_mailto, llamadas_por_minuto
      from public.configuracion_recalculo $$,
-  $$ values (null::text, null::text, null::numeric, null::integer, null::text) $$,
+  $$ values (null::text, null::text, null::numeric, null::integer, null::text, null::integer) $$,
   'al inicio no hay valores: las Edge Functions usan los secretos de entorno');
 select throws_ok(
   $$ insert into public.configuracion_recalculo (id) values (false) $$,
@@ -45,6 +47,10 @@ select throws_ok($$ update public.configuracion_recalculo set max_candidatos = 0
   '23514', null, 'máximo de candidatos menor que 1 rechazado');
 select throws_ok($$ update public.configuracion_recalculo set max_candidatos = 201 $$,
   '23514', null, 'máximo de candidatos mayor que 200 rechazado');
+select throws_ok($$ update public.configuracion_recalculo set llamadas_por_minuto = 0 $$,
+  '23514', null, 'llamadas por minuto menor que 1 rechazadas');
+select throws_ok($$ update public.configuracion_recalculo set llamadas_por_minuto = 1001 $$,
+  '23514', null, 'llamadas por minuto mayor que 1000 rechazadas');
 select throws_ok($$ update public.configuracion_recalculo set modelo = '   ' $$,
   '23514', null, 'modelo en blanco rechazado');
 select throws_ok($$ update public.configuracion_recalculo set modelo = '../otro:generateContent' $$,
@@ -58,6 +64,8 @@ select throws_ok($$ update public.configuracion_recalculo set crossref_mailto = 
 set local role anon;
 select throws_ok($$ select * from public.configuracion_recalculo $$,
   '42501', null, 'anónimo no lee la configuración');
+select throws_ok($$ select llamadas_por_minuto from public.configuracion_recalculo $$,
+  '42501', null, 'anónimo no lee las llamadas por minuto');
 select throws_ok($$ update public.configuracion_recalculo set umbral = 0.5 $$,
   '42501', null, 'anónimo no cambia la configuración');
 select throws_ok($$ select * from public.configuracion_recalculo_cambio $$,
@@ -79,7 +87,10 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"00000000-0000-0000-0000-0000000000d3","role":"authenticated"}';
 select is_empty($$ select * from public.configuracion_recalculo $$,
   'un decisor no lee la configuración (RLS)');
-update public.configuracion_recalculo set umbral = 0.5, proveedor_llm = 'fake';
+select is_empty($$ select llamadas_por_minuto from public.configuracion_recalculo $$,
+  'un decisor no lee las llamadas por minuto (RLS)');
+update public.configuracion_recalculo
+  set umbral = 0.5, proveedor_llm = 'fake', llamadas_por_minuto = 5;
 select throws_ok($$ insert into public.configuracion_recalculo (id) values (true) $$,
   '42501', null, 'un decisor no inserta configuración');
 select throws_ok($$ delete from public.configuracion_recalculo $$,
@@ -104,8 +115,9 @@ select throws_ok($$ select * from vault.decrypted_secrets $$,
 reset role;
 
 select results_eq(
-  $$ select umbral, proveedor_llm, actualizado_por from public.configuracion_recalculo $$,
-  $$ values (null::numeric, null::text, null::uuid) $$,
+  $$ select umbral, proveedor_llm, llamadas_por_minuto, actualizado_por
+     from public.configuracion_recalculo $$,
+  $$ values (null::numeric, null::text, null::integer, null::uuid) $$,
   'el update del decisor no cambió nada');
 
 -- ---------------------------------------------------------------------------
@@ -118,7 +130,7 @@ select is((select count(*)::int from public.configuracion_recalculo), 1,
 select lives_ok(
   $$ update public.configuracion_recalculo
      set proveedor_llm = 'gemini', modelo = 'gemini-3.1-flash-lite', umbral = 0.8,
-         max_candidatos = 15, crossref_mailto = 'equipo@unemi.edu.ec' $$,
+         max_candidatos = 15, crossref_mailto = 'equipo@unemi.edu.ec', llamadas_por_minuto = 15 $$,
   'el administrador cambia los parámetros');
 select throws_ok($$ update public.configuracion_recalculo set actualizado_en = now() - interval '1 day' $$,
   '42501', null, 'ni el administrador escribe las columnas de auditoría a mano');
@@ -129,11 +141,22 @@ select results_eq(
   'el cambio guarda quién (auth.uid) y cuándo');
 select results_eq(
   $$ select cambio, realizado_por, realizado_por_nombre, realizado_en,
-            detalle ->> 'umbral', detalle ->> 'max_candidatos'
+            detalle ->> 'umbral', detalle ->> 'max_candidatos', detalle ->> 'llamadas_por_minuto'
      from public.configuracion_recalculo_cambio $$,
   $$ values ('parametros'::text, '00000000-0000-0000-0000-0000000000a3'::uuid, 'Ada Admin'::text, now(),
-            '0.8'::text, '15'::text) $$,
+            '0.8'::text, '15'::text, '15'::text) $$,
   'el registro de cambios anota el cambio de parámetros con su autor');
+
+-- Los límites del ritmo (1 y 1000) se aceptan y cambiar solo ese valor también queda registrado.
+select lives_ok($$ update public.configuracion_recalculo set llamadas_por_minuto = 1 $$,
+  'el administrador fija 1 llamada por minuto');
+select lives_ok($$ update public.configuracion_recalculo set llamadas_por_minuto = 1000 $$,
+  'el administrador fija 1000 llamadas por minuto');
+select lives_ok($$ update public.configuracion_recalculo set llamadas_por_minuto = 15 $$,
+  'el administrador vuelve a 15 llamadas por minuto');
+select is(
+  (select count(*)::int from public.configuracion_recalculo_cambio where cambio = 'parametros'),
+  4, 'cambiar solo llamadas_por_minuto queda registrado en el registro de cambios');
 
 -- Claves en Vault: solo escritura.
 select results_eq(
@@ -187,10 +210,10 @@ select is_empty(
 -- Las Edge Functions (service_role) leen la configuración efectiva con la clave descifrada.
 set local role service_role;
 select results_eq(
-  $$ select proveedor_llm, modelo, umbral, max_candidatos, crossref_mailto,
+  $$ select proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, crossref_mailto,
             gemini_api_key, openalex_api_key
      from public.configuracion_recalculo_servicio() $$,
-  $$ values ('gemini'::text, 'gemini-3.1-flash-lite'::text, 0.8::numeric, 15,
+  $$ values ('gemini'::text, 'gemini-3.1-flash-lite'::text, 0.8::numeric, 15, 15,
             'equipo@unemi.edu.ec'::text, 'clave-secreta-456'::text, null::text) $$,
   'service_role recibe los parámetros y la clave descifrada (sin espacios)');
 reset role;
