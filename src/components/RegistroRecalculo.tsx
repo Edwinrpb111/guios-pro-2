@@ -79,11 +79,21 @@ function textoTokens(l: LoteRegistro): string | null {
   return partes.length === 0 ? null : `tokens: ${partes.join(', ')}`;
 }
 
+/**
+ * «250 tokens/s»: tokens de salida (incluye el razonamiento) por segundo de la tanda; `null` sin
+ * tokens de salida o sin duración.
+ */
+function textoVelocidad(l: LoteRegistro): string | null {
+  if (l.tokensSalida === null || l.ms === null || l.ms <= 0) return null;
+  return `${formatearEntero(l.tokensSalida / (l.ms / 1000))} tokens/s`;
+}
+
 function lineaLote(l: LoteRegistro): string {
   const cabecera = `Lote ${numero(l.n)}${l.tamano === null ? '' : ` (${l.tamano})`}`;
   const resultado = l.resultado === null ? '—' : (RESULTADOS_LOTE[l.resultado] ?? l.resultado);
   return [
     `${cabecera}: ${formatearDuracion(l.ms)}`,
+    textoVelocidad(l),
     plural(l.reintentos, 'reintento', 'reintentos'),
     resultado,
     plural(l.aceptados, 'aceptado', 'aceptados'),

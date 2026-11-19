@@ -346,6 +346,23 @@ describe('RegistroRecalculo en vivo (issue #45)', () => {
     expect(paso.queryByText(/razonamiento/)).toBeNull();
     expect(paso.getAllByText(/tokens/)).toHaveLength(1);
   });
+
+  it('cada lote muestra los tokens de salida por segundo junto a su duración', () => {
+    const lote = crearLoteConTokens({ ms: 2000, tokensSalida: 1001 });
+    mostrar([{ ...PASO_BASE, registro: { ...REGISTRO_OK, lotes: [lote] } }]);
+    expect(
+      tarjeta('Costo de licencias').getByText(
+        new RegExp(`${formatearDuracion(2000)} · 501 tokens/s · `),
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('sin tokens de salida o sin duración no se muestran tokens por segundo', () => {
+    const sinSalida = crearLoteConTokens({ ms: 2000, tokensEntrada: 50 });
+    const sinDuracion = crearLoteConTokens({ ms: 0, tokensSalida: 300 });
+    mostrar([{ ...PASO_BASE, registro: { ...REGISTRO_OK, lotes: [sinSalida, sinDuracion] } }]);
+    expect(tarjeta('Costo de licencias').queryByText(/tokens\/s/)).toBeNull();
+  });
 });
 
 function crearLoteConTokens(tokens: Partial<LoteRegistro>): LoteRegistro {
