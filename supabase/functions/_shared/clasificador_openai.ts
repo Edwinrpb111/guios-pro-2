@@ -126,6 +126,8 @@ export class ClasificadorCompatibleOpenAI implements Clasificador {
             authorization: `Bearer ${this.#apiKey}`,
           },
           body: cuerpoPeticion,
+          // Una redirección podría llevar la clave a otro servidor: se trata como fallo de conexión.
+          redirect: 'error',
           signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
         });
       } catch {

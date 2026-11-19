@@ -215,6 +215,15 @@ Deno.test('openai: la dirección base con «/» final no duplica la barra', asyn
 });
 
 Deno.test(
+  'openai: no sigue redirecciones, para que la clave no viaje a otro servidor',
+  async () => {
+    const { fetch, llamadas } = crearFetchGuionado([ok()]);
+    await clasificarLote(clasificador(fetch));
+    assertEquals(llamadas[0]!.redirect, 'error');
+  },
+);
+
+Deno.test(
   'openai: el ritmo por minuto se aplica antes de cada llamada, como con Gemini',
   async () => {
     const reloj = crearRelojFalso();
