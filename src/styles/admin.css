@@ -413,6 +413,73 @@ a.boton {
   margin-bottom: 0;
 }
 
+/* ---------- registro del recálculo (P-09, issue #43) ---------- */
+.admin-registro {
+  margin-top: var(--espacio-4);
+}
+.admin-registro > details > summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--navy);
+  padding: var(--espacio-1) 0;
+}
+.admin-registro summary:focus-visible {
+  outline: var(--foco);
+  outline-offset: 2px;
+}
+.admin-registro__acciones {
+  margin: var(--espacio-2) 0;
+}
+.admin-registro__lista {
+  list-style: none;
+  margin: var(--espacio-3) 0 0;
+  padding: 0;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.admin-registro__lista > li {
+  border-top: 1px solid var(--line);
+  padding: var(--espacio-2) 0;
+}
+.admin-registro__lista summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--espacio-2);
+  cursor: pointer;
+  min-height: 32px;
+}
+.admin-registro__nombre {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.admin-registro__duracion {
+  color: var(--muted);
+  font-size: var(--texto-pequeno);
+  font-variant-numeric: tabular-nums;
+}
+.admin-registro__cuerpo {
+  padding: var(--espacio-2) 0 var(--espacio-1) var(--espacio-4);
+  font-size: var(--texto-pequeno);
+  overflow-wrap: anywhere;
+}
+.admin-registro__cuerpo p {
+  margin: 0 0 var(--espacio-1);
+}
+.admin-registro__cuerpo ul {
+  margin: 0 0 var(--espacio-1);
+  padding-left: var(--espacio-4);
+}
+.admin-registro__mensaje {
+  font-weight: 600;
+}
+.admin-registro__mensaje[data-resultado='error'],
+.admin-registro__mensaje[data-resultado='pausado'] {
+  color: var(--A);
+}
+
 /* ---------- móvil: tablas en tarjetas ---------- */
 @media (max-width: 760px) {
   .admin-indicadores {

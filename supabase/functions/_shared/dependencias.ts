@@ -14,6 +14,7 @@ import { CrossrefProveedor } from './crossref.ts';
 import { ErrorApi } from './errores.ts';
 import { ClasificadorFalso, ProveedorFalso } from './falsos.ts';
 import { OpenAlexProveedor } from './openalex.ts';
+import type { PresupuestoPaso } from './presupuesto.ts';
 import { RELOJ_REAL, RitmoDeLlamadas } from './ritmo.ts';
 import type { Repositorio } from './repositorio.ts';
 import type { Clasificador, NombreBase, ProveedorBusqueda } from './tipos.ts';
@@ -23,14 +24,17 @@ export interface Dependencias {
   repositorio: Repositorio;
   contexto: ContextoSubfactores;
   configuracion: Configuracion;
-  /** Un proveedor por fuente pedida, en el mismo orden. */
-  proveedores(fuentes: NombreBase[]): ProveedorBusqueda[];
+  /**
+   * Un proveedor por fuente pedida, en el mismo orden. Con `presupuesto` (el tope de 110 s del
+   * paso, issue #43) cada consulta dura como máximo lo que queda.
+   */
+  proveedores(fuentes: NombreBase[], presupuesto?: PresupuestoPaso): ProveedorBusqueda[];
   /** Hora en milisegundos; inyectable para probar el ritmo con un reloj falso. */
   ahora(): number;
   /** Espera `ms` milisegundos; inyectable para que las pruebas no duerman de verdad. */
   esperar(ms: number): Promise<void>;
   /** Un clasificador por paso: lleva la cuenta de las llamadas y la espera de ese paso. */
-  clasificador(modelo: string): Clasificador;
+  clasificador(modelo: string, presupuesto?: PresupuestoPaso): Clasificador;
 }
 
 /** Lo que se puede reemplazar en las pruebas: reloj y `fetch` del clasificador. */
@@ -67,21 +71,27 @@ export function crearDependencias(
     configuracion,
     ahora,
     esperar,
-    proveedores(fuentes) {
+    proveedores(fuentes, presupuesto) {
       return fuentes.map((fuente) => {
         if (configuracion.proveedorLlm === 'fake') return new ProveedorFalso(fuente);
         if (fuente === 'crossref') {
-          return new CrossrefProveedor(
-            configuracion.crossrefMailto === undefined
+          return new CrossrefProveedor({
+            ...(configuracion.crossrefMailto === undefined
               ? {}
-              : { mailto: configuracion.crossrefMailto },
-          );
+              : { mailto: configuracion.crossrefMailto }),
+            ahora,
+            esperar,
+            ...(presupuesto === undefined ? {} : { presupuesto }),
+          });
         }
         if (configuracion.openalexApiKey === undefined) throw faltaSecreto('OPENALEX_API_KEY');
-        return new OpenAlexProveedor({ apiKey: configuracion.openalexApiKey });
+        return new OpenAlexProveedor({
+          apiKey: configuracion.openalexApiKey,
+          ...(presupuesto === undefined ? {} : { presupuesto }),
+        });
       });
     },
-    clasificador(modelo) {
+    clasificador(modelo, presupuesto) {
       if (configuracion.proveedorLlm === 'fake') return new ClasificadorFalso();
       if (configuracion.proveedorLlm === 'openai') {
         if (configuracion.openaiBaseUrl === undefined) throw faltaSecreto('OPENAI_COMPAT_BASE_URL');
@@ -93,7 +103,13 @@ export function crearDependencias(
           urlBase: configuracion.openaiBaseUrl,
           modelo,
           ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
-          ritmo: new RitmoDeLlamadas({ ahora, esperar }, configuracion.llamadasPorMinuto),
+          ...(presupuesto === undefined ? {} : { presupuesto }),
+          ritmo: new RitmoDeLlamadas(
+            { ahora, esperar },
+            configuracion.llamadasPorMinuto,
+            undefined,
+            presupuesto,
+          ),
         });
       }
       if (configuracion.geminiApiKey === undefined) throw faltaSecreto('GEMINI_API_KEY');
@@ -102,7 +118,13 @@ export function crearDependencias(
         apiKey: configuracion.geminiApiKey,
         modelo,
         ...(opciones.fetch === undefined ? {} : { fetch: opciones.fetch }),
-        ritmo: new RitmoDeLlamadas({ ahora, esperar }, configuracion.llamadasPorMinuto),
+        ...(presupuesto === undefined ? {} : { presupuesto }),
+        ritmo: new RitmoDeLlamadas(
+          { ahora, esperar },
+          configuracion.llamadasPorMinuto,
+          undefined,
+          presupuesto,
+        ),
       });
     },
   };

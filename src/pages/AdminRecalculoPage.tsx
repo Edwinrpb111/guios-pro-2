@@ -6,6 +6,7 @@ import { nombreCalculo, rangoCalculo } from '../admin/resultado';
 import { TablaIS } from '../admin/TablaIS';
 import { useCarga } from '../admin/useCarga';
 import { useRecalculo, type EstadoRecalculo } from '../admin/useRecalculo';
+import { RegistroRecalculo } from '../components/RegistroRecalculo';
 import type { Importancia } from '../guios-core';
 
 const TOTAL_FACTORES = 18;
@@ -68,6 +69,18 @@ function VistaRecalculo({ id }: { id: number }) {
   }, [api, id]);
   const comparacion = useCarga(cargarComparacion);
 
+  // Registro de los pasos (issue #43): se vuelve a leer tras cada paso (`registroVersion`).
+  const { registroVersion } = recalculo;
+  const cargarRegistro = useCallback(
+    () => api.registroPasos(id),
+    // `registroVersion` no se usa dentro: solo cambia la identidad para que `useCarga` relea.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api, id, registroVersion],
+  );
+  const registro = useCarga(cargarRegistro);
+  const corriendo = fase === 'ejecutando' || fase === 'pausando';
+  const verRegistro = calculo?.origen === 'ia' && fase !== 'cargando';
+
   const enMarcha = ['ejecutando', 'pausando', 'pausado', 'guardando', 'error'].includes(fase);
 
   return (
@@ -88,6 +101,7 @@ function VistaRecalculo({ id }: { id: number }) {
             recálculo se retoma desde lo pendiente al volver.
           </p>
         )}
+        {fase === 'ejecutando' && mensaje && <Aviso>{mensaje}</Aviso>}
         {fase === 'pausando' && <p>Pausando al terminar el subfactor en curso…</p>}
         {fase === 'pausado' && <Aviso>{mensaje ?? 'El recálculo está pausado.'}</Aviso>}
         {fase === 'guardando' && (
@@ -163,6 +177,16 @@ function VistaRecalculo({ id }: { id: number }) {
           )}
         </div>
       </section>
+
+      {verRegistro && (
+        <RegistroRecalculo
+          pasos={registro.datos ?? []}
+          enMarcha={corriendo}
+          abiertoInicial={corriendo || fase === 'pausado' || fase === 'error'}
+          error={registro.error}
+          onActualizar={registro.recargar}
+        />
+      )}
     </MarcoAdmin>
   );
 }

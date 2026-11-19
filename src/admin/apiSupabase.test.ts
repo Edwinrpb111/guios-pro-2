@@ -1,4 +1,8 @@
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from '@supabase/supabase-js';
 import { crearApiAdmin, type ClienteAdmin } from './apiSupabase';
 import { ErrorAdmin } from './tipos';
 
@@ -258,6 +262,190 @@ describe('crearApiAdmin (Supabase)', () => {
     await expect(
       crearApiAdmin(cliente).iniciarRecalculo({ anioInicio: 2020, anioFin: 2025, fuentes: [] }),
     ).rejects.toThrow(/No se pudo contactar/);
+  });
+
+  describe('errores de las Edge Functions (issue #43)', () => {
+    const MENSAJE_TIEMPO = /El paso tardó más de lo permitido/;
+
+    async function errorDelPaso(error: unknown) {
+      const { cliente } = clienteSimulado({
+        funciones: { 'recalculo-paso': { data: null, error: error as { message: string } } },
+      });
+      return crearApiAdmin(cliente)
+        .pasoRecalculo(9)
+        .catch((e: unknown) => e);
+    }
+
+    it.each([504, 546])(
+      'un %i del gateway es un corte por tiempo, no un problema de conexión',
+      async (estado) => {
+        const respuesta = new Response('<html>Gateway Timeout</html>', { status: estado });
+        const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+        expect(error).toBeInstanceOf(ErrorAdmin);
+        expect(error).toMatchObject({ tipo: 'tiempo', codigo: null, estado: null });
+        expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+        expect((error as ErrorAdmin).message).not.toMatch(/conexión/);
+      },
+    );
+
+    it('un 546 WORKER_LIMIT con cuerpo JSON sin `error` también es un corte por tiempo', async () => {
+      const respuesta = new Response(
+        JSON.stringify({ code: 'WORKER_LIMIT', message: 'Function exceeded the limit' }),
+        { status: 546 },
+      );
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({ tipo: 'tiempo' });
+      expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+    });
+
+    it('un error del relay de Supabase es un corte por tiempo', async () => {
+      const error = await errorDelPaso(new FunctionsRelayError(new Response('', { status: 502 })));
+      expect(error).toMatchObject({ tipo: 'tiempo' });
+      expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+    });
+
+    it('un fallo de red sin respuesta mantiene el mensaje de conexión', async () => {
+      const error = await errorDelPaso(new FunctionsFetchError(new TypeError('Failed to fetch')));
+      expect(error).toMatchObject({ tipo: 'red' });
+      expect((error as ErrorAdmin).message).toMatch(/No se pudo contactar/);
+    });
+
+    it('un error HTTP con JSON `error` conserva su mensaje, código y estado', async () => {
+      const respuesta = new Response(
+        JSON.stringify({
+          error: 'Tiempo agotado del paso.',
+          codigo: 'paso_sin_tiempo',
+          estado: 'pausado',
+        }),
+        { status: 503 },
+      );
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({
+        message: 'Tiempo agotado del paso.',
+        codigo: 'paso_sin_tiempo',
+        estado: 'pausado',
+        tipo: 'otro',
+      });
+    });
+
+    it('un error HTTP sin cuerpo JSON no se hace pasar por falta de conexión', async () => {
+      const respuesta = new Response('<html>Internal Server Error</html>', { status: 500 });
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({ tipo: 'otro' });
+      expect((error as ErrorAdmin).message).toMatch(/500/);
+      expect((error as ErrorAdmin).message).not.toMatch(/conexión/);
+    });
+  });
+
+  describe('registro de los pasos del recálculo (issue #43)', () => {
+    const FILA_PASO = {
+      id_subfactor: 105,
+      estado: 'hecho',
+      candidatos: 25,
+      aceptados: 9,
+      detalle: null,
+      iniciado_en: '2026-11-22T10:00:00Z',
+      duracion_ms: 4321,
+      registro: { intento: 1, proveedor: 'fake', aceptados: 9, resultado: 'hecho' },
+      subfactor: { enunciado: 'Costo de licencias' },
+    };
+
+    it('lee las columnas nuevas de recalculo_paso, del paso más reciente al más antiguo', async () => {
+      const { cliente, llamadas } = clienteSimulado({
+        tablas: { recalculo_paso: { data: [FILA_PASO], error: null } },
+      });
+      const pasos = await crearApiAdmin(cliente).registroPasos(7);
+
+      expect(pasos).toEqual([
+        {
+          idSubfactor: 105,
+          nombre: 'Costo de licencias',
+          estado: 'hecho',
+          iniciadoEn: '2026-11-22T10:00:00Z',
+          duracionMs: 4321,
+          candidatos: 25,
+          aceptados: 9,
+          detalle: null,
+          registro: expect.objectContaining({ intento: 1, proveedor: 'fake', resultado: 'hecho' }),
+        },
+      ]);
+      const llamada = llamadas.find((l) => l.tabla === 'recalculo_paso');
+      const columnas = String(llamada?.pasos.find(([m]) => m === 'select')?.[1][0]);
+      for (const c of [
+        'iniciado_en',
+        'duracion_ms',
+        'registro',
+        'detalle',
+        'subfactor(enunciado)',
+      ]) {
+        expect(columnas).toContain(c);
+      }
+      expect(llamada?.pasos).toContainEqual(['eq', ['id_calculo', 7]]);
+      expect(llamada?.pasos.filter(([m]) => m === 'order')[0]).toEqual([
+        'order',
+        ['iniciado_en', { ascending: false, nullsFirst: false }],
+      ]);
+    });
+
+    it('omite los pasos pendientes que nunca empezaron', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: {
+          recalculo_paso: {
+            data: [
+              {
+                ...FILA_PASO,
+                id_subfactor: 1,
+                estado: 'pendiente',
+                iniciado_en: null,
+                duracion_ms: null,
+                registro: null,
+              },
+              { ...FILA_PASO, id_subfactor: 2, estado: 'pendiente', duracion_ms: null },
+              {
+                ...FILA_PASO,
+                id_subfactor: 3,
+                estado: 'error',
+                iniciado_en: null,
+                detalle: 'Falló',
+              },
+            ],
+            error: null,
+          },
+        },
+      });
+      const pasos = await crearApiAdmin(cliente).registroPasos(7);
+      expect(pasos.map((p) => p.idSubfactor)).toEqual([2, 3]);
+      expect(pasos[0]).toMatchObject({ estado: 'pendiente', duracionMs: null });
+      expect(pasos[1]).toMatchObject({ detalle: 'Falló', iniciadoEn: null });
+    });
+
+    it('un registro mal formado no rompe la lectura', async () => {
+      const { cliente } = clienteSimulado({
+        tablas: {
+          recalculo_paso: {
+            data: [
+              { ...FILA_PASO, registro: 'basura', subfactor: null },
+              { ...FILA_PASO, id_subfactor: 106, registro: { lotes: 'x' }, subfactor: [] },
+            ],
+            error: null,
+          },
+        },
+      });
+      const pasos = await crearApiAdmin(cliente).registroPasos(7);
+      expect(pasos[0]).toMatchObject({ registro: null, nombre: null });
+      expect(pasos[1]?.registro).toMatchObject({ lotes: [] });
+    });
+
+    it('rechaza un estado de paso desconocido y propaga un error de la consulta', async () => {
+      const raro = clienteSimulado({
+        tablas: { recalculo_paso: { data: [{ ...FILA_PASO, estado: 'raro' }], error: null } },
+      });
+      await expect(crearApiAdmin(raro.cliente).registroPasos(7)).rejects.toThrow(/estado/);
+      const mal = clienteSimulado({
+        tablas: { recalculo_paso: { data: null, error: { message: 'sin permiso' } } },
+      });
+      await expect(crearApiAdmin(mal.cliente).registroPasos(7)).rejects.toThrow('sin permiso');
+    });
   });
 
   it('usa las funciones SQL de §11.2 con sus argumentos', async () => {

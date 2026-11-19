@@ -17,6 +17,7 @@ export function apiDiferida(cargar: () => Promise<ApiAdmin>): ApiAdmin {
     referencias: (id) => api().then((a) => a.referencias(id)),
     iniciarRecalculo: (entrada) => api().then((a) => a.iniciarRecalculo(entrada)),
     pasoRecalculo: (id) => api().then((a) => a.pasoRecalculo(id)),
+    registroPasos: (id) => api().then((a) => a.registroPasos(id)),
     pausar: (id) => api().then((a) => a.pausar(id)),
     conteoCitas: (id) => api().then((a) => a.conteoCitas(id)),
     guardarResultado: (id, filas) => api().then((a) => a.guardarResultado(id, filas)),

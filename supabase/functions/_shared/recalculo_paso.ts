@@ -5,9 +5,21 @@ import type { UsuarioVerificado } from './auth.ts';
 import { buscarYClasificar } from './busqueda.ts';
 import { modeloDelProveedor } from './configuracion.ts';
 import type { Dependencias } from './dependencias.ts';
-import { ErrorApi, ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
+import {
+  ErrorApi,
+  ErrorPasoSinTiempo,
+  ErrorProveedorNoDisponible,
+  ErrorRespuestaInvalida,
+} from './errores.ts';
 import type { Resultado } from './http.ts';
-import type { Calculo, Paso, SubfactorCatalogo } from './repositorio.ts';
+import { PRESUPUESTO_PASO_MS, PresupuestoPaso } from './presupuesto.ts';
+import {
+  MENSAJE_INESPERADO,
+  RegistradorPaso,
+  type RegistroPaso,
+  type ResultadoPaso,
+} from './registro.ts';
+import type { Calculo, Paso, Repositorio, SubfactorCatalogo } from './repositorio.ts';
 import { BASES_VALIDAS, type NombreBase } from './tipos.ts';
 
 /** Factores (0..18) cuyos subfactores tienen todos el paso `hecho`. */
@@ -51,6 +63,39 @@ function fuentesDe(calculo: Calculo): NombreBase[] {
   return fuentes as NombreBase[];
 }
 
+/** Mensaje de pausa cuando el paso agota su tope de tiempo (código `paso_sin_tiempo`). */
+function mensajeSinTiempo(subfactor: SubfactorCatalogo): string {
+  return `El subfactor «${subfactor.enunciado}» tardó más de lo permitido (${PRESUPUESTO_PASO_MS / 1000} s). Sube las llamadas por minuto y reanuda, o inicia un cálculo nuevo con menos candidatos.`;
+}
+
+/** Intentos anteriores del paso; si no se puede leer, se cuenta desde cero (el paso sigue). */
+async function leerIntentos(
+  repositorio: Repositorio,
+  idCalculo: number,
+  idSubfactor: number,
+): Promise<number> {
+  try {
+    return await repositorio.intentosDelPaso(idCalculo, idSubfactor);
+  } catch (error) {
+    console.error('No se pudo leer el intento del paso:', error);
+    return 0;
+  }
+}
+
+/** El registro es un apoyo para el administrador: si no se puede escribir, el paso no falla. */
+async function guardarRegistro(
+  repositorio: Repositorio,
+  idCalculo: number,
+  idSubfactor: number,
+  datos: { iniciado_en?: string; duracion_ms: number | null; registro: RegistroPaso },
+): Promise<void> {
+  try {
+    await repositorio.guardarRegistroPaso(idCalculo, idSubfactor, datos);
+  } catch (error) {
+    console.error('No se pudo guardar el registro del paso:', error);
+  }
+}
+
 export async function paso(
   cuerpo: unknown,
   _admin: UsuarioVerificado,
@@ -58,6 +103,8 @@ export async function paso(
 ): Promise<Resultado> {
   const idCalculo = leerIdCalculo(cuerpo);
   const { repositorio, configuracion } = dependencias;
+  // El tope de 110 s corre desde que entra la invocación (issue #43).
+  const presupuesto = new PresupuestoPaso({ ahora: dependencias.ahora });
 
   const calculo = await repositorio.obtenerCalculo(idCalculo);
   if (calculo === null) {
@@ -97,17 +144,58 @@ export async function paso(
   });
   if (siguiente === undefined) return { estado: 200, cuerpo: resumen(pasos, calculo.estado) };
 
-  // Se arman antes de tocar el estado: si falta una clave, el cálculo no cambia.
+  // Se arman antes de tocar el estado: si falta una clave, el cálculo no cambia. Todo el paso
+  // comparte el mismo presupuesto de tiempo (110 s, issue #43).
   const fuentes = fuentesDe(calculo);
-  const proveedores = dependencias.proveedores(fuentes);
+  const proveedores = dependencias.proveedores(fuentes, presupuesto);
   const clasificador = dependencias.clasificador(
     parametros?.modelo ?? modeloDelProveedor(configuracion),
+    presupuesto,
   );
 
   // Una invocación sobre un cálculo pausado lo reanuda (BRIEF §13.5).
   if (calculo.estado === 'pausado') {
     await repositorio.actualizarCalculo(idCalculo, { estado: 'en_proceso', mensaje_error: null });
   }
+
+  // El registro se escribe YA al empezar: si la plataforma corta el paso, queda el inicio, el
+  // intento y `duracion_ms` nula. Una falla al escribir el registro nunca tumba el paso.
+  const intento = (await leerIntentos(repositorio, idCalculo, siguiente.id_subfactor)) + 1;
+  const registrador = new RegistradorPaso(configuracion.proveedorLlm, intento);
+  await guardarRegistro(repositorio, idCalculo, siguiente.id_subfactor, {
+    iniciado_en: new Date(presupuesto.inicio).toISOString(),
+    duracion_ms: null,
+    registro: registrador.interrumpido(),
+  });
+  const terminar = async (resultado: ResultadoPaso, mensaje: string | null, aceptados: number) => {
+    const duracion = Math.max(0, presupuesto.ahora() - presupuesto.inicio);
+    const registro = registrador.cerrar(resultado, mensaje, aceptados);
+    await guardarRegistro(repositorio, idCalculo, siguiente.id_subfactor, {
+      duracion_ms: duracion,
+      registro,
+    });
+    // Una línea por intento, solo con ids, conteos y tiempos: nunca claves, URL ni textos.
+    console.log(
+      JSON.stringify({
+        evento: 'recalculo_paso',
+        id_calculo: idCalculo,
+        id_subfactor: siguiente.id_subfactor,
+        subfactor: `${siguiente.orden_factor}.${siguiente.orden}`,
+        intento,
+        proveedor: registro.proveedor,
+        resultado,
+        duracion_ms: duracion,
+        busqueda: registro.busqueda.map((b) => ({
+          fuente: b.fuente,
+          ms: b.ms,
+          candidatos: b.candidatos,
+        })),
+        candidatos: registro.busqueda.reduce((suma, b) => suma + b.candidatos, 0),
+        lotes: registro.lotes.length,
+        aceptados,
+      }),
+    );
+  };
 
   try {
     const resultado = await buscarYClasificar({
@@ -119,6 +207,8 @@ export async function paso(
       anioFin: parametros?.anio_fin ?? 0,
       umbral: parametros?.umbral ?? configuracion.umbral,
       maxCandidatos: parametros?.max_candidatos ?? configuracion.maxCandidatos,
+      presupuesto,
+      registro: registrador,
     });
     await repositorio.completarPaso(
       idCalculo,
@@ -126,23 +216,28 @@ export async function paso(
       resultado.referencias,
       resultado.candidatos,
     );
+    await terminar('hecho', null, resultado.referencias.length);
   } catch (error) {
-    const disponible = !(error instanceof ErrorProveedorNoDisponible);
-    if (disponible && !(error instanceof ErrorRespuestaInvalida)) throw error;
-
-    // 429, caída o respuesta inservible: se pausa con un mensaje legible y NO se reintenta en
-    // bucle. El administrador reanuda desde P-09 y se retoma desde este mismo paso.
-    if (error instanceof ErrorRespuestaInvalida) {
-      await repositorio.marcarPasoConError(idCalculo, siguiente.id_subfactor, error.message);
+    const sinTiempo = error instanceof ErrorPasoSinTiempo;
+    const invalida = error instanceof ErrorRespuestaInvalida;
+    if (!(error instanceof ErrorProveedorNoDisponible) && !invalida) {
+      // Fallo inesperado: queda anotado (sin copiar su texto) y sigue siendo un error interno.
+      await terminar('error', MENSAJE_INESPERADO, 0);
+      throw error;
     }
-    await repositorio.actualizarCalculo(idCalculo, {
-      estado: 'pausado',
-      mensaje_error: error.message,
-    });
+
+    // 429, caída, respuesta inservible o tiempo agotado: se pausa con un mensaje legible y NO se
+    // reintenta en bucle. El administrador reanuda desde P-09 y se retoma desde este mismo paso.
+    const mensaje = sinTiempo ? mensajeSinTiempo(siguiente) : error.message;
+    if (invalida) {
+      await repositorio.marcarPasoConError(idCalculo, siguiente.id_subfactor, mensaje);
+    }
+    await repositorio.actualizarCalculo(idCalculo, { estado: 'pausado', mensaje_error: mensaje });
+    await terminar(invalida ? 'error' : 'pausado', mensaje, 0);
     throw new ErrorApi(
-      error instanceof ErrorRespuestaInvalida ? 502 : 503,
-      error instanceof ErrorRespuestaInvalida ? 'respuesta_invalida' : 'proveedor_no_disponible',
-      error.message,
+      invalida ? 502 : 503,
+      invalida ? 'respuesta_invalida' : sinTiempo ? 'paso_sin_tiempo' : 'proveedor_no_disponible',
+      mensaje,
       resumen(await repositorio.listarPasos(idCalculo), 'pausado'),
     );
   }

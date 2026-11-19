@@ -1,6 +1,11 @@
 // Proveedor OpenAlex (BRIEF §13.3).
 import { normalizarDoi } from './doi.ts';
-import { ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
+import {
+  ErrorPasoSinTiempo,
+  ErrorProveedorNoDisponible,
+  ErrorRespuestaInvalida,
+} from './errores.ts';
+import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import type { Candidato, ProveedorBusqueda } from './tipos.ts';
 
 const URL_BASE = 'https://api.openalex.org/works';
@@ -32,10 +37,13 @@ export class OpenAlexProveedor implements ProveedorBusqueda {
   readonly nombre = 'openalex' as const;
   readonly #apiKey: string;
   readonly #fetch: typeof fetch;
+  readonly #presupuesto: PresupuestoPaso | undefined;
 
-  constructor(opciones: { apiKey: string; fetch?: typeof fetch }) {
+  /** Con `presupuesto`, la consulta dura como máximo lo que queda del paso (issue #43). */
+  constructor(opciones: { apiKey: string; fetch?: typeof fetch; presupuesto?: PresupuestoPaso }) {
     this.#apiKey = opciones.apiKey;
     this.#fetch = opciones.fetch ?? fetch;
+    this.#presupuesto = opciones.presupuesto;
   }
 
   async buscar(
@@ -54,10 +62,12 @@ export class OpenAlexProveedor implements ProveedorBusqueda {
     url.searchParams.set('select', 'id,doi,title,publication_year,abstract_inverted_index');
     url.searchParams.set('api_key', this.#apiKey);
 
+    const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
     let respuesta: Response;
     try {
-      respuesta = await this.#fetch(url, { signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
-    } catch {
+      respuesta = await this.#fetch(url, { signal });
+    } catch (error) {
+      if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
       // No se reenvía el error original: su texto puede incluir la dirección con la clave.
       throw new ErrorProveedorNoDisponible(
         'No se pudo conectar con OpenAlex. Revisa la conexión y reanuda el cálculo.',
@@ -82,6 +92,7 @@ export class OpenAlexProveedor implements ProveedorBusqueda {
     try {
       cuerpo = await respuesta.json();
     } catch {
+      if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
       throw new ErrorRespuestaInvalida('OpenAlex devolvió una respuesta que no es JSON.');
     }
     const resultados = (cuerpo as { results?: unknown } | null)?.results;

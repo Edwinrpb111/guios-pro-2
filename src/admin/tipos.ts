@@ -83,6 +83,56 @@ export interface ConteoCitas {
   citas: number;
 }
 
+/** Estado de un `recalculo_paso` en la base. */
+export type EstadoPaso = 'pendiente' | 'hecho' | 'error';
+
+/** Una búsqueda bibliográfica del paso (OpenAlex o Crossref). Todo puede faltar (JSON no confiable). */
+export interface BusquedaRegistro {
+  fuente: string | null;
+  ms: number | null;
+  candidatos: number | null;
+  error: string | null;
+}
+
+/** Un lote enviado a la IA. */
+export interface LoteRegistro {
+  n: number | null;
+  tamano: number | null;
+  ms: number | null;
+  reintentos: number | null;
+  resultado: string | null;
+  aceptados: number | null;
+}
+
+/** Registro del último intento de un paso (`recalculo_paso.registro`), ya validado. */
+export interface RegistroPaso {
+  intento: number | null;
+  proveedor: string | null;
+  busqueda: BusquedaRegistro[];
+  lotes: LoteRegistro[];
+  aceptados: number | null;
+  resultado: string | null;
+  mensaje: string | null;
+}
+
+/** Un paso del recálculo con su registro, para el panel «Registro del recálculo». */
+export interface PasoRegistro {
+  idSubfactor: number;
+  /** Enunciado del subfactor; `null` si no se pudo leer. */
+  nombre: string | null;
+  estado: EstadoPaso;
+  /** Inicio del último intento; `null` si el paso nunca empezó. */
+  iniciadoEn: string | null;
+  /** `null` mientras corre o si la plataforma lo cortó. */
+  duracionMs: number | null;
+  candidatos: number;
+  aceptados: number;
+  /** Último error guardado por la Edge Function, si lo hay. */
+  detalle: string | null;
+  /** `null` si no hay registro o no se pudo interpretar. */
+  registro: RegistroPaso | null;
+}
+
 export interface EntradaRecalculo {
   anioInicio: number;
   anioFin: number;
@@ -149,17 +199,31 @@ export interface ConfiguracionRecalculo {
   cambios: CambioConfiguracion[];
 }
 
+/**
+ * Clase del error de una Edge Function, para decidir si se reintenta el paso (issue #43):
+ * `tiempo` = la plataforma cortó el paso (504, 546, relay); `red` = la petición no llegó a
+ * obtener respuesta; `otro` = cualquier otro error, con o sin mensaje del servidor.
+ */
+export type TipoErrorAdmin = 'tiempo' | 'red' | 'otro';
+
 /** Error de la API con el mensaje en español que se muestra al administrador. */
 export class ErrorAdmin extends Error {
   readonly codigo: string | null;
   /** Estado del cálculo informado por la Edge Function (p. ej. `pausado`). */
   readonly estado: string | null;
+  readonly tipo: TipoErrorAdmin;
 
-  constructor(mensaje: string, codigo: string | null = null, estado: string | null = null) {
+  constructor(
+    mensaje: string,
+    codigo: string | null = null,
+    estado: string | null = null,
+    tipo: TipoErrorAdmin = 'otro',
+  ) {
     super(mensaje);
     this.name = 'ErrorAdmin';
     this.codigo = codigo;
     this.estado = estado;
+    this.tipo = tipo;
   }
 }
 
@@ -172,6 +236,8 @@ export interface ApiAdmin {
   referencias(id: number): Promise<ReferenciaCalculo[]>;
   iniciarRecalculo(entrada: EntradaRecalculo): Promise<number>;
   pasoRecalculo(id: number): Promise<ResultadoPaso>;
+  /** Pasos con actividad del cálculo, del más reciente al más antiguo (registro del recálculo). */
+  registroPasos(id: number): Promise<PasoRegistro[]>;
   pausar(id: number): Promise<void>;
   conteoCitas(id: number): Promise<ConteoCitas[]>;
   guardarResultado(id: number, filas: FilaSugerida[]): Promise<void>;

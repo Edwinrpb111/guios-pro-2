@@ -339,26 +339,35 @@ export type Database = {
           aceptados: number;
           candidatos: number;
           detalle: string | null;
+          duracion_ms: number | null;
           estado: string;
           id_calculo: number;
           id_subfactor: number;
+          iniciado_en: string | null;
+          registro: Json | null;
         };
         ComputedFields: never;
         Insert: {
           aceptados?: number;
           candidatos?: number;
           detalle?: string | null;
+          duracion_ms?: number | null;
           estado?: string;
           id_calculo: number;
           id_subfactor: number;
+          iniciado_en?: string | null;
+          registro?: Json | null;
         };
         Update: {
           aceptados?: number;
           candidatos?: number;
           detalle?: string | null;
+          duracion_ms?: number | null;
           estado?: string;
           id_calculo?: number;
           id_subfactor?: number;
+          iniciado_en?: string | null;
+          registro?: Json | null;
         };
         Relationships: [
           {

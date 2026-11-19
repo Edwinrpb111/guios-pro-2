@@ -2,9 +2,10 @@
  * `ApiAdmin` con Supabase (BRIEF §11): lecturas con RLS de administrador, funciones SQL de
  * §11.2 y Edge Functions de §11.3. Valida los dominios cerrados al leer (BRIEF §14).
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { FunctionsRelayError, type SupabaseClient } from '@supabase/supabase-js';
 import { esImportancia, type Importancia } from '../guios-core';
 import type { Database, Json } from '../lib/database.types';
+import { leerRegistro } from './registro';
 import {
   CLAVES,
   ErrorAdmin,
@@ -12,9 +13,11 @@ import {
   type CalculoResumen,
   type ConfiguracionRecalculo,
   type EstadoCalculo,
+  type EstadoPaso,
   type FilaSugerida,
   type NombreClave,
   type ParametrosCalculo,
+  type PasoRegistro,
 } from './tipos';
 
 export type ClienteAdmin = SupabaseClient<Database>;
@@ -32,11 +35,24 @@ const ESTADOS: readonly EstadoCalculo[] = [
   'fallido',
 ];
 
+const ESTADOS_PASO: readonly EstadoPaso[] = ['pendiente', 'hecho', 'error'];
+
+const COLUMNAS_PASO =
+  'id_subfactor, estado, candidatos, aceptados, detalle, iniciado_en, duracion_ms, registro, ' +
+  'subfactor(enunciado)';
+
 /** PostgREST devuelve como máximo 1000 filas por consulta (`max_rows`). */
 const TAMANO_PAGINA = 1000;
 
 const SIN_CONEXION =
   'No se pudo contactar con el servicio de recálculo. Revisa tu conexión e intenta de nuevo.';
+
+/** Corte de la plataforma (504, 546 WORKER_LIMIT, relay): el paso no alcanzó a terminar. */
+export const PASO_SIN_TIEMPO =
+  'El paso tardó más de lo permitido. Se reintentará; si se repite, sube las llamadas por minuto o inicia un cálculo nuevo con menos candidatos.';
+
+/** Estados con que la plataforma corta una Edge Function por tiempo o por límite de recursos. */
+const ESTADOS_DE_CORTE: readonly number[] = [504, 546];
 
 interface FilaCalculo {
   id_calculo: number;
@@ -90,6 +106,51 @@ function mapearCalculo(fila: FilaCalculo): CalculoResumen {
     mensajeError: fila.mensaje_error,
     parametros,
   };
+}
+
+interface FilaPaso {
+  id_subfactor: number;
+  estado: string;
+  candidatos: number;
+  aceptados: number;
+  detalle: string | null;
+  iniciado_en: string | null;
+  duracion_ms: number | null;
+  registro: Json | null;
+  /** PostgREST devuelve el subfactor embebido como objeto (o lista/null si algo cambia). */
+  subfactor: { enunciado?: unknown } | { enunciado?: unknown }[] | null;
+}
+
+function nombreDeSubfactor(subfactor: FilaPaso['subfactor']): string | null {
+  const fila = Array.isArray(subfactor) ? subfactor[0] : subfactor;
+  return typeof fila?.enunciado === 'string' && fila.enunciado !== '' ? fila.enunciado : null;
+}
+
+/**
+ * Pasos con actividad (empezados o ya con resultado), del más reciente al más antiguo. Los
+ * pendientes que nunca empezaron no son registro: son el trabajo que falta.
+ */
+function mapearPasos(filas: FilaPaso[]): PasoRegistro[] {
+  return filas
+    .filter((f) => f.iniciado_en !== null || f.estado !== 'pendiente')
+    .map((f) => {
+      if (!ESTADOS_PASO.includes(f.estado as EstadoPaso)) {
+        throw new ErrorAdmin(
+          `El paso del subfactor ${f.id_subfactor} tiene un estado desconocido.`,
+        );
+      }
+      return {
+        idSubfactor: f.id_subfactor,
+        nombre: nombreDeSubfactor(f.subfactor),
+        estado: f.estado as EstadoPaso,
+        iniciadoEn: f.iniciado_en,
+        duracionMs: f.duracion_ms,
+        candidatos: f.candidatos,
+        aceptados: f.aceptados,
+        detalle: f.detalle,
+        registro: leerRegistro(f.registro),
+      };
+    });
 }
 
 const SOLO_ADMINISTRADOR =
@@ -159,28 +220,38 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
   };
 }
 
-/** Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español. */
+/**
+ * Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español y su clase
+ * (`tipo`). Un corte por tiempo (504, 546, relay) no se confunde con una caída de la red.
+ */
 async function errorDeFuncion(error: unknown): Promise<ErrorAdmin> {
   const contexto = (error as { context?: unknown } | null)?.context;
-  if (contexto instanceof Response) {
-    try {
-      const cuerpo = (await contexto.json()) as {
-        error?: unknown;
-        codigo?: unknown;
-        estado?: unknown;
-      };
-      if (typeof cuerpo.error === 'string') {
-        return new ErrorAdmin(
-          cuerpo.error,
-          typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
-          typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
-        );
-      }
-    } catch {
-      // Cuerpo no JSON: se usa el mensaje genérico.
-    }
+  if (!(contexto instanceof Response)) {
+    // Sin respuesta: la petición no llegó al servidor (FunctionsFetchError).
+    return new ErrorAdmin(SIN_CONEXION, null, null, 'red');
   }
-  return new ErrorAdmin(SIN_CONEXION);
+  if (error instanceof FunctionsRelayError || ESTADOS_DE_CORTE.includes(contexto.status)) {
+    return new ErrorAdmin(PASO_SIN_TIEMPO, null, null, 'tiempo');
+  }
+  try {
+    const cuerpo = (await contexto.json()) as {
+      error?: unknown;
+      codigo?: unknown;
+      estado?: unknown;
+    };
+    if (typeof cuerpo.error === 'string') {
+      return new ErrorAdmin(
+        cuerpo.error,
+        typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
+        typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
+      );
+    }
+  } catch {
+    // Cuerpo no JSON: se usa el mensaje genérico con el estado HTTP.
+  }
+  return new ErrorAdmin(
+    `El servicio de recálculo respondió con un error (HTTP ${contexto.status}). Intenta de nuevo.`,
+  );
 }
 
 async function invocar<T>(cliente: ClienteAdmin, funcion: string, cuerpo: object): Promise<T> {
@@ -302,6 +373,19 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
 
     pasoRecalculo(id) {
       return invocar(cliente, 'recalculo-paso', { id_calculo: id });
+    },
+
+    async registroPasos(id) {
+      const filas = exigir(
+        await cliente
+          .from('recalculo_paso')
+          .select(COLUMNAS_PASO)
+          .eq('id_calculo', id)
+          // Los pasos sin inicio quedan al final; entre iguales, un orden estable.
+          .order('iniciado_en', { ascending: false, nullsFirst: false })
+          .order('id_subfactor'),
+      ) as unknown as FilaPaso[];
+      return mapearPasos(filas);
     },
 
     obtenerConfiguracion: () => obtenerConfiguracion(cliente),
