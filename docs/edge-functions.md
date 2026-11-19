@@ -20,24 +20,25 @@ Las dos funciones exigen `Authorization: Bearer <JWT>` de un **administrador** y
 
 Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`estado`, `progreso`, `pendientes`).
 
-| HTTP | `codigo`                                                    | Cuándo                                                                                                             |
-| ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                                           |
-| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                             |
-| 403  | `solo_administrador`                                        | **Un decisor**                                                                                                     |
-| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                              |
-| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                           |
-| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                            |
-| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas |
-| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`             |
-| 503  | `proveedor_no_disponible`                                   | 429, 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error`                           |
-| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                               |
+| HTTP | `codigo`                                                    | Cuándo                                                                                                                                 |
+| ---- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                                                               |
+| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                                                 |
+| 403  | `solo_administrador`                                        | **Un decisor**                                                                                                                         |
+| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                                                  |
+| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                                               |
+| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                                                |
+| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas                     |
+| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`                                 |
+| 503  | `proveedor_no_disponible`                                   | 429/503 de Gemini tras agotar los reintentos, otro 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error` |
+| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                                                   |
 
 **Orden de las comprobaciones.** Primero el token: sin `Authorization: Bearer` la respuesta es 401 sin tocar la configuración. Los errores de configuración (`configuracion_*`: variable ausente o inválida) se registran solo en el servidor y el cliente recibe `error_interno`, sin nombrar variables.
 
 ### Pausa y reanudación (BRIEF §13.5)
 
-- Un 429 o una caída de cualquier API **no se reintenta en bucle**: el cálculo pasa a `pausado`, se guarda un `mensaje_error` legible y la respuesta (503/502) incluye `{estado: 'pausado', progreso, pendientes}`.
+- Gemini: antes de cada llamada se espera para respetar `llamadas_por_minuto` (15 por defecto) y un 429 o 503 se reintenta hasta 3 veces, esperando el `retryDelay` de Gemini (máximo 30 s por espera y 90 s en total por paso); el clasificador falso no espera ([ADR-011](decisiones/ADR-011-ritmo-de-llamadas-a-gemini.md)).
+- Si se agotan esos reintentos, o falla otra API o la red (sin reintento), **no se reintenta en bucle**: el cálculo pasa a `pausado`, se guarda un `mensaje_error` legible y la respuesta (503/502) incluye `{estado: 'pausado', progreso, pendientes}`.
 - Volver a invocar `recalculo-paso` **reanuda** (`pausado → en_proceso`, se borra el mensaje) desde el paso pendiente o con error. Cerrar la pestaña no pierde nada: lo hecho queda guardado.
 - Los pasos son idempotentes (`UNIQUE (id_calculo, id_subfactor, doi)`): repetir uno no duplica referencias.
 - Un recálculo pausado o fallido nunca afecta a las evaluaciones: sigue vigente el cálculo anterior.

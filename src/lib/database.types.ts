@@ -78,6 +78,7 @@ export type Database = {
           actualizado_por: string | null;
           crossref_mailto: string | null;
           id: boolean;
+          llamadas_por_minuto: number | null;
           max_candidatos: number | null;
           modelo: string | null;
           proveedor_llm: string | null;
@@ -89,6 +90,7 @@ export type Database = {
           actualizado_por?: string | null;
           crossref_mailto?: string | null;
           id?: boolean;
+          llamadas_por_minuto?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
           proveedor_llm?: string | null;
@@ -99,6 +101,7 @@ export type Database = {
           actualizado_por?: string | null;
           crossref_mailto?: string | null;
           id?: boolean;
+          llamadas_por_minuto?: number | null;
           max_candidatos?: number | null;
           modelo?: string | null;
           proveedor_llm?: string | null;
@@ -635,6 +638,7 @@ export type Database = {
         Returns: {
           crossref_mailto: string;
           gemini_api_key: string;
+          llamadas_por_minuto: number;
           max_candidatos: number;
           modelo: string;
           openalex_api_key: string;

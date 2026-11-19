@@ -106,7 +106,9 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
   const [fila, estados, cambios] = await Promise.all([
     cliente
       .from('configuracion_recalculo')
-      .select('proveedor_llm, modelo, umbral, max_candidatos, crossref_mailto, actualizado_en')
+      .select(
+        'proveedor_llm, modelo, umbral, max_candidatos, llamadas_por_minuto, crossref_mailto, actualizado_en',
+      )
       .maybeSingle()
       .then(exigir),
     cliente.rpc('estado_claves_recalculo').then(exigir),
@@ -133,6 +135,7 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
       modelo: fila.modelo,
       umbral: fila.umbral === null ? null : Number(fila.umbral),
       maxCandidatos: fila.max_candidatos,
+      llamadasPorMinuto: fila.llamadas_por_minuto,
       crossrefMailto: fila.crossref_mailto,
     },
     actualizadoEn: fila.actualizado_en,
@@ -311,6 +314,7 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
             modelo: p.modelo,
             umbral: p.umbral,
             max_candidatos: p.maxCandidatos,
+            llamadas_por_minuto: p.llamadasPorMinuto,
             crossref_mailto: p.crossrefMailto,
           })
           .eq('id', true)

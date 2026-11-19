@@ -83,7 +83,8 @@ function motivoSinUso(proveedor: ParametrosRecalculo['proveedorLlm']): string {
 
 /**
  * Un solo bloque para configurar el clasificador (issue #37): se elige Gemini o Falso y, con
- * Gemini, la clave aparece ahí mismo. Modelo, umbral, máximo de candidatos, correo de Crossref y
+ * Gemini, la clave aparece ahí mismo. Modelo, umbral, máximo de candidatos, llamadas por minuto
+ * a Gemini (issue #39), correo de Crossref y
  * «usar el secreto de Supabase» van en «Opciones avanzadas». Un campo vacío usa el secreto de
  * Supabase de la Edge Function o, si tampoco existe, el valor por defecto.
  */
@@ -294,6 +295,23 @@ function ConfiguracionClasificador({
               />
             </label>
           </div>
+          <label className="admin-campo">
+            Llamadas a Gemini por minuto
+            <input
+              inputMode="numeric"
+              value={formulario.llamadasPorMinuto}
+              onChange={campo('llamadasPorMinuto')}
+              placeholder="15"
+              aria-describedby={`${id}-ritmo`}
+            />
+          </label>
+          <span id={`${id}-ritmo`} className="admin-ayuda admin-campo__ayuda">
+            De 1 a 1000. El recálculo espera entre llamadas para no pasar de este número por minuto,
+            y si Gemini responde que se superó el límite, espera y reintenta solo unas veces antes
+            de pausar. El plan gratis permite cerca de 15 por minuto; con facturación activada se
+            puede subir. Con menos de 4, un subfactor con muchos candidatos puede tardar demasiado
+            en un solo paso. Vacío: LLM_LLAMADAS_POR_MINUTO o 15.
+          </span>
           <label className="admin-campo">
             Correo para Crossref
             <input

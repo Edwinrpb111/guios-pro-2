@@ -1,12 +1,14 @@
 /**
  * Validación del formulario «Configuración del recálculo» (issue #33). Son las mismas reglas que
  * imponen la base (CHECK de `configuracion_recalculo`) y la Edge Function (`configuracion.ts`):
- * umbral entre 0 y 1, máximo de candidatos entero entre 1 y 200. Un campo vacío = `null`, es
+ * umbral entre 0 y 1, máximo de candidatos entero entre 1 y 200 y llamadas por minuto a
+ * Gemini entero entre 1 y 1000. Un campo vacío = `null`, es
  * decir, «usar el secreto de Supabase o el valor por defecto».
  */
 import type { ParametrosRecalculo, ProveedorLlm } from './tipos';
 
 export const MAX_CANDIDATOS_TOPE = 200;
+export const LLAMADAS_POR_MINUTO_TOPE = 1000;
 export const LARGO_MAXIMO_MODELO = 100;
 /** El modelo va en la URL de Gemini: mismo patrón que el CHECK de la base. */
 const MODELO_VALIDO = /^[A-Za-z0-9._-]+$/;
@@ -17,6 +19,7 @@ export interface FormularioConfiguracion {
   modelo: string;
   umbral: string;
   maxCandidatos: string;
+  llamadasPorMinuto: string;
   crossrefMailto: string;
 }
 
@@ -31,6 +34,7 @@ export function formularioDesdeParametros(p: ParametrosRecalculo): FormularioCon
     modelo: p.modelo ?? '',
     umbral: p.umbral === null ? '' : String(p.umbral),
     maxCandidatos: p.maxCandidatos === null ? '' : String(p.maxCandidatos),
+    llamadasPorMinuto: p.llamadasPorMinuto === null ? '' : String(p.llamadasPorMinuto),
     crossrefMailto: p.crossrefMailto ?? '',
   };
 }
@@ -69,6 +73,17 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
     };
   }
 
+  const textoRitmo = f.llamadasPorMinuto.trim();
+  const ritmo = textoRitmo === '' ? null : Number(textoRitmo);
+  if (
+    ritmo !== null &&
+    (!/^\d+$/.test(textoRitmo) || ritmo < 1 || ritmo > LLAMADAS_POR_MINUTO_TOPE)
+  ) {
+    return {
+      error: `Las llamadas por minuto a Gemini deben ser un entero entre 1 y ${LLAMADAS_POR_MINUTO_TOPE}.`,
+    };
+  }
+
   const correo = f.crossrefMailto.trim();
   if (correo !== '' && (correo.length > 254 || !CORREO.test(correo))) {
     return { error: 'El correo para Crossref no es válido.' };
@@ -80,6 +95,7 @@ export function validarConfiguracion(f: FormularioConfiguracion): ValidacionConf
       modelo: modelo === '' ? null : modelo,
       umbral,
       maxCandidatos: maximo,
+      llamadasPorMinuto: ritmo,
       crossrefMailto: correo === '' ? null : correo,
     },
   };

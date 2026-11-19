@@ -322,6 +322,7 @@ describe('crearApiAdmin (Supabase)', () => {
       modelo: 'gemini-3.1-flash-lite',
       umbral: 0.7,
       max_candidatos: null,
+      llamadas_por_minuto: 12,
       crossref_mailto: 'equipo@unemi.edu.ec',
       actualizado_en: '2026-11-18T10:00:00Z',
     };
@@ -352,6 +353,7 @@ describe('crearApiAdmin (Supabase)', () => {
           modelo: 'gemini-3.1-flash-lite',
           umbral: 0.7,
           maxCandidatos: null,
+          llamadasPorMinuto: 12,
           crossrefMailto: 'equipo@unemi.edu.ec',
         },
         actualizadoEn: '2026-11-18T10:00:00Z',
@@ -409,6 +411,7 @@ describe('crearApiAdmin (Supabase)', () => {
         modelo: null,
         umbral: 0.8,
         maxCandidatos: 15,
+        llamadasPorMinuto: 30,
         crossrefMailto: null,
       });
       expect(llamadas[0]?.pasos).toEqual([
@@ -420,6 +423,7 @@ describe('crearApiAdmin (Supabase)', () => {
               modelo: null,
               umbral: 0.8,
               max_candidatos: 15,
+              llamadas_por_minuto: 30,
               crossref_mailto: null,
             },
           ],
@@ -439,6 +443,7 @@ describe('crearApiAdmin (Supabase)', () => {
           modelo: null,
           umbral: null,
           maxCandidatos: null,
+          llamadasPorMinuto: null,
           crossrefMailto: null,
         }),
       ).rejects.toThrow(/Solo un administrador/);

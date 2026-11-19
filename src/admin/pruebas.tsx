@@ -88,6 +88,7 @@ export const CONFIGURACION_PRUEBA: ConfiguracionRecalculo = {
     modelo: 'gemini-3.1-flash-lite',
     umbral: 0.7,
     maxCandidatos: null,
+    llamadasPorMinuto: null,
     crossrefMailto: 'equipo@unemi.edu.ec',
   },
   actualizadoEn: '2026-11-18T15:00:00Z',
