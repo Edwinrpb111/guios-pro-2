@@ -1,6 +1,11 @@
 // Clasificador con IA (BRIEF §13.3). La IA no busca: solo decide si un candidato que ya trajo
 // una API bibliográfica trata el subfactor. Así no se inventan referencias (§13.5).
-import { ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
+import {
+  ErrorPasoSinTiempo,
+  ErrorProveedorNoDisponible,
+  ErrorRespuestaInvalida,
+} from './errores.ts';
+import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import { armarPrompt, INSTRUCCION_SISTEMA, leerVeredictos, VERSION_PROMPT } from './prompt.ts';
 import { leerEsperaSugerida, type RitmoDeLlamadas } from './ritmo.ts';
 import type { Candidato, Clasificador, Veredicto } from './tipos.ts';
@@ -8,7 +13,8 @@ import type { Candidato, Clasificador, Veredicto } from './tipos.ts';
 export { VERSION_PROMPT };
 
 const URL_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-const TIEMPO_MAXIMO_MS = 60_000;
+/** Tiempo propio de cada llamada; el paso entero tiene además su tope de 110 s (issue #43). */
+const TIEMPO_MAXIMO_MS = 30_000;
 
 const ESQUEMA_RESPUESTA = {
   type: 'ARRAY',
@@ -51,21 +57,30 @@ export class GeminiClasificador implements Clasificador {
   readonly #modelo: string;
   readonly #fetch: typeof fetch;
   readonly #ritmo: RitmoDeLlamadas | undefined;
+  readonly #presupuesto: PresupuestoPaso | undefined;
 
   /**
    * Con `ritmo` el clasificador espera antes de cada llamada para respetar el límite por minuto
-   * y reintenta un 429/503 unas veces (issue #39). Sin `ritmo` no espera ni reintenta.
+   * y reintenta un 429/503 unas veces (issue #39). Sin `ritmo` no espera ni reintenta. Con
+   * `presupuesto`, cada llamada dura como máximo lo que queda del paso (issue #43).
    */
   constructor(opciones: {
     apiKey: string;
     modelo: string;
     fetch?: typeof fetch;
     ritmo?: RitmoDeLlamadas;
+    presupuesto?: PresupuestoPaso;
   }) {
     this.#apiKey = opciones.apiKey;
     this.#modelo = opciones.modelo;
     this.#fetch = opciones.fetch ?? fetch;
     this.#ritmo = opciones.ritmo;
+    this.#presupuesto = opciones.presupuesto;
+  }
+
+  /** Reintentos acumulados en este paso, para que el registro los reparta por lote. */
+  get reintentos(): number {
+    return this.#ritmo?.reintentos ?? 0;
   }
 
   async clasificar(
@@ -94,20 +109,24 @@ export class GeminiClasificador implements Clasificador {
     for (let intento = 0; ; intento++) {
       // Cada llamada, también un reintento, respeta el ritmo configurado.
       await this.#ritmo?.esperarTurno();
+      const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
       try {
         respuesta = await this.#fetch(`${URL_BASE}/${this.#modelo}:generateContent`, {
           method: 'POST',
           // La clave va en cabecera, no en la dirección, para que no aparezca en registros.
           headers: { 'content-type': 'application/json', 'x-goog-api-key': this.#apiKey },
           body: cuerpoPeticion,
-          signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS),
+          signal,
         });
-      } catch {
+      } catch (error) {
+        // Si la señal la acotó el tope del paso, no es un fallo de red: se pausa por tiempo.
+        if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
         throw new ErrorProveedorNoDisponible(
           'No se pudo conectar con Gemini. Revisa la conexión y reanuda el cálculo.',
         );
       }
       cuerpo = await respuesta.json().catch(() => null);
+      if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
 
       // Solo el límite por minuto (429) y la saturación (503) se reintentan; si se agotan los
       // reintentos o el tiempo del paso, sigue el camino de siempre: pausar el cálculo.
@@ -124,6 +143,7 @@ export class GeminiClasificador implements Clasificador {
     if (respuesta.status === 429 || respuesta.status >= 500) {
       throw new ErrorProveedorNoDisponible(
         'Gemini no está disponible o alcanzó su cuota. Reanuda el cálculo más tarde.',
+        respuesta.status === 429 || respuesta.status === 503 ? 'reintento_agotado' : 'error',
       );
     }
     const mensajeApi = String(
@@ -136,6 +156,7 @@ export class GeminiClasificador implements Clasificador {
     ) {
       throw new ErrorProveedorNoDisponible(
         'Gemini rechazó la clave. Revisa el secreto GEMINI_API_KEY y reanuda el cálculo.',
+        'clave_rechazada',
       );
     }
     if (!respuesta.ok) {

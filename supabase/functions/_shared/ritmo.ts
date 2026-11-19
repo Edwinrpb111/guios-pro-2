@@ -2,7 +2,8 @@
 // por minuto (alrededor de 15): sin freno, un paso con 50 candidatos (5 lotes) y un navegador
 // que pide un subfactor tras otro agotan el cupo en segundos. Este módulo reparte las llamadas
 // en el tiempo y decide cuánto esperar antes de reintentar un 429/503.
-import { ErrorProveedorNoDisponible } from './errores.ts';
+import { ErrorPasoSinTiempo, ErrorProveedorNoDisponible } from './errores.ts';
+import { type PresupuestoPaso, TIEMPO_MINIMO_LOTE_MS } from './presupuesto.ts';
 
 /** Hora y espera inyectables: las pruebas usan un reloj falso y nunca duermen de verdad. */
 export interface Reloj {
@@ -27,7 +28,8 @@ export const ESPERA_MAXIMA_REINTENTO_MS = 30_000;
 export const ESPERA_BASE_REINTENTO_MS = 5_000;
 /**
  * Máximo de espera (ritmo + reintentos) por paso. Las Edge Functions viven 150 s como máximo
- * (BRIEF §13.2): con 90 s de espera quedan 60 s para las llamadas y para guardar.
+ * (BRIEF §13.2). Este tope solo cuenta las esperas; el tiempo total del paso (también las
+ * llamadas) lo limita `PresupuestoPaso`, que `RitmoDeLlamadas` consulta si se le da uno (issue #43).
  */
 export const ESPERA_TOTAL_MAXIMA_MS = 90_000;
 
@@ -39,17 +41,37 @@ export class RitmoDeLlamadas {
   readonly #reloj: Reloj;
   readonly #intervaloMs: number;
   readonly #presupuestoMs: number;
+  readonly #paso: PresupuestoPaso | undefined;
   #ultimaLlamada: number | undefined;
   #esperado = 0;
+  #reintentos = 0;
 
+  /** `paso`, si se da, limita además cada espera al tiempo que queda del paso (110 s). */
   constructor(
     reloj: Reloj,
     llamadasPorMinuto: number,
     presupuestoMs: number = ESPERA_TOTAL_MAXIMA_MS,
+    paso?: PresupuestoPaso,
   ) {
     this.#reloj = reloj;
     this.#intervaloMs = 60_000 / llamadasPorMinuto;
     this.#presupuestoMs = presupuestoMs;
+    this.#paso = paso;
+  }
+
+  /** Reintentos hechos hasta ahora en este paso (para el registro de cada lote). */
+  get reintentos(): number {
+    return this.#reintentos;
+  }
+
+  /** Pausa por tiempo si, tras esperar `espera` ms, ya no cabría una llamada (mínimo 15 s). */
+  #exigirTiempo(espera: number): void {
+    if (
+      this.#paso !== undefined &&
+      this.#paso.restante() - Math.max(espera, 0) < TIEMPO_MINIMO_LOTE_MS
+    ) {
+      throw new ErrorPasoSinTiempo();
+    }
   }
 
   async #esperar(ms: number): Promise<void> {
@@ -75,6 +97,7 @@ export class RitmoDeLlamadas {
         'Las llamadas por minuto configuradas son muy pocas para completar este paso a tiempo. Sube las llamadas por minuto o baja el máximo de candidatos y reanuda el cálculo.',
       );
     }
+    this.#exigirTiempo(falta);
     await this.#esperar(falta);
     this.#ultimaLlamada = this.#reloj.ahora();
   }
@@ -89,7 +112,10 @@ export class RitmoDeLlamadas {
     const pedida = sugeridaMs ?? ESPERA_BASE_REINTENTO_MS * 2 ** intento;
     const espera = Math.min(pedida, ESPERA_MAXIMA_REINTENTO_MS);
     if (this.#esperado + espera > this.#presupuestoMs) return false;
+    // Si esperar deja sin tiempo para la siguiente llamada, el que manda es el tope del paso.
+    this.#exigirTiempo(espera);
     await this.#esperar(espera);
+    this.#reintentos++;
     return true;
   }
 }

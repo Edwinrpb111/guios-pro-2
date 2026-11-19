@@ -1,7 +1,12 @@
 // Proveedor Crossref (BRIEF §13.3). Consultas en serie, como máximo 1 por segundo, y respeta
 // las cabeceras `x-rate-limit-*`.
 import { normalizarDoi } from './doi.ts';
-import { ErrorProveedorNoDisponible, ErrorRespuestaInvalida } from './errores.ts';
+import {
+  ErrorPasoSinTiempo,
+  ErrorProveedorNoDisponible,
+  ErrorRespuestaInvalida,
+} from './errores.ts';
+import { esErrorDeTiempo, type PresupuestoPaso, senalDe } from './presupuesto.ts';
 import type { Candidato, ProveedorBusqueda } from './tipos.ts';
 
 const URL_BASE = 'https://api.crossref.org/works';
@@ -51,6 +56,7 @@ export class CrossrefProveedor implements ProveedorBusqueda {
   readonly #fetch: typeof fetch;
   readonly #ahora: () => number;
   readonly #esperar: (ms: number) => Promise<void>;
+  readonly #presupuesto: PresupuestoPaso | undefined;
   #ultimaConsulta: number | null = null;
   #intervaloMs = INTERVALO_MINIMO_MS;
 
@@ -60,6 +66,8 @@ export class CrossrefProveedor implements ProveedorBusqueda {
       fetch?: typeof fetch;
       ahora?: () => number;
       esperar?: (ms: number) => Promise<void>;
+      /** La consulta y la espera de ritmo duran como máximo lo que queda del paso (issue #43). */
+      presupuesto?: PresupuestoPaso;
     } = {},
   ) {
     this.#mailto = opciones.mailto;
@@ -67,6 +75,7 @@ export class CrossrefProveedor implements ProveedorBusqueda {
     this.#ahora = opciones.ahora ?? Date.now;
     this.#esperar =
       opciones.esperar ?? ((ms) => new Promise((resolver) => setTimeout(resolver, ms)));
+    this.#presupuesto = opciones.presupuesto;
   }
 
   async buscar(
@@ -87,10 +96,12 @@ export class CrossrefProveedor implements ProveedorBusqueda {
 
     await this.#respetarLimite();
 
+    const { signal, porPresupuesto } = senalDe(this.#presupuesto, TIEMPO_MAXIMO_MS);
     let respuesta: Response;
     try {
-      respuesta = await this.#fetch(url, { signal: AbortSignal.timeout(TIEMPO_MAXIMO_MS) });
-    } catch {
+      respuesta = await this.#fetch(url, { signal });
+    } catch (error) {
+      if (porPresupuesto && esErrorDeTiempo(error)) throw new ErrorPasoSinTiempo();
       throw new ErrorProveedorNoDisponible(
         'No se pudo conectar con Crossref. Revisa la conexión y reanuda el cálculo.',
       );
@@ -112,6 +123,7 @@ export class CrossrefProveedor implements ProveedorBusqueda {
     try {
       cuerpo = await respuesta.json();
     } catch {
+      if (porPresupuesto && signal.aborted) throw new ErrorPasoSinTiempo();
       throw new ErrorRespuestaInvalida('Crossref devolvió una respuesta que no es JSON.');
     }
     const items = (cuerpo as { message?: { items?: unknown } } | null)?.message?.items;
@@ -140,6 +152,11 @@ export class CrossrefProveedor implements ProveedorBusqueda {
   async #respetarLimite(): Promise<void> {
     if (this.#ultimaConsulta === null) return;
     const espera = this.#intervaloMs - (this.#ahora() - this.#ultimaConsulta);
-    if (espera > 0) await this.#esperar(espera);
+    if (espera <= 0) return;
+    // Una espera de ritmo que ya no cabe en el paso lo pausa por tiempo en lugar de agotarlo.
+    if (this.#presupuesto !== undefined && espera >= this.#presupuesto.restante()) {
+      throw new ErrorPasoSinTiempo();
+    }
+    await this.#esperar(espera);
   }
 }
