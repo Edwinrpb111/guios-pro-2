@@ -349,3 +349,16 @@ Deno.test('LLM_PROVIDER=fake: el recálculo completo no espera nunca', async () 
   );
   assertEquals(reloj.esperas, []);
 });
+
+Deno.test(
+  'ritmo muy bajo: la espera del ritmo también respeta el tope del paso y pausa en vez de agotar la función',
+  async () => {
+    const reloj = crearRelojFalso();
+    const ritmo = new RitmoDeLlamadas(reloj, 1); // 60 s entre llamadas; tope de 90 s por paso
+    await ritmo.esperarTurno(); // 60 s: cabe
+    const antes = reloj.ahora();
+    const error = await assertRejects(() => ritmo.esperarTurno(), ErrorProveedorNoDisponible);
+    assert(/llamadas por minuto/i.test(error.message), error.message);
+    assertEquals(reloj.ahora(), antes, 'no espera si la espera no cabe en el paso');
+  },
+);

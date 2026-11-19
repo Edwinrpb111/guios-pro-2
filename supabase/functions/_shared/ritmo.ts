@@ -2,6 +2,7 @@
 // por minuto (alrededor de 15): sin freno, un paso con 50 candidatos (5 lotes) y un navegador
 // que pide un subfactor tras otro agotan el cupo en segundos. Este módulo reparte las llamadas
 // en el tiempo y decide cuánto esperar antes de reintentar un 429/503.
+import { ErrorProveedorNoDisponible } from './errores.ts';
 
 /** Hora y espera inyectables: las pruebas usan un reloj falso y nunca duermen de verdad. */
 export interface Reloj {
@@ -67,6 +68,13 @@ export class RitmoDeLlamadas {
       this.#ultimaLlamada === undefined
         ? this.#intervaloMs
         : this.#ultimaLlamada + this.#intervaloMs - this.#reloj.ahora();
+    // El ritmo también cuenta para el tope del paso: si no cabe, se pausa (y se reanuda luego)
+    // en lugar de agotar el tiempo de la Edge Function.
+    if (falta > 0 && this.#esperado + falta > this.#presupuestoMs) {
+      throw new ErrorProveedorNoDisponible(
+        'Las llamadas por minuto configuradas son muy pocas para completar este paso a tiempo. Sube las llamadas por minuto o baja el máximo de candidatos y reanuda el cálculo.',
+      );
+    }
     await this.#esperar(falta);
     this.#ultimaLlamada = this.#reloj.ahora();
   }
