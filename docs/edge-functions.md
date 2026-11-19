@@ -14,24 +14,24 @@ Las dos funciones exigen `Authorization: Bearer <JWT>` de un **administrador** y
 - `fuentes` ⊂ `["openalex", "crossref"]`. Los años van de 1900 a 2100 y `anio_inicio ≤ anio_fin`.
 - `recalculo-iniciar` crea el `calculo_sugerida` (`en_proceso`, `origen = 'ia'`) con los **parámetros** usados (años, fuentes, umbral, modelo, proveedor, versión del prompt y límite de candidatos; RNF-09) y un `recalculo_paso` `pendiente` por cada subfactor del catálogo (61).
 - `recalculo-paso` procesa **un** subfactor por invocación (los planes Free limitan cada invocación a 150 s y 2 s de CPU). `progreso` es el número de factores (0..18) con todos sus pasos hechos; `pendientes`, los pasos que faltan (`pendiente` o `error`). Con `pendientes = 0` ya se puede calcular IL/IS y llamar a `guardar_resultado_calculo`; llamarla otra vez no hace nada.
-- Usa el umbral, el límite y el modelo **guardados en el cálculo**, no los del entorno actual.
+- Usa el umbral, el límite y el modelo **guardados en el cálculo**, no los de la configuración o el entorno actuales.
 
 ### Errores
 
 Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`estado`, `progreso`, `pendientes`).
 
-| HTTP | `codigo`                                                    | Cuándo                                                                                                 |
-| ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                               |
-| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                 |
-| 403  | `solo_administrador`                                        | **Un decisor**                                                                                         |
-| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                  |
-| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                               |
-| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                |
-| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; `LLM_PROVIDER` cambió desde que empezó; sin fuentes guardadas          |
-| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado` |
-| 503  | `proveedor_no_disponible`                                   | 429, 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error`               |
-| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                   |
+| HTTP | `codigo`                                                    | Cuándo                                                                                                             |
+| ---- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                                           |
+| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                             |
+| 403  | `solo_administrador`                                        | **Un decisor**                                                                                                     |
+| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                              |
+| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                           |
+| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                            |
+| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas |
+| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`             |
+| 503  | `proveedor_no_disponible`                                   | 429, 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error`                           |
+| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                               |
 
 **Orden de las comprobaciones.** Primero el token: sin `Authorization: Bearer` la respuesta es 401 sin tocar la configuración. Los errores de configuración (`configuracion_*`: variable ausente o inválida) se registran solo en el servidor y el cliente recibe `error_interno`, sin nombrar variables.
 
@@ -57,9 +57,28 @@ La IA no busca: solo clasifica candidatos que ya trajo una API bibliográfica, a
 
 `ProveedorBusqueda` (`OpenAlexProveedor`, `CrossrefProveedor`) y `Clasificador` (`GeminiClasificador`) están en `supabase/functions/_shared/`. Con `LLM_PROVIDER=fake` se usan `ProveedorFalso` y `ClasificadorFalso`: sin red, sin claves, resultados siempre iguales. Es el modo de las pruebas, del CI y de la demostración.
 
+## Configuración: base primero, entorno después (issue #33)
+
+En cada petición con token, `entorno.ts` llama a `crearDependenciasConBase`, que lee con `service_role` la función SQL `configuracion_recalculo_servicio()` (parámetros de `configuracion_recalculo` y claves descifradas de Supabase Vault) y la combina con `Deno.env` en `combinarConEntorno`:
+
+| Lo guardado en la app (`/admin/configuracion`) | Si falta, variable de entorno |
+| ---------------------------------------------- | ----------------------------- |
+| Proveedor del clasificador                     | `LLM_PROVIDER`                |
+| Modelo                                         | `LLM_MODEL`                   |
+| Umbral                                         | `LLM_UMBRAL`                  |
+| Máximo de candidatos                           | `RECALCULO_MAX_CANDIDATOS`    |
+| Correo de Crossref                             | `CROSSREF_MAILTO`             |
+| Clave de Gemini (Vault)                        | `GEMINI_API_KEY`              |
+| Clave de OpenAlex (Vault)                      | `OPENALEX_API_KEY`            |
+
+- Las validaciones (`configuracion_invalida`, `configuracion_incompleta`) se aplican al resultado combinado; el cliente sigue recibiendo solo `error_interno`.
+- Si la lectura de la base falla, la petición responde `error_interno`: no se sigue en silencio con otra configuración.
+- `ORIGENES_PERMITIDOS` nunca sale de la base.
+- Ninguna función que pueda llamar el navegador devuelve una clave: `configuracion_recalculo_servicio()` solo la ejecuta `service_role` ([ADR-010](decisiones/ADR-010-configuracion-del-recalculo-y-vault.md)).
+
 ## Variables
 
-Ver [`variables-entorno.md`](variables-entorno.md). En local, `supabase/config.toml` fija `LLM_PROVIDER = "fake"` para las funciones.
+Ver [`variables-entorno.md`](variables-entorno.md). En local, `supabase/config.toml` fija `LLM_PROVIDER = "fake"` para las funciones; mientras no se guarde otro proveedor en la app, es el que se usa.
 
 ## Probar
 

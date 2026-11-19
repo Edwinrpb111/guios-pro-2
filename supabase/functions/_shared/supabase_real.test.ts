@@ -4,7 +4,11 @@ import { assert, assertEquals, assertRejects } from 'jsr:@std/assert@1';
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2.119.0';
 import { exigirAdmin } from './auth.ts';
 import { ErrorApi } from './errores.ts';
-import { RepositorioSupabase, VerificadorSupabase } from './supabase_real.ts';
+import {
+  leerConfiguracionGuardada,
+  RepositorioSupabase,
+  VerificadorSupabase,
+} from './supabase_real.ts';
 
 interface Llamada {
   tabla: string;
@@ -268,3 +272,24 @@ Deno.test(
     assertEquals(llamadas.filter((l) => l.operacion === 'update').length, 1);
   },
 );
+
+Deno.test(
+  'leerConfiguracionGuardada: usa la RPC de service_role y devuelve su única fila',
+  async () => {
+    const fila = { proveedor_llm: 'gemini', umbral: 0.8, gemini_api_key: 'k' };
+    const { cliente, rpcs } = crearClienteSimulado({ rpc: { data: [fila], error: null } });
+    assertEquals(await leerConfiguracionGuardada(cliente), fila);
+    assertEquals(rpcs, [{ funcion: 'configuracion_recalculo_servicio', argumentos: undefined }]);
+  },
+);
+
+Deno.test('leerConfiguracionGuardada: sin fila devuelve null (se usa el entorno)', async () => {
+  const { cliente } = crearClienteSimulado({ rpc: { data: [], error: null } });
+  assertEquals(await leerConfiguracionGuardada(cliente), null);
+});
+
+Deno.test('leerConfiguracionGuardada: un error de la base es un error interno', async () => {
+  const { cliente } = crearClienteSimulado({ rpc: { data: null, error: { message: 'caída' } } });
+  const error = await assertRejects(() => leerConfiguracionGuardada(cliente), Error);
+  assert(!(error instanceof ErrorApi));
+});

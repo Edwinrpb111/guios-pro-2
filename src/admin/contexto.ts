@@ -22,6 +22,10 @@ export function apiDiferida(cargar: () => Promise<ApiAdmin>): ApiAdmin {
     guardarResultado: (id, filas) => api().then((a) => a.guardarResultado(id, filas)),
     publicar: (id) => api().then((a) => a.publicar(id)),
     descartar: (id) => api().then((a) => a.descartar(id)),
+    obtenerConfiguracion: () => api().then((a) => a.obtenerConfiguracion()),
+    guardarParametros: (parametros) => api().then((a) => a.guardarParametros(parametros)),
+    guardarClave: (nombre, valor) => api().then((a) => a.guardarClave(nombre, valor)),
+    borrarClave: (nombre) => api().then((a) => a.borrarClave(nombre)),
   };
 }
 

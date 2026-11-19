@@ -96,6 +96,52 @@ export interface ResultadoPaso {
   estado: string;
 }
 
+/** Proveedor del clasificador: `fake` es el modo de demostración sin red (BRIEF §13.6). */
+export type ProveedorLlm = 'gemini' | 'fake';
+
+/** Claves de las APIs que se guardan en Supabase Vault (issue #33). */
+export type NombreClave = 'GEMINI_API_KEY' | 'OPENALEX_API_KEY';
+
+export const CLAVES: readonly { nombre: NombreClave; servicio: string }[] = [
+  { nombre: 'GEMINI_API_KEY', servicio: 'Gemini' },
+  { nombre: 'OPENALEX_API_KEY', servicio: 'OpenAlex' },
+];
+
+/**
+ * Parámetros no secretos del recálculo guardados desde la app. `null` = no definido: la Edge
+ * Function usa el secreto de entorno (LLM_PROVIDER, LLM_MODEL…) o su valor por defecto.
+ */
+export interface ParametrosRecalculo {
+  proveedorLlm: ProveedorLlm | null;
+  modelo: string | null;
+  umbral: number | null;
+  maxCandidatos: number | null;
+  crossrefMailto: string | null;
+}
+
+/** Estado de una clave: nunca su valor. */
+export interface EstadoClave {
+  nombre: NombreClave;
+  configurada: boolean;
+  actualizadaEn: string | null;
+}
+
+/** Un cambio de la configuración: qué, quién y cuándo (sin valores de claves). */
+export interface CambioConfiguracion {
+  id: number;
+  cambio: string;
+  realizadoPor: string | null;
+  realizadoEn: string;
+}
+
+export interface ConfiguracionRecalculo {
+  parametros: ParametrosRecalculo;
+  actualizadoEn: string;
+  claves: EstadoClave[];
+  /** Los más recientes primero. */
+  cambios: CambioConfiguracion[];
+}
+
 /** Error de la API con el mensaje en español que se muestra al administrador. */
 export class ErrorAdmin extends Error {
   readonly codigo: string | null;
@@ -124,4 +170,10 @@ export interface ApiAdmin {
   guardarResultado(id: number, filas: FilaSugerida[]): Promise<void>;
   publicar(id: number): Promise<void>;
   descartar(id: number): Promise<void>;
+  /** Configuración del recálculo (issue #33): parámetros, estado de las claves y cambios. */
+  obtenerConfiguracion(): Promise<ConfiguracionRecalculo>;
+  guardarParametros(parametros: ParametrosRecalculo): Promise<void>;
+  /** Guarda o reemplaza una clave en Vault. La clave nunca vuelve al navegador. */
+  guardarClave(nombre: NombreClave, valor: string): Promise<void>;
+  borrarClave(nombre: NombreClave): Promise<void>;
 }

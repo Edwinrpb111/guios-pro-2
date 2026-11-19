@@ -6,11 +6,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { esImportancia, type Importancia } from '../guios-core';
 import type { Database, Json } from '../lib/database.types';
 import {
+  CLAVES,
   ErrorAdmin,
   type ApiAdmin,
   type CalculoResumen,
+  type ConfiguracionRecalculo,
   type EstadoCalculo,
   type FilaSugerida,
+  type NombreClave,
   type ParametrosCalculo,
 } from './tipos';
 
@@ -86,6 +89,67 @@ function mapearCalculo(fila: FilaCalculo): CalculoResumen {
     progreso: fila.progreso,
     mensajeError: fila.mensaje_error,
     parametros,
+  };
+}
+
+const SOLO_ADMINISTRADOR =
+  'Solo un administrador puede ver o cambiar la configuración del recálculo.';
+
+/** Cambios recientes que muestra la pantalla de configuración. */
+const CAMBIOS_RECIENTES = 10;
+
+/**
+ * Configuración del recálculo (issue #33). Las claves no se leen nunca: de Vault solo llega su
+ * estado (`estado_claves_recalculo`), y la tabla de parámetros no tiene columnas de claves.
+ */
+async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<ConfiguracionRecalculo> {
+  const [fila, estados, cambios] = await Promise.all([
+    cliente
+      .from('configuracion_recalculo')
+      .select('proveedor_llm, modelo, umbral, max_candidatos, crossref_mailto, actualizado_en')
+      .maybeSingle()
+      .then(exigir),
+    cliente.rpc('estado_claves_recalculo').then(exigir),
+    cliente
+      .from('configuracion_recalculo_cambio')
+      .select('id_cambio, cambio, realizado_por_nombre, realizado_en')
+      .order('realizado_en', { ascending: false })
+      .order('id_cambio', { ascending: false })
+      .limit(CAMBIOS_RECIENTES)
+      .then(exigir),
+  ]);
+  if (fila === null) throw new ErrorAdmin(SOLO_ADMINISTRADOR);
+  if (
+    fila.proveedor_llm !== null &&
+    fila.proveedor_llm !== 'gemini' &&
+    fila.proveedor_llm !== 'fake'
+  ) {
+    throw new ErrorAdmin('La configuración tiene un proveedor del clasificador desconocido.');
+  }
+  const nombres = CLAVES.map((c) => c.nombre as string);
+  return {
+    parametros: {
+      proveedorLlm: fila.proveedor_llm,
+      modelo: fila.modelo,
+      umbral: fila.umbral === null ? null : Number(fila.umbral),
+      maxCandidatos: fila.max_candidatos,
+      crossrefMailto: fila.crossref_mailto,
+    },
+    actualizadoEn: fila.actualizado_en,
+    claves: (estados ?? []).map((e) => {
+      if (!nombres.includes(e.nombre)) throw new ErrorAdmin(`Clave desconocida: ${e.nombre}.`);
+      return {
+        nombre: e.nombre as NombreClave,
+        configurada: e.configurada,
+        actualizadaEn: e.actualizada_en,
+      };
+    }),
+    cambios: (cambios ?? []).map((c) => ({
+      id: c.id_cambio,
+      cambio: c.cambio,
+      realizadoPor: c.realizado_por_nombre,
+      realizadoEn: c.realizado_en,
+    })),
   };
 }
 
@@ -232,6 +296,35 @@ export function crearApiAdmin(cliente: ClienteAdmin): ApiAdmin {
 
     pasoRecalculo(id) {
       return invocar(cliente, 'recalculo-paso', { id_calculo: id });
+    },
+
+    obtenerConfiguracion: () => obtenerConfiguracion(cliente),
+
+    async guardarParametros(p) {
+      // `.select` para saber si la fila se actualizó: con RLS, un no administrador no ve error,
+      // solo cero filas. Quién y cuándo los fija un trigger de la base, no el navegador.
+      const filas = exigir(
+        await cliente
+          .from('configuracion_recalculo')
+          .update({
+            proveedor_llm: p.proveedorLlm,
+            modelo: p.modelo,
+            umbral: p.umbral,
+            max_candidatos: p.maxCandidatos,
+            crossref_mailto: p.crossrefMailto,
+          })
+          .eq('id', true)
+          .select('id'),
+      );
+      if ((filas ?? []).length !== 1) throw new ErrorAdmin(SOLO_ADMINISTRADOR);
+    },
+
+    async guardarClave(nombre, valor) {
+      exigir(await cliente.rpc('guardar_clave_recalculo', { p_nombre: nombre, p_valor: valor }));
+    },
+
+    async borrarClave(nombre) {
+      exigir(await cliente.rpc('borrar_clave_recalculo', { p_nombre: nombre }));
     },
 
     pausar: (id) => rpcSinResultado(cliente, 'pausar_calculo', id),

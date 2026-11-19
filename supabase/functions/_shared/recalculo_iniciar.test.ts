@@ -3,7 +3,7 @@ import { atender } from './http.ts';
 import { iniciar } from './recalculo_iniciar.ts';
 import { VERSION_PROMPT } from './clasificador.ts';
 import { CONFIGURACION_PRUEBA, crearDependenciasPrueba } from './pruebas_recalculo.ts';
-import { TOKEN_ADMIN, TOKEN_DECISOR } from './pruebas.ts';
+import { TOKEN_ADMIN, TOKEN_DECISOR, verificadorFalso } from './pruebas.ts';
 
 function llamar(
   dependencias: ReturnType<typeof crearDependenciasPrueba>,
@@ -16,7 +16,7 @@ function llamar(
       headers: token === null ? {} : { authorization: `Bearer ${token}` },
       body: JSON.stringify(cuerpo),
     }),
-    { origenes: [], crear: () => dependencias },
+    { origenes: [], verificador: () => verificadorFalso, crear: () => dependencias },
     (entrada, admin, deps) => iniciar(entrada, admin, deps),
   );
 }

@@ -2,7 +2,12 @@
 // reemplazarlo por falsos en las pruebas.
 import type { VerificadorAdmin } from './auth.ts';
 import { GeminiClasificador } from './clasificador.ts';
-import { type Configuracion, leerConfiguracion } from './configuracion.ts';
+import {
+  combinarConEntorno,
+  type Configuracion,
+  type ConfiguracionGuardada,
+  leerConfiguracion,
+} from './configuracion.ts';
 import { contextoSubfactores, type ContextoSubfactores } from './contexto.ts';
 import { CrossrefProveedor } from './crossref.ts';
 import { ErrorApi } from './errores.ts';
@@ -25,7 +30,7 @@ function faltaSecreto(variable: string): ErrorApi {
   return new ErrorApi(
     500,
     'configuracion_incompleta',
-    `Falta configurar ${variable} en los secretos de Supabase (o usa LLM_PROVIDER=fake).`,
+    `Falta configurar ${variable} en «Configuración del recálculo» o en los secretos de Supabase (o usa LLM_PROVIDER=fake).`,
   );
 }
 
@@ -39,7 +44,8 @@ export function crearDependencias(
 ): Dependencias {
   const configuracion = leerConfiguracion(leer);
   return {
-    ...infraestructura,
+    repositorio: infraestructura.repositorio,
+    verificador: infraestructura.verificador,
     contexto: contextoSubfactores(),
     configuracion,
     proveedores(fuentes) {
@@ -62,4 +68,25 @@ export function crearDependencias(
       return new GeminiClasificador({ apiKey: configuracion.geminiApiKey, modelo });
     },
   };
+}
+
+export interface InfraestructuraConBase {
+  repositorio: Repositorio;
+  verificador: VerificadorAdmin;
+  /** Configuración guardada por el administrador (issue #33); `null` si no hay fila. */
+  configuracionGuardada(): Promise<ConfiguracionGuardada | null>;
+}
+
+/**
+ * Igual que `crearDependencias`, pero antes lee la configuración guardada en la base: lo que el
+ * administrador definió en la app manda y lo que falta sale del entorno. Se llama en cada
+ * petición para que un cambio en la app se aplique sin redesplegar. Si la lectura falla, la
+ * petición falla (error interno) en lugar de usar en silencio otra configuración.
+ */
+export async function crearDependenciasConBase(
+  leer: (nombre: string) => string | undefined,
+  infraestructura: InfraestructuraConBase,
+): Promise<Dependencias> {
+  const guardada = await infraestructura.configuracionGuardada();
+  return crearDependencias(combinarConEntorno(guardada, leer), infraestructura);
 }

@@ -47,6 +47,15 @@
 .boton--primario:hover:not(:disabled) {
   background: var(--navy2);
 }
+/* Acción destructiva confirmada (p. ej. borrar una clave): rojo con contraste AA sobre blanco. */
+.boton--peligro {
+  background: #b42318;
+  border-color: #b42318;
+  color: #fff;
+}
+.boton--peligro:hover:not(:disabled) {
+  background: #912018;
+}
 .boton--fantasma {
   border-color: transparent;
   background: transparent;
