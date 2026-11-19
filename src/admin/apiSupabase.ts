@@ -2,7 +2,7 @@
  * `ApiAdmin` con Supabase (BRIEF §11): lecturas con RLS de administrador, funciones SQL de
  * §11.2 y Edge Functions de §11.3. Valida los dominios cerrados al leer (BRIEF §14).
  */
-import type { SupabaseClient } from '@supabase/supabase-js';
+import { FunctionsRelayError, type SupabaseClient } from '@supabase/supabase-js';
 import { esImportancia, type Importancia } from '../guios-core';
 import type { Database, Json } from '../lib/database.types';
 import {
@@ -37,6 +37,13 @@ const TAMANO_PAGINA = 1000;
 
 const SIN_CONEXION =
   'No se pudo contactar con el servicio de recálculo. Revisa tu conexión e intenta de nuevo.';
+
+/** Corte de la plataforma (504, 546 WORKER_LIMIT, relay): el paso no alcanzó a terminar. */
+export const PASO_SIN_TIEMPO =
+  'El paso tardó más de lo permitido. Se reintentará; si se repite, reduce el máximo de candidatos o sube las llamadas por minuto.';
+
+/** Estados con que la plataforma corta una Edge Function por tiempo o por límite de recursos. */
+const ESTADOS_DE_CORTE: readonly number[] = [504, 546];
 
 interface FilaCalculo {
   id_calculo: number;
@@ -159,28 +166,38 @@ async function obtenerConfiguracion(cliente: ClienteAdmin): Promise<Configuracio
   };
 }
 
-/** Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español. */
+/**
+ * Convierte el error de una Edge Function en un `ErrorAdmin` con su mensaje en español y su clase
+ * (`tipo`). Un corte por tiempo (504, 546, relay) no se confunde con una caída de la red.
+ */
 async function errorDeFuncion(error: unknown): Promise<ErrorAdmin> {
   const contexto = (error as { context?: unknown } | null)?.context;
-  if (contexto instanceof Response) {
-    try {
-      const cuerpo = (await contexto.json()) as {
-        error?: unknown;
-        codigo?: unknown;
-        estado?: unknown;
-      };
-      if (typeof cuerpo.error === 'string') {
-        return new ErrorAdmin(
-          cuerpo.error,
-          typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
-          typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
-        );
-      }
-    } catch {
-      // Cuerpo no JSON: se usa el mensaje genérico.
-    }
+  if (!(contexto instanceof Response)) {
+    // Sin respuesta: la petición no llegó al servidor (FunctionsFetchError).
+    return new ErrorAdmin(SIN_CONEXION, null, null, 'red');
   }
-  return new ErrorAdmin(SIN_CONEXION);
+  if (error instanceof FunctionsRelayError || ESTADOS_DE_CORTE.includes(contexto.status)) {
+    return new ErrorAdmin(PASO_SIN_TIEMPO, null, null, 'tiempo');
+  }
+  try {
+    const cuerpo = (await contexto.json()) as {
+      error?: unknown;
+      codigo?: unknown;
+      estado?: unknown;
+    };
+    if (typeof cuerpo.error === 'string') {
+      return new ErrorAdmin(
+        cuerpo.error,
+        typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null,
+        typeof cuerpo.estado === 'string' ? cuerpo.estado : null,
+      );
+    }
+  } catch {
+    // Cuerpo no JSON: se usa el mensaje genérico con el estado HTTP.
+  }
+  return new ErrorAdmin(
+    `El servicio de recálculo respondió con un error (HTTP ${contexto.status}). Intenta de nuevo.`,
+  );
 }
 
 async function invocar<T>(cliente: ClienteAdmin, funcion: string, cuerpo: object): Promise<T> {

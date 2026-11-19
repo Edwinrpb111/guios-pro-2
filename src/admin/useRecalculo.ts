@@ -2,11 +2,13 @@
  * Bucle del recálculo de P-09 (BRIEF §13.2, pasos 4 y 5): invoca `recalculo-paso` hasta que no
  * quedan pendientes, calcula IL e IS con guios-core y las guarda con `guardar_resultado_calculo`.
  * Pausa a pedido o ante un 429/caída (sin reintentar en bucle) y se retoma desde lo pendiente.
+ * Ante un corte de la plataforma (tiempo o límite) o una caída de la red repite el MISMO paso
+ * unas veces antes de mostrar el error (issue #43); una pausa del servidor no se reintenta.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useApiAdmin } from './contexto';
 import { filasDesdeConteo } from './resultado';
-import { ErrorAdmin, type CalculoResumen, type FilaSugerida } from './tipos';
+import { ErrorAdmin, type CalculoResumen, type FilaSugerida, type ResultadoPaso } from './tipos';
 
 export type FaseRecalculo =
   | 'cargando'
@@ -51,13 +53,30 @@ interface Control {
   corriendo: boolean;
 }
 
+/** Reintentos automáticos del mismo paso según la clase de error (issue #43). */
+const REINTENTOS: Record<'tiempo' | 'red', number> = { tiempo: 2, red: 1 };
+
+/** Espera antes del reintento n (1, 2…): 3 s, 6 s. */
+const ESPERA_BASE_MS = 3000;
+
+const PASO_NO_COMPLETADO =
+  'El paso tardó más de lo permitido y no se completó tras varios intentos. Reduce el máximo de candidatos o sube las llamadas por minuto, y pulsa Reintentar.';
+
+export interface OpcionesRecalculo {
+  /** Espera entre reintentos; se inyecta en las pruebas. Debe ser estable entre renders. */
+  esperar?: (ms: number) => Promise<void>;
+}
+
+const esperarReal = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms));
+
 function mensajeDe(error: unknown): string {
   return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
 }
 
 /** Al cambiar de cálculo, monta de nuevo el componente (`key={id}`) para empezar de cero. */
-export function useRecalculo(id: number) {
+export function useRecalculo(id: number, opciones: OpcionesRecalculo = {}) {
   const api = useApiAdmin();
+  const esperar = useRef(opciones.esperar ?? esperarReal);
   const [estado, setEstado] = useState<EstadoRecalculo>(INICIAL);
   const control = useRef<Control>({ vivo: false, pausa: false, corriendo: false });
 
@@ -104,6 +123,31 @@ export function useRecalculo(id: number) {
       if (c.vivo) await abrir(c);
     }
 
+    /**
+     * Invoca un paso y, si la plataforma lo corta o la red falla, repite el mismo paso unas
+     * veces. Devuelve `null` si se pidió pausar o se desmontó durante la espera.
+     */
+    async function invocarPaso(c: Control): Promise<ResultadoPaso | null> {
+      for (let reintentos = 0; ; reintentos++) {
+        try {
+          return await api.pasoRecalculo(id);
+        } catch (error) {
+          const tipo = error instanceof ErrorAdmin ? error.tipo : 'otro';
+          if (tipo === 'otro' || reintentos >= REINTENTOS[tipo]) {
+            throw tipo === 'tiempo' && reintentos > 0
+              ? new ErrorAdmin(PASO_NO_COMPLETADO, null, null, tipo)
+              : error;
+          }
+          if (!c.vivo || c.pausa) return null;
+          actualizar({
+            mensaje: `${mensajeDe(error)} Reintentando (${reintentos + 1} de ${REINTENTOS[tipo]})…`,
+          });
+          await esperar.current(ESPERA_BASE_MS * (reintentos + 1));
+          if (!c.vivo || c.pausa) return null;
+        }
+      }
+    }
+
     async function ejecutar(c: Control): Promise<void> {
       if (c.corriendo) return;
       c.corriendo = true;
@@ -118,9 +162,15 @@ export function useRecalculo(id: number) {
             if (c.vivo) await abrir(c);
             return;
           }
-          const resultado = await api.pasoRecalculo(id);
+          const resultado = await invocarPaso(c);
           if (!c.vivo) return;
-          actualizar({ progreso: resultado.progreso, pendientes: resultado.pendientes });
+          // Reintento cancelado por una pausa: el bucle la atiende en la vuelta siguiente.
+          if (resultado === null) continue;
+          actualizar({
+            progreso: resultado.progreso,
+            pendientes: resultado.pendientes,
+            mensaje: null,
+          });
           if (resultado.pendientes === 0) break;
         }
         await finalizar(c);

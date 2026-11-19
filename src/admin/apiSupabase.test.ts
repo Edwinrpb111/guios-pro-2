@@ -1,4 +1,8 @@
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import {
+  FunctionsFetchError,
+  FunctionsHttpError,
+  FunctionsRelayError,
+} from '@supabase/supabase-js';
 import { crearApiAdmin, type ClienteAdmin } from './apiSupabase';
 import { ErrorAdmin } from './tipos';
 
@@ -258,6 +262,79 @@ describe('crearApiAdmin (Supabase)', () => {
     await expect(
       crearApiAdmin(cliente).iniciarRecalculo({ anioInicio: 2020, anioFin: 2025, fuentes: [] }),
     ).rejects.toThrow(/No se pudo contactar/);
+  });
+
+  describe('errores de las Edge Functions (issue #43)', () => {
+    const MENSAJE_TIEMPO = /El paso tardó más de lo permitido/;
+
+    async function errorDelPaso(error: unknown) {
+      const { cliente } = clienteSimulado({
+        funciones: { 'recalculo-paso': { data: null, error: error as { message: string } } },
+      });
+      return crearApiAdmin(cliente)
+        .pasoRecalculo(9)
+        .catch((e: unknown) => e);
+    }
+
+    it.each([504, 546])(
+      'un %i del gateway es un corte por tiempo, no un problema de conexión',
+      async (estado) => {
+        const respuesta = new Response('<html>Gateway Timeout</html>', { status: estado });
+        const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+        expect(error).toBeInstanceOf(ErrorAdmin);
+        expect(error).toMatchObject({ tipo: 'tiempo', codigo: null, estado: null });
+        expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+        expect((error as ErrorAdmin).message).not.toMatch(/conexión/);
+      },
+    );
+
+    it('un 546 WORKER_LIMIT con cuerpo JSON sin `error` también es un corte por tiempo', async () => {
+      const respuesta = new Response(
+        JSON.stringify({ code: 'WORKER_LIMIT', message: 'Function exceeded the limit' }),
+        { status: 546 },
+      );
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({ tipo: 'tiempo' });
+      expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+    });
+
+    it('un error del relay de Supabase es un corte por tiempo', async () => {
+      const error = await errorDelPaso(new FunctionsRelayError(new Response('', { status: 502 })));
+      expect(error).toMatchObject({ tipo: 'tiempo' });
+      expect((error as ErrorAdmin).message).toMatch(MENSAJE_TIEMPO);
+    });
+
+    it('un fallo de red sin respuesta mantiene el mensaje de conexión', async () => {
+      const error = await errorDelPaso(new FunctionsFetchError(new TypeError('Failed to fetch')));
+      expect(error).toMatchObject({ tipo: 'red' });
+      expect((error as ErrorAdmin).message).toMatch(/No se pudo contactar/);
+    });
+
+    it('un error HTTP con JSON `error` conserva su mensaje, código y estado', async () => {
+      const respuesta = new Response(
+        JSON.stringify({
+          error: 'Tiempo agotado del paso.',
+          codigo: 'paso_sin_tiempo',
+          estado: 'pausado',
+        }),
+        { status: 503 },
+      );
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({
+        message: 'Tiempo agotado del paso.',
+        codigo: 'paso_sin_tiempo',
+        estado: 'pausado',
+        tipo: 'otro',
+      });
+    });
+
+    it('un error HTTP sin cuerpo JSON no se hace pasar por falta de conexión', async () => {
+      const respuesta = new Response('<html>Internal Server Error</html>', { status: 500 });
+      const error = await errorDelPaso(new FunctionsHttpError(respuesta));
+      expect(error).toMatchObject({ tipo: 'otro' });
+      expect((error as ErrorAdmin).message).toMatch(/500/);
+      expect((error as ErrorAdmin).message).not.toMatch(/conexión/);
+    });
   });
 
   it('usa las funciones SQL de §11.2 con sus argumentos', async () => {

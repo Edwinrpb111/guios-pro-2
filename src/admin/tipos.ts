@@ -149,17 +149,31 @@ export interface ConfiguracionRecalculo {
   cambios: CambioConfiguracion[];
 }
 
+/**
+ * Clase del error de una Edge Function, para decidir si se reintenta el paso (issue #43):
+ * `tiempo` = la plataforma cortó el paso (504, 546, relay); `red` = la petición no llegó a
+ * obtener respuesta; `otro` = cualquier otro error, con o sin mensaje del servidor.
+ */
+export type TipoErrorAdmin = 'tiempo' | 'red' | 'otro';
+
 /** Error de la API con el mensaje en español que se muestra al administrador. */
 export class ErrorAdmin extends Error {
   readonly codigo: string | null;
   /** Estado del cálculo informado por la Edge Function (p. ej. `pausado`). */
   readonly estado: string | null;
+  readonly tipo: TipoErrorAdmin;
 
-  constructor(mensaje: string, codigo: string | null = null, estado: string | null = null) {
+  constructor(
+    mensaje: string,
+    codigo: string | null = null,
+    estado: string | null = null,
+    tipo: TipoErrorAdmin = 'otro',
+  ) {
     super(mensaje);
     this.name = 'ErrorAdmin';
     this.codigo = codigo;
     this.estado = estado;
+    this.tipo = tipo;
   }
 }
 
