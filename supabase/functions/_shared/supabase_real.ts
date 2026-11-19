@@ -5,6 +5,7 @@ import type { UsuarioVerificado, VerificadorAdmin } from './auth.ts';
 import type { ConfiguracionGuardada } from './configuracion.ts';
 import type { InfraestructuraConBase } from './dependencias.ts';
 import { ErrorApi } from './errores.ts';
+import type { RegistroPaso } from './registro.ts';
 import type {
   Calculo,
   EstadoCalculo,
@@ -138,6 +139,35 @@ export class RepositorioSupabase implements Repositorio {
         .eq('id_calculo', idCalculo)
         .eq('id_subfactor', idSubfactor),
       'No se pudo marcar el paso con error',
+    );
+  }
+
+  async intentosDelPaso(idCalculo: number, idSubfactor: number): Promise<number> {
+    const fila = exigir(
+      await this.#cliente
+        .from('recalculo_paso')
+        .select('registro')
+        .eq('id_calculo', idCalculo)
+        .eq('id_subfactor', idSubfactor)
+        .maybeSingle(),
+      'No se pudo leer el registro del paso',
+    ) as { registro: { intento?: unknown } | null } | null;
+    const intento = fila?.registro?.intento;
+    return typeof intento === 'number' && Number.isInteger(intento) && intento > 0 ? intento : 0;
+  }
+
+  async guardarRegistroPaso(
+    idCalculo: number,
+    idSubfactor: number,
+    datos: { iniciado_en?: string; duracion_ms: number | null; registro: RegistroPaso },
+  ): Promise<void> {
+    exigir(
+      await this.#cliente
+        .from('recalculo_paso')
+        .update(datos)
+        .eq('id_calculo', idCalculo)
+        .eq('id_subfactor', idSubfactor),
+      'No se pudo guardar el registro del paso',
     );
   }
 }

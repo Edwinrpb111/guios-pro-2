@@ -3,6 +3,9 @@
 import { aceptarVeredictos } from './clasificador.ts';
 import { type ContextoSubfactores, contextoDe } from './contexto.ts';
 import { normalizarDoi } from './doi.ts';
+import { ErrorPasoSinTiempo } from './errores.ts';
+import type { PresupuestoPaso } from './presupuesto.ts';
+import { type EntradaLote, mensajeSeguro, motivoDe, type RegistradorPaso } from './registro.ts';
 import type { NuevaReferencia, SubfactorCatalogo } from './repositorio.ts';
 import type { Candidato, Clasificador, ProveedorBusqueda } from './tipos.ts';
 
@@ -78,9 +81,23 @@ export async function buscarYClasificar(entrada: {
   anioFin: number;
   umbral: number;
   maxCandidatos: number;
+  /** Tope de tiempo del paso (110 s): sin tiempo no se busca ni se empieza un lote (issue #43). */
+  presupuesto?: PresupuestoPaso;
+  /** Si se da, anota cada búsqueda y cada lote (tiempos, conteos y motivo), sin textos. */
+  registro?: RegistradorPaso;
 }): Promise<ResultadoBusqueda> {
-  const { subfactor, proveedores, clasificador, anioInicio, anioFin, umbral, maxCandidatos } =
-    entrada;
+  const {
+    subfactor,
+    proveedores,
+    clasificador,
+    anioInicio,
+    anioFin,
+    umbral,
+    maxCandidatos,
+    presupuesto,
+    registro,
+  } = entrada;
+  const ahora = presupuesto?.ahora.bind(presupuesto) ?? Date.now;
   const { terminosFactor, terminosSubfactor, descripcion } = contextoDe(
     entrada.contexto,
     subfactor,
@@ -90,20 +107,60 @@ export async function buscarYClasificar(entrada: {
   // En serie, como pide Crossref (BRIEF §13.3).
   const listas: Candidato[][] = [];
   for (const proveedor of proveedores) {
-    listas.push(await proveedor.buscar(consulta, anioInicio, anioFin, maxCandidatos));
+    const desde = ahora();
+    try {
+      if (presupuesto !== undefined && presupuesto.restante() <= 0) throw new ErrorPasoSinTiempo();
+      const lista = await proveedor.buscar(consulta, anioInicio, anioFin, maxCandidatos);
+      listas.push(lista);
+      registro?.anotarBusqueda({
+        fuente: proveedor.nombre,
+        ms: ahora() - desde,
+        candidatos: lista.length,
+        error: null,
+      });
+    } catch (error) {
+      registro?.anotarBusqueda({
+        fuente: proveedor.nombre,
+        ms: ahora() - desde,
+        candidatos: 0,
+        error: mensajeSeguro(error),
+      });
+      throw error;
+    }
   }
   const candidatos = depurar(intercalar(listas), anioInicio, anioFin).slice(0, maxCandidatos);
 
   const aceptados: Candidato[] = [];
   for (let i = 0; i < candidatos.length; i += TAMANO_LOTE) {
     const lote = candidatos.slice(i, i + TAMANO_LOTE);
-    const veredictos = await clasificador.clasificar(
-      subfactor.nombre_factor,
-      subfactor.enunciado,
-      descripcion,
-      lote,
-    );
-    aceptados.push(...aceptarVeredictos(lote, veredictos, umbral));
+    const n = i / TAMANO_LOTE + 1;
+    const desde = ahora();
+    const reintentosAntes = clasificador.reintentos ?? 0;
+    const anotar = (resultado: EntradaLote['resultado'], aceptadosLote: number) =>
+      registro?.anotarLote({
+        n,
+        tamano: lote.length,
+        ms: ahora() - desde,
+        reintentos: (clasificador.reintentos ?? 0) - reintentosAntes,
+        resultado,
+        aceptados: aceptadosLote,
+      });
+    try {
+      // Con poco tiempo no se empieza el lote: se pausa y se reanuda con todo el tiempo.
+      presupuesto?.exigirTiempoParaLote();
+      const veredictos = await clasificador.clasificar(
+        subfactor.nombre_factor,
+        subfactor.enunciado,
+        descripcion,
+        lote,
+      );
+      const delLote = aceptarVeredictos(lote, veredictos, umbral);
+      aceptados.push(...delLote);
+      anotar('ok', delLote.length);
+    } catch (error) {
+      anotar(motivoDe(error), 0);
+      throw error;
+    }
   }
 
   return {

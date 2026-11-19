@@ -1,5 +1,6 @@
 // Acceso a datos del recálculo. La interfaz permite probar las funciones sin base de datos;
 // la implementación real (service_role) está en `supabase_real.ts`.
+import type { RegistroPaso } from './registro.ts';
 
 export interface SubfactorCatalogo {
   id_subfactor: number;
@@ -80,4 +81,15 @@ export interface Repositorio {
     candidatos: number,
   ): Promise<void>;
   marcarPasoConError(idCalculo: number, idSubfactor: number, detalle: string): Promise<void>;
+  /** Intentos ya registrados de un paso (0 si nunca se intentó): el próximo es este + 1. */
+  intentosDelPaso(idCalculo: number, idSubfactor: number): Promise<number>;
+  /**
+   * Guarda el registro de un intento (issue #43): al empezar, con `iniciado_en` y `duracion_ms`
+   * nula; al terminar, con la duración y el registro final. No toca `estado` ni `detalle`.
+   */
+  guardarRegistroPaso(
+    idCalculo: number,
+    idSubfactor: number,
+    datos: { iniciado_en?: string; duracion_ms: number | null; registro: RegistroPaso },
+  ): Promise<void>;
 }

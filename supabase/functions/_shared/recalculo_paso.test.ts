@@ -104,11 +104,8 @@ Deno.test(
     assertEquals(guardadas.length, 6); // 3 candidatos de cada una de las 2 fuentes
     assert(guardadas.every((r) => r.id_subfactor === 11));
     assertEquals(new Set(guardadas.map((r) => r.base_datos)), new Set(['openalex', 'crossref']));
-    assertEquals(deps.repositorio.pasos.get(id)!.get(11), {
-      estado: 'hecho',
-      candidatos: 6,
-      detalle: null,
-    });
+    const fila = deps.repositorio.pasos.get(id)!.get(11)!;
+    assertEquals([fila.estado, fila.candidatos, fila.detalle], ['hecho', 6, null]);
   },
 );
 

@@ -34,6 +34,11 @@ export interface Veredicto {
 }
 
 export interface Clasificador {
+  /**
+   * Reintentos acumulados por este clasificador en el paso (429/503 reintentados). Es opcional: el
+   * falso no reintenta. El registro del paso reparte la diferencia entre lote y lote (issue #43).
+   */
+  readonly reintentos?: number;
   clasificar(
     factor: string,
     subfactor: string,
