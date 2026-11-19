@@ -126,7 +126,10 @@ export class RepositorioSupabase implements Repositorio {
       );
     }
     // Los rechazados del subfactor se reemplazan: se borran los del intento anterior (también
-    // cuando ahora no hay ninguno) y se insertan los nuevos. Los mensajes de error no llevan datos.
+    // cuando ahora no hay ninguno) y se guardan los nuevos con upsert por (cálculo, subfactor, DOI):
+    // si el cliente reintenta tras un 504 y dos corridas del mismo paso se intercalan, la segunda
+    // no choca con 23505 ni deja el paso con error estando hecho. Los mensajes de error no llevan
+    // datos.
     exigir(
       await this.#cliente
         .from('referencia_rechazada')
@@ -137,11 +140,10 @@ export class RepositorioSupabase implements Repositorio {
     );
     if (rechazadas.length > 0) {
       exigir(
-        await this.#cliente
-          .from('referencia_rechazada')
-          .insert(
-            rechazadas.map((r) => ({ ...r, id_calculo: idCalculo, id_subfactor: idSubfactor })),
-          ),
+        await this.#cliente.from('referencia_rechazada').upsert(
+          rechazadas.map((r) => ({ ...r, id_calculo: idCalculo, id_subfactor: idSubfactor })),
+          { onConflict: 'id_calculo,id_subfactor,doi' },
+        ),
         'No se pudieron guardar los candidatos rechazados',
       );
     }

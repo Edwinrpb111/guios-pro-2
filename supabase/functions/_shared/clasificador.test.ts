@@ -352,3 +352,9 @@ Deno.test('Gemini: recorta resúmenes largos y declara la versión del prompt', 
   assert(cuerpo.contents[0].parts[0].text.length < 3000);
   assertEquals(VERSION_PROMPT, 'v1');
 });
+
+Deno.test('limpiarEvidencia: quita los sustitutos sueltos y conserva los pares válidos', () => {
+  assertEquals(limpiarEvidencia('a\ud83db'), 'ab');
+  assertEquals(limpiarEvidencia('a\ude00b'), 'ab');
+  assertEquals(limpiarEvidencia('a😀b'), 'a😀b');
+});

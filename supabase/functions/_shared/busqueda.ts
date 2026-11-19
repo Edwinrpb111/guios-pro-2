@@ -1,6 +1,6 @@
 // Un paso del recálculo (BRIEF §13.2, pasos 3a–3d): arma la consulta, busca en las fuentes,
 // normaliza y deduplica por DOI, recorta, clasifica en lotes y devuelve lo aceptado y lo rechazado.
-import { type Clasificado, repartirVeredictos } from './clasificador.ts';
+import { type Clasificado, limpiarTexto, repartirVeredictos } from './clasificador.ts';
 import { type ContextoSubfactores, contextoDe } from './contexto.ts';
 import { normalizarDoi } from './doi.ts';
 import { ErrorPasoSinTiempo } from './errores.ts';
@@ -18,6 +18,7 @@ export const TAMANO_LOTE = 10;
 const FRASE_BASE = 'open source software adoption FLOSS';
 const LARGO_MAXIMO_CONSULTA = 300;
 const TITULO_MAXIMO = 500; // columna `referencia.titulo varchar(500)`
+const DOI_MAXIMO = 200; // columna `referencia.doi varchar(200)`
 
 /** (open source software adoption / FLOSS adoption) + factor + términos del subfactor. */
 export function armarConsulta(terminosFactor: string[], terminosSubfactor: string[]): string {
@@ -81,12 +82,17 @@ export interface ResultadoBusqueda {
   rechazadas: NuevaReferenciaRechazada[];
 }
 
-/** Fila lista para guardar: título a la columna (500) y año/DOI ya validados por `depurar`. */
+/**
+ * Fila lista para guardar: año y forma del DOI ya validados por `depurar`. Título y DOI vienen de
+ * las fuentes (texto ajeno): se les quitan caracteres de control y sustitutos sueltos, que
+ * Postgres rechaza (tumbarían el paso en cada reintento), y el título se limita a la columna (500)
+ * sin partir un par sustituto. En el DOI el carácter inválido se quita (no se cambia por espacio).
+ */
 function aFila({ candidato, confianza, evidencia }: Clasificado): NuevaReferencia {
   return {
-    titulo: candidato.titulo.slice(0, TITULO_MAXIMO),
+    titulo: limpiarTexto(candidato.titulo, TITULO_MAXIMO),
     anio: candidato.anio as number,
-    doi: candidato.doi as string,
+    doi: limpiarTexto(candidato.doi as string, DOI_MAXIMO, ''),
     base_datos: candidato.base,
     confianza,
     evidencia,

@@ -241,7 +241,7 @@ Deno.test(
 );
 
 Deno.test(
-  'RepositorioSupabase.completarPaso: reemplaza los rechazados del subfactor (borra y luego inserta)',
+  'RepositorioSupabase.completarPaso: reemplaza los rechazados del subfactor (borra y luego hace upsert por DOI)',
   async () => {
     const { cliente, llamadas } = crearClienteSimulado();
 
@@ -250,14 +250,23 @@ Deno.test(
     const operaciones = llamadas
       .filter((l) => l.tabla === 'referencia_rechazada')
       .map((l) => l.operacion);
-    assertEquals(operaciones, ['delete', 'insert']);
+    assertEquals(operaciones, ['delete', 'upsert']);
     const borrado = llamadas.find((l) => l.operacion === 'delete');
     assertEquals(borrado?.filtros, [
       ['id_calculo', 7],
       ['id_subfactor', 11],
     ]);
-    const insercion = llamadas.find((l) => l.operacion === 'insert');
+    // Upsert (no insert): dos corridas intercaladas del mismo paso (reintento del cliente tras un
+    // 504) no deben chocar con 23505 sobre (cálculo, subfactor, doi).
+    assertEquals(
+      llamadas.filter((l) => l.tabla === 'referencia_rechazada' && l.operacion === 'insert').length,
+      0,
+    );
+    const insercion = llamadas.find(
+      (l) => l.tabla === 'referencia_rechazada' && l.operacion === 'upsert',
+    );
     assertEquals(insercion?.argumentos[0], [{ ...RECHAZADAS[0], id_calculo: 7, id_subfactor: 11 }]);
+    assertEquals(insercion?.argumentos[1], { onConflict: 'id_calculo,id_subfactor,doi' });
     // Los rechazados se reemplazan antes de marcar el paso como hecho.
     const posicion = (l: Llamada | undefined) => llamadas.indexOf(l!);
     const marca = llamadas.find((l) => l.tabla === 'recalculo_paso' && l.operacion === 'update');

@@ -187,6 +187,37 @@ Deno.test(
   },
 );
 
+Deno.test(
+  'trazabilidad: un DOI aceptado en un intento y rechazado en el reintento queda en ambas tablas (límite conocido, ADR-015)',
+  async () => {
+    let ronda = 1;
+    const deps = conVeredictos(() => [
+      ronda === 1
+        ? { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: 'Primero sí.' }
+        : { indice: 1, trata_subfactor: false, confianza: 0.2, evidencia: 'Ahora no.' },
+    ]);
+    const id = await nuevoCalculo(deps);
+    await llamar(deps, { id_calculo: id });
+    assertEquals(deps.repositorio.doisDe(id, ID_SUBFACTOR), ['10.1000/art.1']);
+    assertEquals(deps.repositorio.rechazadasDe(id, ID_SUBFACTOR), []);
+
+    ronda = 2;
+    deps.repositorio.pasos.get(id)!.get(ID_SUBFACTOR)!.estado = 'pendiente';
+    await llamar(deps, { id_calculo: id });
+
+    // El upsert no borra: sigue en `referencia` (lo único que leen los conteos, IL e IS) con el
+    // veredicto del primer intento, igual que antes de #46...
+    assertEquals(deps.repositorio.doisDe(id, ID_SUBFACTOR), ['10.1000/art.1']);
+    assertEquals(referencia(deps, id, '10.1000/art.1')?.confianza, 0.9);
+    assertEquals(referencia(deps, id, '10.1000/art.1')?.evidencia, 'Primero sí.');
+    // ...y además figura como rechazado con el veredicto del segundo (solo se ve en P-10).
+    assertEquals(
+      deps.repositorio.rechazadasDe(id, ID_SUBFACTOR).map((r) => [r.doi, r.confianza, r.evidencia]),
+      [['10.1000/art.1', 0.2, 'Ahora no.']],
+    );
+  },
+);
+
 Deno.test('trazabilidad: un paso que falla no guarda rechazados', async () => {
   const deps = crearDependenciasPrueba({
     proveedores: () => [proveedor],

@@ -269,3 +269,73 @@ Deno.test('un error de un proveedor sube tal cual para pausar el cálculo', asyn
     'Crossref caído',
   );
 });
+
+/** Verdadero si el texto tiene un carácter de control o un sustituto suelto (Postgres lo rechaza). */
+const esInvalidoParaPostgres = (texto: string) =>
+  /[\u0000-\u001f\u007f-\u009f]/.test(texto) ||
+  /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(texto);
+
+Deno.test(
+  'limpia título y DOI de caracteres de control y sustitutos sueltos, en aceptados y rechazados',
+  async () => {
+    const proveedor = proveedorFijo('openalex', [
+      candidato(1, { titulo: 'Acepta\u0000do\u0007uno', doi: '10.1000/a\u0000bc' }),
+      candidato(2, { titulo: 'Rechaza\u0000do \ud83dsuelto', doi: '10.1000/d\u0000ef' }),
+      candidato(3, { titulo: 'Otro\ude00 rechazado', doi: '10.1000/ghi' }),
+      candidato(4, { titulo: 'Con emoji 😀 válido', doi: '10.1000/jkl' }),
+    ]);
+    const clasificador = clasificadorGuionado(() => [
+      { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: 'ok' },
+      { indice: 2, trata_subfactor: false, confianza: 0.9, evidencia: 'no' },
+      { indice: 3, trata_subfactor: false, confianza: 0.9, evidencia: 'no' },
+      { indice: 4, trata_subfactor: true, confianza: 0.9, evidencia: 'ok' },
+    ]);
+
+    const { referencias, rechazadas } = await ejecutar([proveedor], clasificador);
+
+    for (const fila of [...referencias, ...rechazadas]) {
+      assert(
+        !esInvalidoParaPostgres(fila.titulo),
+        `título inválido: ${JSON.stringify(fila.titulo)}`,
+      );
+      assert(!esInvalidoParaPostgres(fila.doi), `DOI inválido: ${JSON.stringify(fila.doi)}`);
+    }
+    assertEquals(
+      referencias.map((r) => [r.titulo, r.doi]),
+      [
+        ['Acepta do uno', '10.1000/abc'],
+        ['Con emoji 😀 válido', '10.1000/jkl'],
+      ],
+    );
+    assertEquals(
+      rechazadas.map((r) => [r.titulo, r.doi]),
+      [
+        ['Rechaza do suelto', '10.1000/def'],
+        ['Otro rechazado', '10.1000/ghi'],
+      ],
+    );
+  },
+);
+
+Deno.test(
+  'el recorte del título a 500 no parte un par sustituto (aceptados y rechazados)',
+  async () => {
+    // El emoji (2 unidades) ocupa las posiciones 499 y 500: un slice(0, 500) dejaría la mitad alta.
+    const titulo = `${'A'.repeat(499)}😀${'B'.repeat(50)}`;
+    const proveedor = proveedorFijo('openalex', [
+      candidato(1, { titulo }),
+      candidato(2, { titulo }),
+    ]);
+    const clasificador = clasificadorGuionado(() => [
+      { indice: 1, trata_subfactor: true, confianza: 0.9, evidencia: 'ok' },
+      { indice: 2, trata_subfactor: false, confianza: 0.9, evidencia: 'no' },
+    ]);
+
+    const { referencias, rechazadas } = await ejecutar([proveedor], clasificador);
+
+    for (const fila of [referencias[0]!, rechazadas[0]!]) {
+      assertEquals(fila.titulo, 'A'.repeat(499));
+      assert(!esInvalidoParaPostgres(fila.titulo));
+    }
+  },
+);
