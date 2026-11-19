@@ -20,24 +20,25 @@ Las dos funciones exigen `Authorization: Bearer <JWT>` de un **administrador** y
 
 Siempre `{error, codigo}` con un mensaje en español; algunos añaden datos (`estado`, `progreso`, `pendientes`).
 
-| HTTP | `codigo`                                                    | Cuándo                                                                                                                                 |
-| ---- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                                                               |
-| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                                                 |
-| 403  | `solo_administrador`                                        | **Un decisor**                                                                                                                         |
-| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                                                  |
-| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                                               |
-| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                                                |
-| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas                     |
-| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`                                 |
-| 503  | `proveedor_no_disponible`                                   | 429/503 de Gemini tras agotar los reintentos, otro 5xx, caída de red o clave rechazada. El cálculo queda `pausado` con `mensaje_error` |
-| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                                                   |
+| HTTP | `codigo`                                                    | Cuándo                                                                                                                                                                             |
+| ---- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400  | `solicitud_invalida`                                        | Cuerpo que no es JSON o campos inválidos                                                                                                                                           |
+| 401  | `no_autenticado`, `sesion_invalida`                         | Sin JWT o JWT inválido                                                                                                                                                             |
+| 403  | `solo_administrador`                                        | **Un decisor**                                                                                                                                                                     |
+| 403  | `origen_no_permitido`                                       | `Origin` distinto del frontend (CORS)                                                                                                                                              |
+| 404  | `calculo_no_encontrado`                                     | `id_calculo` inexistente                                                                                                                                                           |
+| 405  | `metodo_no_permitido`                                       | Método distinto de POST                                                                                                                                                            |
+| 409  | `calculo_cerrado`, `proveedor_cambiado`, `calculo_invalido` | El cálculo ya no está en curso; el proveedor (app o `LLM_PROVIDER`) cambió desde que empezó; sin fuentes guardadas                                                                 |
+| 502  | `respuesta_invalida`                                        | Una API respondió algo que no se puede interpretar. El paso queda en `error` y el cálculo en `pausado`                                                                             |
+| 503  | `proveedor_no_disponible`                                   | 429/503 de Gemini o del proveedor compatible tras agotar los reintentos, otro 5xx, caída de red, clave rechazada o sin saldo (402). El cálculo queda `pausado` con `mensaje_error` |
+| 500  | `catalogo_vacio`, `error_interno`                           | Catálogo sin sembrar, o fallo inesperado o de configuración (sin detalle al cliente)                                                                                               |
 
 **Orden de las comprobaciones.** Primero el token: sin `Authorization: Bearer` la respuesta es 401 sin tocar la configuración. Los errores de configuración (`configuracion_*`: variable ausente o inválida) se registran solo en el servidor y el cliente recibe `error_interno`, sin nombrar variables.
 
 ### Pausa y reanudación (BRIEF §13.5)
 
 - Gemini: antes de cada llamada se espera para respetar `llamadas_por_minuto` (15 por defecto) y un 429 o 503 se reintenta hasta 3 veces, esperando el `retryDelay` de Gemini (máximo 30 s por espera y 90 s en total por paso); el clasificador falso no espera ([ADR-011](decisiones/ADR-011-ritmo-de-llamadas-a-gemini.md)).
+- Compatible con OpenAI (issue #40): mismo ritmo y mismos reintentos, usando la cabecera `Retry-After` ([ADR-012](decisiones/ADR-012-proveedor-compatible-con-openai.md)).
 - Si se agotan esos reintentos, o falla otra API o la red (sin reintento), **no se reintenta en bucle**: el cálculo pasa a `pausado`, se guarda un `mensaje_error` legible y la respuesta (503/502) incluye `{estado: 'pausado', progreso, pendientes}`.
 - Volver a invocar `recalculo-paso` **reanuda** (`pausado → en_proceso`, se borra el mensaje) desde el paso pendiente o con error. Cerrar la pestaña no pierde nada: lo hecho queda guardado.
 - Los pasos son idempotentes (`UNIQUE (id_calculo, id_subfactor, doi)`): repetir uno no duplica referencias.
@@ -56,7 +57,7 @@ La IA no busca: solo clasifica candidatos que ya trajo una API bibliográfica, a
 
 ## Interfaces y falsos (RNF-07)
 
-`ProveedorBusqueda` (`OpenAlexProveedor`, `CrossrefProveedor`) y `Clasificador` (`GeminiClasificador`) están en `supabase/functions/_shared/`. Con `LLM_PROVIDER=fake` se usan `ProveedorFalso` y `ClasificadorFalso`: sin red, sin claves, resultados siempre iguales. Es el modo de las pruebas, del CI y de la demostración.
+`ProveedorBusqueda` (`OpenAlexProveedor`, `CrossrefProveedor`) y `Clasificador` (`GeminiClasificador`, `ClasificadorCompatibleOpenAI` en `clasificador_openai.ts`, con `LLM_PROVIDER=openai`) están en `supabase/functions/_shared/`. Con `LLM_PROVIDER=fake` se usan `ProveedorFalso` y `ClasificadorFalso`: sin red, sin claves, resultados siempre iguales. Es el modo de las pruebas, del CI y de la demostración.
 
 ## Configuración: base primero, entorno después (issue #33)
 
@@ -70,6 +71,9 @@ En cada petición con token, `entorno.ts` llama a `crearDependenciasConBase`, qu
 | Máximo de candidatos                           | `RECALCULO_MAX_CANDIDATOS`    |
 | Correo de Crossref                             | `CROSSREF_MAILTO`             |
 | Clave de Gemini (Vault)                        | `GEMINI_API_KEY`              |
+| Dirección base del compatible con OpenAI       | `OPENAI_COMPAT_BASE_URL`      |
+| Modelo del compatible con OpenAI               | `OPENAI_COMPAT_MODEL`         |
+| Clave del compatible con OpenAI (Vault)        | `OPENAI_COMPAT_API_KEY`       |
 | Clave de OpenAlex (Vault)                      | `OPENALEX_API_KEY`            |
 
 - Las validaciones (`configuracion_invalida`, `configuracion_incompleta`) se aplican al resultado combinado; el cliente sigue recibiendo solo `error_interno`.
